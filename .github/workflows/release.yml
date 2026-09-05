@@ -1,0 +1,58 @@
+name: Release
+
+# Tagging `vX.Y.Z` on `main` builds the Windows installers and attaches them to
+# the GitHub Release. A release artefact always comes from a tagged commit that
+# passed the gates — never from a developer machine.
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build Windows installers
+    runs-on: windows-latest
+
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Gates
+        run: npm run gates
+        shell: pwsh
+
+      - name: Build the installers
+        run: npm run tauri build
+
+      - name: Check the bundle
+        run: npm run check:bundle
+
+      - uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: ${{ github.ref_name }}
+          releaseName: Deskstart ${{ github.ref_name }}
+          releaseBody: |
+            See CHANGELOG.md for what changed.
+
+            The installers are not code-signed: Windows SmartScreen will warn on
+            first run. Verify the download came from this Releases page.
+          releaseDraft: true
+          prerelease: false
