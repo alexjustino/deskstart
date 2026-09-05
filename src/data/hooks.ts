@@ -120,6 +120,15 @@ export function useExecuteProfile() {
         void client.invalidateQueries({ queryKey: keys.events(line.runId) });
         onLine?.(line);
       }),
-    onSettled: () => client.invalidateQueries({ queryKey: ['runs'] }),
+    // The last line — `run_finished` — is written by the host without an
+    // `onLine`, and the refetch the previous line triggered may have read the
+    // file before it was there. Read every log again once the run is over, so
+    // the screen never stops one line short of the truth. Found by the
+    // end-to-end suite: "completed, with failures" reached the file and not
+    // the screen.
+    onSettled: () => {
+      void client.invalidateQueries({ queryKey: ['runs'] });
+      void client.invalidateQueries({ queryKey: ['events'] });
+    },
   });
 }
