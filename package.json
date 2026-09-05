@@ -1,0 +1,67 @@
+{
+  "name": "deskstart",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc && vite build",
+    "preview": "vite preview",
+    "tauri": "tauri",
+    "lint": "eslint .",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
+    "gates": "pwsh -NoProfile -ExecutionPolicy Bypass -File ./scripts/gates.ps1",
+    "e2e": "npm run e2e:build && tsc -p tsconfig.e2e.json --noEmit && vitest run --config vitest.e2e.config.ts",
+    "e2e:build": "tauri build --debug --no-bundle",
+    "e2e:only": "tsc -p tsconfig.e2e.json --noEmit && vitest run --config vitest.e2e.config.ts",
+    "check:version": "node scripts/check-version.mjs",
+    "check:bundle": "node scripts/check-bundle.mjs",
+    "release:check": "npm run gates && npm run tauri build && npm run check:bundle"
+  },
+  "dependencies": {
+    "@fluentui/react-icons": "^2.0.339",
+    "@tailwindcss/vite": "^4.3.3",
+    "@tanstack/react-query": "^5.102.8",
+    "@tauri-apps/api": "^2",
+    "@tauri-apps/plugin-log": "^2.9.1",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "tailwindcss": "^4.3.3"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@tauri-apps/cli": "^2",
+    "@types/node": "^26.4.1",
+    "@types/react": "^19.1.8",
+    "@types/react-dom": "^19.1.6",
+    "@vitejs/plugin-react": "^4.6.0",
+    "@vitest/coverage-v8": "^4.1.11",
+    "axe-core": "^4.13.0",
+    "eslint": "^10.9.1",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "eslint-plugin-react-refresh": "^0.5.6",
+    "globals": "^17.12.0",
+    "prettier": "^3.9.6",
+    "sharp": "^0.35.4",
+    "typescript": "~5.8.3",
+    "typescript-eslint": "^8.69.0",
+    "vite": "^7.0.4",
+    "vitest": "^4.1.11"
+  },
+  "description": "Open your working day with one button: profiles of timed steps, run and logged",
+  "license": "Apache-2.0",
+  "author": "Alex Justino",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/alexjustino/deskstart.git"
+  },
+  "bugs": {
+    "url": "https://github.com/alexjustino/deskstart/issues"
+  },
+  "homepage": "https://github.com/alexjustino/deskstart"
+}
