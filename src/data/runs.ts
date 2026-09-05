@@ -8,6 +8,7 @@
 
 import { invoke } from '@tauri-apps/api/core';
 
+import type { Launch } from '@/domain/profile';
 import type { Mode, Outcome, RunEvent } from '@/domain/run';
 
 export interface Run {
@@ -59,6 +60,9 @@ const OUTCOMES: ReadonlySet<string> = new Set([
   'stopped',
 ]);
 
+/** The line kinds that mean the step was done, whatever "done" meant for its kind. */
+const DONE: ReadonlySet<string> = new Set(['spawned', 'opened', 'would_spawn', 'would_open']);
+
 function toRun(raw: RawRun): Run {
   return {
     id: raw.id,
@@ -97,28 +101,20 @@ function toLogLine(raw: RawEvent): LogLine {
 export function toRunEvent(line: LogLine): RunEvent | null {
   const at = Date.parse(line.at);
   if (line.stepId === null) return null;
-  switch (line.kind) {
-    case 'spawned': {
-      const pid = typeof line.payload.pid === 'number' ? line.payload.pid : 0;
-      return { kind: 'spawned', stepId: line.stepId, pid, at };
-    }
-    case 'would_spawn':
-      return { kind: 'would_spawn', stepId: line.stepId, at };
-    case 'failed': {
-      const reason = typeof line.payload.reason === 'string' ? line.payload.reason : 'unknown';
-      return { kind: 'failed', stepId: line.stepId, reason, at };
-    }
-    default:
-      return null;
+  if (DONE.has(line.kind)) return { kind: 'step_done', stepId: line.stepId, at };
+  if (line.kind === 'failed') {
+    const reason = typeof line.payload.reason === 'string' ? line.payload.reason : 'unknown';
+    return { kind: 'step_failed', stepId: line.stepId, reason, at };
   }
+  return null;
 }
 
 export async function runBegin(profileId: string, mode: Mode): Promise<Run> {
   return toRun(await invoke<RawRun>('run_begin', { profileId, mode, trigger: 'button' }));
 }
 
-export async function stepExecute(runId: string, stepId: string): Promise<LogLine> {
-  return toLogLine(await invoke<RawEvent>('step_execute', { runId, stepId }));
+export async function stepExecute(runId: string, stepId: string, launch: Launch): Promise<LogLine> {
+  return toLogLine(await invoke<RawEvent>('step_execute', { runId, stepId, launch }));
 }
 
 export async function runFinish(runId: string, outcome: Outcome): Promise<Run> {

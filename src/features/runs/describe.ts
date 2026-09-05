@@ -8,41 +8,78 @@
  */
 
 import type { LogLine } from '@/data/runs';
+import { lastSegment } from '@/domain/profile';
 import type { Outcome } from '@/domain/run';
 import type { ChipTone } from '@/ui/chipTone';
 
 /** The last path segment: what a person calls the program. */
 export function baseName(path: unknown): string {
   if (typeof path !== 'string' || path === '') return 'the program';
-  return path.split(/[\\/]/).pop() || path;
+  return lastSegment(path);
+}
+
+/** The resolved target of a line: the program for an app, the target otherwise. */
+function targetOf(p: Record<string, unknown>): string | null {
+  if (typeof p.program === 'string') return p.program;
+  if (typeof p.target === 'string') return p.target;
+  return null;
+}
+
+/** What a person calls the target: a file name, a folder name, a host. */
+function nameOf(p: Record<string, unknown>): string {
+  const target = targetOf(p);
+  if (target === null) return 'the step';
+  if (p.kind === 'url') {
+    try {
+      return new URL(target).host;
+    } catch {
+      return target;
+    }
+  }
+  return lastSegment(target);
+}
+
+/** "folder src" / "notes.txt" / "github.com": the noun the sentence needs. */
+function noun(p: Record<string, unknown>): string {
+  return p.kind === 'folder' ? `folder ${nameOf(p)}` : nameOf(p);
+}
+
+/** The resolved target, and where it came from when expansion changed it. */
+function detailOf(p: Record<string, unknown>): string | null {
+  const target = targetOf(p);
+  if (target === null) return null;
+  return typeof p.source === 'string' && p.source !== '' ? `${target} — from ${p.source}` : target;
+}
+
+function pidSuffix(p: Record<string, unknown>): string {
+  return typeof p.pid === 'number' ? ` — PID ${p.pid}` : '';
 }
 
 export function describe(line: LogLine): { text: string; detail: string | null } {
   const p = line.payload;
   switch (line.kind) {
     case 'run_started': {
-      const mode = p.mode === 'dry' ? 'dry run' : 'run';
       const steps = typeof p.steps === 'number' ? p.steps : 0;
       return {
-        text: `${mode === 'dry run' ? 'Dry run' : 'Run'} started — ${String(p.profileName ?? '')}, ${steps} ${steps === 1 ? 'step' : 'steps'}`,
+        text: `${p.mode === 'dry' ? 'Dry run' : 'Run'} started — ${String(p.profileName ?? '')}, ${steps} ${steps === 1 ? 'step' : 'steps'}`,
         detail: null,
       };
     }
     case 'spawned':
-      return {
-        text: `Started ${baseName(p.program)} — PID ${String(p.pid ?? '?')}`,
-        detail: typeof p.program === 'string' ? p.program : null,
-      };
+      return { text: `Started ${nameOf(p)}${pidSuffix(p)}`, detail: detailOf(p) };
+    case 'opened':
+      return { text: `Opened ${noun(p)}${pidSuffix(p)}`, detail: detailOf(p) };
     case 'would_spawn':
+      return { text: `Would start ${nameOf(p)}`, detail: detailOf(p) };
+    case 'would_open':
+      return { text: `Would open ${noun(p)}`, detail: detailOf(p) };
+    case 'failed': {
+      const verb = p.kind === 'app' || p.kind === undefined ? 'start' : 'open';
       return {
-        text: `Would start ${baseName(p.program)}`,
-        detail: typeof p.program === 'string' ? p.program : null,
+        text: `Could not ${verb} ${noun(p)}: ${String(p.reason ?? 'no reason recorded')}`,
+        detail: detailOf(p),
       };
-    case 'failed':
-      return {
-        text: `Could not start ${baseName(p.program)}: ${String(p.reason ?? 'no reason recorded')}`,
-        detail: typeof p.program === 'string' ? p.program : null,
-      };
+    }
     case 'run_finished':
       return { text: `Run finished — ${outcomeLabel(p.outcome)}`, detail: null };
     default:
