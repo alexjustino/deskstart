@@ -23,6 +23,7 @@ part that matters most later — the cost we accepted.
 | [015](#adr-015) | Stop closes what the run opened, and only that                                           | Accepted |
 | [016](#adr-016) | Third-party tools are adapters that degrade visibly                                      | Accepted |
 | [017](#adr-017) | Scheduling is delegated to the Windows Task Scheduler                                    | Accepted |
+| [018](#adr-018) | Folders, files and web pages open by verb on a validated target                          | Accepted |
 
 ---
 
@@ -275,3 +276,27 @@ Diagnostics shows which tasks exist.
 
 **Cost accepted.** A person can edit or delete the task outside the application; Diagnostics
 reports the discrepancy rather than fighting it.
+
+## ADR-018 — Folders, files and web pages open by verb on a validated target {#adr-018}
+
+**Context.** A folder, a file and a web page are things Windows opens with whatever it
+associates with them, not programs with a known path. ADR-014 forbids composing a command
+line for a shell; it does not say how to ask Windows to open something.
+
+**Decision.** A folder opens in Explorer, which is a program like any other: `explorer.exe`
+under the system root, with the path as its one argument, through the same `os::process`
+every application step uses. A file and a web page open through `ShellExecuteExW` with the
+`open` verb on the target itself — `lpFile` is the path or the address, `lpParameters` is
+empty, and no string is composed. The target has already been validated by the domain (an
+absolute path; `http` or `https` and nothing else) and is checked again by the host, because
+a check that lives in one place is a check that can be bypassed. The PID Windows hands back
+goes into the log when there is one; a file opened by an application already running yields
+none, and the line says so by not inventing one.
+
+**Why not `tauri-plugin-opener`.** It is a general "open this" with its own notion of what a
+URL is; this product wants exactly two schemes and its own log line per open. A dependency
+that does more than the product allows is a surface the threat model has to explain.
+
+**Cost accepted.** `file:` addresses never open, even ones a person typed on purpose — a file
+is a file step. And "opened" for a file means "Windows accepted the request": whether the
+associated application showed anything is readiness's question (F4).

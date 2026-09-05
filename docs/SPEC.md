@@ -217,6 +217,32 @@ is a line with its reason and the run goes on. Runs survive a restart and outliv
   is closed by the person. Holding handles in a Job Object is F3's whole subject.
 - **Settings.** The theme choice lives on Diagnostics, in memory, until F10 persists it.
 
+### Delivered in F1
+
+A step is one of four kinds — an application, a folder, a file, a web page — added, edited and
+moved in one form. Arguments are a list, edited one at a time, never a text box split on
+spaces. A path may name one of the six allow-listed environment variables; the host provides
+their values and the domain expands them, and the row shows the path as written and what it
+became. The form previews the resolved launch with the same function the run uses. A dry run
+writes the resolved target of every step — and its source when expansion changed it — and
+starts nothing. Folders open in Explorer (a program with one argument); files and web pages
+open by the `open` verb on the validated target (ADR-018); `http` and `https` are the only
+schemes, refused by the domain and again by the host.
+
+### Deferred out of F1, and why
+
+- **Store apps and shortcuts.** A `.lnk` is resolved by reading the link, a Store app is
+  launched through its AUMID; both are the R2 territory (a PID that is not the window) and
+  belong with readiness (F4), where the answer to "did it open" is a window, not a PID.
+- **Saving a step that does not resolve here.** The editor refuses it, as F0 refused a
+  relative path. A profile that was written on another machine and resolves only there is
+  exactly what import (F5) will bring, and the review screen is where such a step is shown as
+  unresolvable rather than refused.
+- **Choosing a file or folder with a picker.** The path is typed. A native dialog is a
+  capability (`dialog:allow-open`) the window does not have yet; it arrives with import and
+  export (F5), which need it anyway.
+- **Window placement fields** (position, size, monitor, state). Stored nowhere yet; F6.
+
 ## 8. Definition of done
 
 A slice is done when **all eight** are true.

@@ -26,7 +26,7 @@ Migrations are forward-only and numbered (`VERSIONING.md`).
 | `id`          | UUID v7                                                                                                                                         |
 | `profile_id`  | cascades on delete                                                                                                                              |
 | `position`    | order within the profile; integer, dense                                                                                                        |
-| `kind`        | `app` today; more kinds arrive by migration (`CHECK`)                                                                                           |
+| `kind`        | `app`, `folder`, `file` or `url` (`CHECK`, widened by migration 002)                                                                            |
 | `config_json` | the step's own shape, written and validated by the domain (ADR-010); e.g. `{"program": "C:\\...\\notepad.exe", "args": [], "workingDir": null}` |
 | `timing_json` | `{}` until F2                                                                                                                                   |
 
@@ -61,13 +61,18 @@ The host stores `config_json` verbatim and parses it only to act, refusing unkno
 
 ### Event kinds
 
-| Kind           | `step_id` | Payload                                                |
-| -------------- | --------- | ------------------------------------------------------ |
-| `run_started`  | `NULL`    | `profileName`, `mode`, `trigger`, `steps` (count)      |
-| `spawned`      | step      | `program`, `args`, `workingDir`, `pid`                 |
-| `would_spawn`  | step      | `program`, `args`, `workingDir` (dry run)              |
-| `failed`       | step      | `program`, `args`, `workingDir`, `reason` (a sentence) |
-| `run_finished` | `NULL`    | `outcome`                                              |
+| Kind           | `step_id` | Payload                                                                                 |
+| -------------- | --------- | --------------------------------------------------------------------------------------- |
+| `run_started`  | `NULL`    | `profileName`, `mode`, `trigger`, `steps` (count)                                       |
+| `spawned`      | step      | `kind: "app"`, `program`, `args`, `workingDir`, `source`, `pid`                         |
+| `opened`       | step      | `kind` (`folder`/`file`/`url`), `target`, `source`, `pid` (null when Windows gave none) |
+| `would_spawn`  | step      | as `spawned` without `pid` (dry run)                                                    |
+| `would_open`   | step      | as `opened` without `pid` (dry run)                                                     |
+| `failed`       | step      | the launch as above, plus `reason` (a sentence)                                         |
+| `run_finished` | `NULL`    | `outcome`                                                                               |
+
+Every launch payload carries the target **resolved** — the absolute path or the address the
+host was asked to act on — and `source`, the path as written, when expansion changed it.
 
 A run's first event and its row are inserted in one transaction; so are its last event and
 its outcome. Later slices add `waiting`, `ready`, `timed_out`, `closed`, `not_stoppable`,
