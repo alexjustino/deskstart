@@ -10,20 +10,31 @@ import { startSession, type Session } from './session';
  *   "a profile with one step opens Notepad and the log says when and with
  *    which PID"
  *
- * Not "the button was clicked" — the process is looked up by the PID the log
- * printed, through the operating system, and closed by the suite afterwards.
- * Then the application is restarted and the log is still there.
+ * Not "the button was clicked" — Windows is asked whether a Notepad appeared,
+ * and the suite closes it afterwards. Then the application is restarted and
+ * the log is still there.
+ *
+ * Why the check is "a Notepad appeared" and not "the PID in the log is alive":
+ * on Windows 11, `System32\notepad.exe` is a stub that hands off to the Store
+ * Notepad and exits within milliseconds. The PID the log prints is true — it
+ * is the process Deskstart started — and it is gone by the time anyone looks.
+ * That is risk R2 in the specification, seen on the first real run rather
+ * than read about; readiness by window is F4's subject.
  */
 
 const NOTEPAD = 'C:\\Windows\\System32\\notepad.exe';
 
-/** Is a process with this PID alive, according to Windows? */
-function processExists(pid: number): boolean {
-  const output = execFileSync('tasklist', ['/FI', `PID eq ${pid}`, '/NH', '/FO', 'CSV'], {
-    encoding: 'utf-8',
-    windowsHide: true,
-  });
-  return output.includes(`"${pid}"`);
+/** The PIDs of every running Notepad, whichever binary it is. */
+function notepadPids(): number[] {
+  const output = execFileSync(
+    'tasklist',
+    ['/FI', 'IMAGENAME eq notepad.exe', '/NH', '/FO', 'CSV'],
+    {
+      encoding: 'utf-8',
+      windowsHide: true,
+    },
+  );
+  return [...output.matchAll(/^"[^"]*","(\d+)"/gim)].map((m) => Number(m[1]));
 }
 
 function killProcess(pid: number): void {
@@ -37,13 +48,16 @@ function killProcess(pid: number): void {
 describe('a run', () => {
   let session: Session;
   let pid: number | null = null;
+  /** Notepads that were already open before the suite: not ours to close. */
+  let before: number[] = [];
 
   beforeAll(async () => {
+    before = notepadPids();
     session = await startSession();
   });
 
   afterAll(async () => {
-    if (pid !== null) killProcess(pid);
+    for (const opened of notepadPids().filter((p) => !before.includes(p))) killProcess(opened);
     await session?.stop();
   });
 
@@ -100,8 +114,10 @@ describe('a run', () => {
     const stamp = await (await row.find('span')).text();
     expect(stamp).toMatch(/^\d{2}:\d{2}:\d{2}\.\d{3}$/);
 
-    // Windows agrees that the process exists.
-    expect(processExists(pid)).toBe(true);
+    // Windows agrees that a Notepad appeared that was not there before.
+    await driver.waitFor('a new Notepad process', async () =>
+      notepadPids().some((p) => !before.includes(p)) ? true : null,
+    );
     await driver.waitForText('Run finished — completed');
     await session.screenshot('run-notepad-started');
   });
@@ -119,12 +135,9 @@ describe('a run', () => {
     );
     await driver.waitForText('Run finished — completed, with failures');
 
-    // Close the second Notepad this run opened.
+    // Close the second Notepad this run opened; the first stays for the restart check.
     const rows = await driver.findAll('ol[aria-label="Run log"] li[data-kind="spawned"]');
-    for (const row of rows) {
-      const match = /PID (\d+)/.exec(await row.text());
-      if (match) killProcess(Number(match[1]));
-    }
+    expect(rows.length).toBe(1);
     await session.screenshot('run-with-failure');
   });
 
