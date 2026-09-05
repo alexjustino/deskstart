@@ -382,7 +382,7 @@ function AddStepForm({ profileId }: { profileId: string }) {
       <p className="text-caption font-semibold text-fg-tertiary uppercase">Add an application</p>
       <Input
         aria-label="Program path"
-        placeholder={'C:\\Windows\\System32\\notepad.exe'}
+        placeholder="Absolute path to a program, e.g. C:\Program Files\App\app.exe"
         value={program}
         onChange={(e) => setProgram(e.target.value)}
         disabled={add.isPending}
