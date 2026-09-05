@@ -1,0 +1,13 @@
+# Normalise line endings so a Windows checkout and a Linux CI runner never
+# disagree about whether a file changed. Prettier and rustfmt both assume LF.
+* text=auto eol=lf
+
+# Binary assets must never be touched.
+*.png binary
+*.ico binary
+*.icns binary
+*.svg text eol=lf
+
+# Lockfiles are generated: keep them out of diff review by default.
+package-lock.json linguist-generated=true -diff
+src-tauri/Cargo.lock linguist-generated=true -diff

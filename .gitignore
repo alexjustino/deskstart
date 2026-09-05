@@ -1,0 +1,45 @@
+# Build output
+dist/
+dist-ssr/
+src-tauri/target/
+src-tauri/gen/
+
+# Dependencies
+node_modules/
+
+# Local data — never commit a database or a log
+*.sqlite3
+*.sqlite3-shm
+*.sqlite3-wal
+*.db
+*.log
+logs/
+
+# Environment and secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.p12
+*.pfx
+secrets/
+
+# Editors and OS
+.DS_Store
+Thumbs.db
+*.local
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Tooling caches
+coverage/
+.vitest/
+.eslintcache
+
+# End-to-end screenshots
+e2e/artefacts/
