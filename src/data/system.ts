@@ -70,6 +70,14 @@ export async function fetchSystemInfo(): Promise<SystemInfo> {
   };
 }
 
+/**
+ * The allow-listed environment, name to value, for the names the system
+ * defines. The only environment the interface ever sees (ADR-010).
+ */
+export async function fetchEnvironment(): Promise<Record<string, string>> {
+  return invoke<Record<string, string>>('environment');
+}
+
 export async function fetchAccentRamp(): Promise<AccentRamp> {
   const raw = await invoke<RawAccentRamp>('accent_ramp');
   return {

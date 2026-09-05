@@ -20,9 +20,9 @@ describe('a run', () => {
   it('starts each step in order and finishes completed', () => {
     const { state, actions } = drive(plan(STEPS, 'real'), [
       { kind: 'begun', at: 1000 },
-      { kind: 'spawned', stepId: 'a', pid: 1, at: 1100 },
-      { kind: 'spawned', stepId: 'b', pid: 2, at: 1200 },
-      { kind: 'spawned', stepId: 'c', pid: 3, at: 1300 },
+      { kind: 'step_done', stepId: 'a', at: 1100 },
+      { kind: 'step_done', stepId: 'b', at: 1200 },
+      { kind: 'step_done', stepId: 'c', at: 1300 },
     ]);
     expect(actions).toEqual([
       { kind: 'execute', stepId: 'a' },
@@ -39,9 +39,9 @@ describe('a run', () => {
   it('continues past a step that failed and says so in the outcome', () => {
     const { state, actions } = drive(plan(STEPS, 'real'), [
       { kind: 'begun', at: 0 },
-      { kind: 'spawned', stepId: 'a', pid: 1, at: 1 },
-      { kind: 'failed', stepId: 'b', reason: 'the program was not found', at: 2 },
-      { kind: 'spawned', stepId: 'c', pid: 3, at: 3 },
+      { kind: 'step_done', stepId: 'a', at: 1 },
+      { kind: 'step_failed', stepId: 'b', reason: 'the program was not found', at: 2 },
+      { kind: 'step_done', stepId: 'c', at: 3 },
     ]);
     expect(actions.at(-1)).toEqual({ kind: 'finish', outcome: 'completed_with_failures' });
     expect(state.results).toEqual({ a: 'ok', b: 'failed', c: 'ok' });
@@ -50,16 +50,16 @@ describe('a run', () => {
   it('is failed when every step failed', () => {
     const { actions } = drive(plan(STEPS.slice(0, 2), 'real'), [
       { kind: 'begun', at: 0 },
-      { kind: 'failed', stepId: 'a', reason: 'x', at: 1 },
-      { kind: 'failed', stepId: 'b', reason: 'y', at: 2 },
+      { kind: 'step_failed', stepId: 'a', reason: 'x', at: 1 },
+      { kind: 'step_failed', stepId: 'b', reason: 'y', at: 2 },
     ]);
     expect(actions.at(-1)).toEqual({ kind: 'finish', outcome: 'failed' });
   });
 
-  it('a dry run takes would_spawn as success and starts nothing else', () => {
+  it('a dry run is the same machine: a step done is a step done', () => {
     const { state, actions } = drive(plan(STEPS.slice(0, 1), 'dry'), [
       { kind: 'begun', at: 0 },
-      { kind: 'would_spawn', stepId: 'a', at: 1 },
+      { kind: 'step_done', stepId: 'a', at: 1 },
     ]);
     expect(actions).toEqual([
       { kind: 'execute', stepId: 'a' },
@@ -77,7 +77,7 @@ describe('a run', () => {
   it('a stop finishes the run and marks the rest skipped', () => {
     const { state, actions } = drive(plan(STEPS, 'real'), [
       { kind: 'begun', at: 0 },
-      { kind: 'spawned', stepId: 'a', pid: 1, at: 1 },
+      { kind: 'step_done', stepId: 'a', at: 1 },
       { kind: 'stop_requested', at: 2 },
     ]);
     expect(actions.at(-1)).toEqual({ kind: 'finish', outcome: 'stopped' });
@@ -94,22 +94,22 @@ describe('a run', () => {
 
   it('ignores an event for a step that is not the current one', () => {
     const begun = reduce(plan(STEPS, 'real'), { kind: 'begun', at: 0 }).state;
-    const stray = reduce(begun, { kind: 'spawned', stepId: 'c', pid: 3, at: 1 });
+    const stray = reduce(begun, { kind: 'step_done', stepId: 'c', at: 1 });
     expect(stray.state).toBe(begun);
     expect(stray.actions).toEqual([]);
-    const unknown = reduce(begun, { kind: 'failed', stepId: 'zz', reason: '?', at: 1 });
+    const unknown = reduce(begun, { kind: 'step_failed', stepId: 'zz', reason: '?', at: 1 });
     expect(unknown.state).toBe(begun);
   });
 
   it('ignores a step event before the run begun and anything after it finished', () => {
     const planned = plan(STEPS.slice(0, 1), 'real');
-    const early = reduce(planned, { kind: 'spawned', stepId: 'a', pid: 1, at: 1 });
+    const early = reduce(planned, { kind: 'step_done', stepId: 'a', at: 1 });
     expect(early.state).toBe(planned);
     expect(early.actions).toEqual([]);
 
     const { state: finished } = drive(planned, [
       { kind: 'begun', at: 0 },
-      { kind: 'spawned', stepId: 'a', pid: 1, at: 1 },
+      { kind: 'step_done', stepId: 'a', at: 1 },
     ]);
     const late = reduce(finished, { kind: 'begun', at: 2 });
     expect(late.state).toBe(finished);

@@ -13,22 +13,29 @@
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
-import type { StepConfig } from '@/domain/profile';
+import type { Step, StepConfig } from '@/domain/profile';
 import type { Mode } from '@/domain/run';
 
 import { executeProfile } from './execute';
 import * as profileApi from './profiles';
 import * as runApi from './runs';
+import { fetchEnvironment } from './system';
 
 export const keys = {
   profiles: ['profiles'] as const,
   steps: (profileId: string) => ['steps', profileId] as const,
   runs: (profileId: string | null) => ['runs', profileId] as const,
   events: (runId: string) => ['events', runId] as const,
+  environment: ['environment'] as const,
 };
 
 export function useProfiles() {
   return useQuery({ queryKey: keys.profiles, queryFn: profileApi.listProfiles });
+}
+
+/** The allow-listed environment. Read once: it does not change while the window is open. */
+export function useEnvironment() {
+  return useQuery({ queryKey: keys.environment, queryFn: fetchEnvironment });
 }
 
 export function useCreateProfile() {
@@ -73,11 +80,31 @@ export function useAddStep() {
   });
 }
 
+export function useUpdateStep() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, config }: { id: string; profileId: string; config: StepConfig }) =>
+      profileApi.updateStep(id, config),
+    onSuccess: (_step, { profileId }) =>
+      client.invalidateQueries({ queryKey: keys.steps(profileId) }),
+  });
+}
+
 export function useDeleteStep() {
   const client = useQueryClient();
   return useMutation({
     mutationFn: ({ id }: { id: string; profileId: string }) => profileApi.deleteStep(id),
     onSuccess: (_void, { profileId }) =>
+      client.invalidateQueries({ queryKey: keys.steps(profileId) }),
+  });
+}
+
+export function useMoveStep() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, direction }: { id: string; profileId: string; direction: -1 | 1 }) =>
+      profileApi.moveStep(id, direction),
+    onSuccess: (_steps, { profileId }) =>
       client.invalidateQueries({ queryKey: keys.steps(profileId) }),
   });
 }
@@ -107,16 +134,18 @@ export function useExecuteProfile() {
   return useMutation({
     mutationFn: ({
       profileId,
-      stepIds,
+      steps,
       mode,
+      env,
       onLine,
     }: {
       profileId: string;
-      stepIds: string[];
+      steps: Step[];
       mode: Mode;
+      env: Readonly<Record<string, string>>;
       onLine?: (line: runApi.LogLine) => void;
     }) =>
-      executeProfile(profileId, stepIds, mode, (line) => {
+      executeProfile(profileId, steps, mode, env, (line) => {
         void client.invalidateQueries({ queryKey: keys.events(line.runId) });
         onLine?.(line);
       }),

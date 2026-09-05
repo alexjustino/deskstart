@@ -6,9 +6,13 @@
  * the actions it returns. Dry-run, real run and the end-to-end suite all drive
  * this one function, so what is tested here with a fake clock is what runs.
  *
- * F0 knows one thing: start each step in order, then finish with an outcome
- * that says how many started. Pauses, holds, cycles and dependencies arrive in
- * later slices as more event and action kinds over the same reducer.
+ * The machine does not know how a step was done — started, opened, or only
+ * written down in a dry run — only that it was, or was not. That translation
+ * happens once, at the boundary (`data/runs.ts`).
+ *
+ * F0/F1 know one thing: do each step in order, then finish with an outcome
+ * that says how many succeeded. Pauses, holds, cycles and dependencies arrive
+ * in later slices as more event and action kinds over the same reducer.
  */
 
 export type Mode = 'real' | 'dry';
@@ -23,9 +27,8 @@ export type StepResult = 'ok' | 'failed' | 'skipped';
 
 export type RunEvent =
   | { kind: 'begun'; at: number }
-  | { kind: 'spawned'; stepId: string; pid: number; at: number }
-  | { kind: 'would_spawn'; stepId: string; at: number }
-  | { kind: 'failed'; stepId: string; reason: string; at: number }
+  | { kind: 'step_done'; stepId: string; at: number }
+  | { kind: 'step_failed'; stepId: string; reason: string; at: number }
   | { kind: 'stop_requested'; at: number };
 
 export type Action = { kind: 'execute'; stepId: string } | { kind: 'finish'; outcome: Outcome };
@@ -82,13 +85,12 @@ export function reduce(state: RunState, event: RunEvent): { state: RunState; act
       return advance(running, event.at);
     }
 
-    case 'spawned':
-    case 'would_spawn':
-    case 'failed': {
+    case 'step_done':
+    case 'step_failed': {
       if (state.phase !== 'running') return { state, actions: [] };
       const current = state.steps[state.index];
       if (current === undefined || current.id !== event.stepId) return { state, actions: [] };
-      const result: StepResult = event.kind === 'failed' ? 'failed' : 'ok';
+      const result: StepResult = event.kind === 'step_failed' ? 'failed' : 'ok';
       const next: RunState = {
         ...state,
         index: state.index + 1,

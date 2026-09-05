@@ -14,6 +14,9 @@
 //! - F0: database opened and migrated at startup, single-instance guard,
 //!   rotating file log, accent ramp, profiles and steps, a run that starts a
 //!   program from an argument vector and appends what happened to the log.
+//! - F1: folder, file and url steps (migration 002), opened by verb on a
+//!   validated target; the allow-listed environment for path expansion; a
+//!   step can be moved within its profile.
 
 pub mod commands;
 pub mod db;
@@ -69,6 +72,7 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             commands::system::system_info,
             commands::system::accent_ramp,
+            commands::system::environment,
             commands::profiles::profiles_list,
             commands::profiles::profile_create,
             commands::profiles::profile_rename,
@@ -77,6 +81,7 @@ pub fn run() {
             commands::profiles::step_add,
             commands::profiles::step_update,
             commands::profiles::step_delete,
+            commands::profiles::step_move,
             commands::runs::run_begin,
             commands::runs::step_execute,
             commands::runs::run_finish,

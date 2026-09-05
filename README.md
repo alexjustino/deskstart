@@ -15,10 +15,11 @@ No cloud. No account. No telemetry. No shell.
 
 ---
 
-> **Status: foundation.** Deskstart is being built in public, one vertical slice at a time.
-> What exists today is the foundation (F0): a profile with application steps, a Run button
-> that really starts them, and a log that really says what happened. Everything else on this
-> page is marked as planned. Installers arrive with the first release.
+> **Status: early.** Deskstart is being built in public, one vertical slice at a time. What
+> exists today is the foundation (F0) and the profile editor (F1): profiles of applications,
+> folders, files and web pages, a Run button that really opens them, and a log that really
+> says what happened. Everything else on this page is marked as planned. Installers arrive
+> with the first release.
 
 ## Why
 
@@ -38,13 +39,16 @@ twenty minutes, then close it" and "open, close, reopen" are first-class, not a 
 
 ## What exists today
 
-- **Profiles** with application steps: an absolute program path and, optionally, a working
-  directory.
+- **Profiles** of steps, edited in one form: an **application** (program path, arguments as
+  a list, working directory), a **folder** (opened in Explorer), a **file** (opened with what
+  Windows associates with it), a **web page** (`http`/`https`, in the default browser). Paths
+  may use `%USERPROFILE%` and five other allow-listed names; the row shows the path as written
+  and what it became.
 - **Run.** Each step is started in order from an argument vector — never through a shell —
   and the log gets a line per step before the screen does: _Started notepad.exe — PID 1234_,
   with the time the host wrote it. A program that cannot be started is a line with its
   reason, and the run goes on.
-- **Dry run.** The same run, writing what it would do and starting nothing.
+- **Dry run.** The same run, writing the resolved target of every step and starting nothing.
 - **The log.** Append-only in the database — triggers refuse any update or delete — read on
   the profile screen and on the Runs screen, kept across restarts and after the profile is
   gone.
@@ -54,20 +58,19 @@ twenty minutes, then close it" and "open, close, reopen" are first-class, not a 
 
 ## What is planned
 
-| Slice | What                                                            |
-| ----- | --------------------------------------------------------------- |
-| F1    | Profile editor: arguments, folders, files, URLs; dry-run detail |
-| F2    | Time: pause between steps, hold then close, cycles              |
-| F3    | Stop, and the run history                                       |
-| F4    | Dependencies: "start X once Y is responding", with a timeout    |
-| F5    | Profile as a file: export, import, **review before running**    |
-| F6    | Window control: position, size, monitor, state                  |
-| F7    | Context steps: a bookmark folder, Windows Terminal, VS Code     |
-| F8    | Virtual machines: Hyper-V, VirtualBox, VMware Workstation       |
-| F9    | Triggers: schedule via Task Scheduler, global shortcut          |
-| F10   | Settings, Diagnostics, About, backup                            |
-| F11   | Fluent polish and accessibility                                 |
-| F12   | Release 1.0.0                                                   |
+| Slice | What                                                         |
+| ----- | ------------------------------------------------------------ |
+| F2    | Time: pause between steps, hold then close, cycles           |
+| F3    | Stop, and the run history                                    |
+| F4    | Dependencies: "start X once Y is responding", with a timeout |
+| F5    | Profile as a file: export, import, **review before running** |
+| F6    | Window control: position, size, monitor, state               |
+| F7    | Context steps: a bookmark folder, Windows Terminal, VS Code  |
+| F8    | Virtual machines: Hyper-V, VirtualBox, VMware Workstation    |
+| F9    | Triggers: schedule via Task Scheduler, global shortcut       |
+| F10   | Settings, Diagnostics, About, backup                         |
+| F11   | Fluent polish and accessibility                              |
+| F12   | Release 1.0.0                                                |
 
 The specification, with a proof of done per slice, is [`docs/SPEC.md`](docs/SPEC.md).
 

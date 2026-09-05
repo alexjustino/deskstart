@@ -1,4 +1,6 @@
-//! System-level commands: identity and theme input.
+//! System-level commands: identity, theme input, and the environment a path may use.
+
+use std::collections::BTreeMap;
 
 use serde::Serialize;
 use tauri::{AppHandle, State};
@@ -48,4 +50,56 @@ pub fn system_info(app: AppHandle, db: State<'_, Db>) -> Result<SystemInfo> {
 #[tauri::command]
 pub fn accent_ramp() -> accent::AccentRamp {
     accent::read()
+}
+
+/// The environment names a path in a profile may use (ADR-010). The same six
+/// the domain's `resolvePath` accepts — this is the map it expands from.
+pub const ALLOWED_ENVIRONMENT: [&str; 6] = [
+    "USERPROFILE",
+    "APPDATA",
+    "LOCALAPPDATA",
+    "PROGRAMFILES",
+    "PROGRAMFILES(X86)",
+    "SYSTEMROOT",
+];
+
+/// The allow-listed environment, name to value, for those the system defines.
+/// Nothing else leaves the host: the interface never sees `PATH` or a secret
+/// someone put in an environment variable.
+#[tauri::command]
+pub fn environment() -> BTreeMap<String, String> {
+    ALLOWED_ENVIRONMENT
+        .iter()
+        .filter_map(|name| {
+            std::env::var(name)
+                .ok()
+                .map(|value| (name.to_string(), value))
+        })
+        .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn the_environment_only_ever_holds_allow_listed_names() {
+        let env = environment();
+        for name in env.keys() {
+            assert!(
+                ALLOWED_ENVIRONMENT.contains(&name.as_str()),
+                "{name} leaked"
+            );
+        }
+        assert!(!env.contains_key("PATH"));
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn windows_defines_the_system_root() {
+        let env = environment();
+        assert!(env
+            .get("SYSTEMROOT")
+            .is_some_and(|v| v.ends_with("Windows")));
+    }
 }

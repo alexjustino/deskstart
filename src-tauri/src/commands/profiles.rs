@@ -58,3 +58,10 @@ pub fn step_delete(db: State<'_, Db>, id: String) -> Result<()> {
     let conn = db.0.lock().expect("the database lock was poisoned");
     profiles::delete_step(&conn, &id)
 }
+
+/// Move a step one place up (`-1`) or down (`1`) within its profile.
+#[tauri::command]
+pub fn step_move(db: State<'_, Db>, id: String, direction: i64) -> Result<Vec<Step>> {
+    let mut conn = db.0.lock().expect("the database lock was poisoned");
+    profiles::move_step(&mut conn, &id, direction)
+}

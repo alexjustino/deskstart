@@ -2,7 +2,7 @@
 
 use rusqlite::{params, Connection, OptionalExtension};
 
-use crate::db::models::{Profile, Step};
+use crate::db::models::{Profile, Step, STEP_KINDS};
 use crate::db::{new_id, now};
 use crate::error::{Error, Result};
 
@@ -124,10 +124,8 @@ pub fn add_step(
     config_json: &str,
 ) -> Result<Step> {
     get_profile(conn, profile_id)?;
-    if kind != "app" {
-        return Err(Error::InvalidInput(
-            "that kind of step is not supported yet",
-        ));
+    if !STEP_KINDS.contains(&kind) {
+        return Err(Error::InvalidInput("that kind of step does not exist"));
     }
     if serde_json::from_str::<serde_json::Value>(config_json).is_err() {
         return Err(Error::InvalidInput("the step configuration is not valid"));
@@ -169,6 +167,44 @@ pub fn delete_step(conn: &Connection, id: &str) -> Result<()> {
     conn.execute("DELETE FROM step WHERE id = ?1", [id])?;
     touch_profile(conn, &step.profile_id)?;
     Ok(())
+}
+
+/// Swap a step with its neighbour above (`direction < 0`) or below. At the
+/// edge nothing moves and nothing complains: the list is returned as it is.
+pub fn move_step(conn: &mut Connection, id: &str, direction: i64) -> Result<Vec<Step>> {
+    let step = get_step(conn, id)?;
+    let steps = list_steps(conn, &step.profile_id)?;
+    let index = steps
+        .iter()
+        .position(|s| s.id == id)
+        .ok_or(Error::NotFound)?;
+    let target = match direction.signum() {
+        -1 if index > 0 => index - 1,
+        1 if index + 1 < steps.len() => index + 1,
+        _ => return Ok(steps),
+    };
+    // Positions are made dense first so a swap is exactly a swap, whatever
+    // gaps deletions left behind.
+    let tx = conn.transaction()?;
+    for (position, s) in steps.iter().enumerate() {
+        let position = if s.id == steps[index].id {
+            target
+        } else if s.id == steps[target].id {
+            index
+        } else {
+            position
+        };
+        tx.execute(
+            "UPDATE step SET position = ?2 WHERE id = ?1",
+            params![s.id, position as i64],
+        )?;
+    }
+    tx.execute(
+        "UPDATE profile SET updated_at = ?2 WHERE id = ?1",
+        params![step.profile_id, now()],
+    )?;
+    tx.commit()?;
+    list_steps(conn, &step.profile_id)
 }
 
 fn touch_profile(conn: &Connection, profile_id: &str) -> Result<()> {
@@ -248,11 +284,34 @@ mod tests {
             Err(Error::InvalidInput(_))
         ));
         assert!(matches!(
-            add_step(&conn, &profile.id, "folder", "{}"),
+            add_step(&conn, &profile.id, "shortcut", "{}"),
             Err(Error::InvalidInput(_))
         ));
         assert!(matches!(
             add_step(&conn, "missing", "app", "{}"),
+            Err(Error::NotFound)
+        ));
+    }
+
+    #[test]
+    fn a_step_moves_one_place_and_stays_put_at_the_edge() {
+        let mut conn = memory();
+        let profile = create_profile(&conn, "Morning").unwrap();
+        let a = add_step(&conn, &profile.id, "app", r#"{"program":"a.exe"}"#).unwrap();
+        let b = add_step(&conn, &profile.id, "url", r#"{"url":"https://b"}"#).unwrap();
+        let c = add_step(&conn, &profile.id, "folder", r#"{"path":"C:/c"}"#).unwrap();
+        let order = |steps: &[Step]| steps.iter().map(|s| s.id.clone()).collect::<Vec<_>>();
+
+        let moved = move_step(&mut conn, &c.id, -1).unwrap();
+        assert_eq!(order(&moved), [a.id.clone(), c.id.clone(), b.id.clone()]);
+
+        let edge = move_step(&mut conn, &a.id, -1).unwrap();
+        assert_eq!(order(&edge), [a.id.clone(), c.id.clone(), b.id.clone()]);
+
+        let down = move_step(&mut conn, &a.id, 1).unwrap();
+        assert_eq!(order(&down), [c.id, a.id, b.id]);
+        assert!(matches!(
+            move_step(&mut conn, "missing", 1),
             Err(Error::NotFound)
         ));
     }

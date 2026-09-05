@@ -21,7 +21,8 @@ pub struct Profile {
 /// One thing a profile opens, and how.
 ///
 /// `config_json` is the domain's shape (ADR-010), stored verbatim. The host
-/// parses it into [`AppStepConfig`] only at the moment of acting on it.
+/// never acts on it directly: the domain resolves it into a [`Launch`] and the
+/// host re-checks that against the disk.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct Step {
     pub id: String,
@@ -34,15 +35,75 @@ pub struct Step {
     pub updated_at: String,
 }
 
-/// The configuration of an `app` step, as the domain writes it.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-#[serde(rename_all = "camelCase", deny_unknown_fields)]
-pub struct AppStepConfig {
-    pub program: String,
-    #[serde(default)]
-    pub args: Vec<String>,
-    #[serde(default)]
-    pub working_dir: Option<String>,
+/// The step kinds the host knows how to act on. The schema's CHECK says the same.
+pub const STEP_KINDS: [&str; 4] = ["app", "folder", "file", "url"];
+
+/// What the domain asks the host to do for one step: every path already
+/// resolved and absolute. `source` is the path as written when expansion
+/// changed it, so the log can show both.
+#[derive(Debug, Clone, Deserialize, PartialEq, Eq)]
+#[serde(tag = "kind", rename_all = "lowercase")]
+pub enum Launch {
+    #[serde(rename_all = "camelCase")]
+    App {
+        program: String,
+        #[serde(default)]
+        args: Vec<String>,
+        #[serde(default)]
+        working_dir: Option<String>,
+        #[serde(default)]
+        source: Option<String>,
+    },
+    Folder {
+        path: String,
+        #[serde(default)]
+        source: Option<String>,
+    },
+    File {
+        path: String,
+        #[serde(default)]
+        source: Option<String>,
+    },
+    Url {
+        url: String,
+        #[serde(default)]
+        source: Option<String>,
+    },
+}
+
+impl Launch {
+    pub fn kind(&self) -> &'static str {
+        match self {
+            Launch::App { .. } => "app",
+            Launch::Folder { .. } => "folder",
+            Launch::File { .. } => "file",
+            Launch::Url { .. } => "url",
+        }
+    }
+
+    /// The launch as the log records it — what was asked, before the outcome.
+    pub fn describe(&self) -> serde_json::Value {
+        match self {
+            Launch::App {
+                program,
+                args,
+                working_dir,
+                source,
+            } => serde_json::json!({
+                "kind": "app",
+                "program": program,
+                "args": args,
+                "workingDir": working_dir,
+                "source": source,
+            }),
+            Launch::Folder { path, source } | Launch::File { path, source } => {
+                serde_json::json!({ "kind": self.kind(), "target": path, "source": source })
+            }
+            Launch::Url { url, source } => {
+                serde_json::json!({ "kind": "url", "target": url, "source": source })
+            }
+        }
+    }
 }
 
 /// One execution of a profile, real or dry.
@@ -68,4 +129,26 @@ pub struct Event {
     pub step_id: Option<String>,
     pub kind: String,
     pub payload_json: String,
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_launch_reads_from_the_domain_shape() {
+        let app: Launch = serde_json::from_str(
+            r#"{"kind":"app","program":"C:\\a.exe","args":["x"],"workingDir":null,"source":"%SYSTEMROOT%\\a.exe"}"#,
+        )
+        .unwrap();
+        assert_eq!(app.kind(), "app");
+        assert_eq!(app.describe()["source"], "%SYSTEMROOT%\\a.exe");
+
+        let url: Launch = serde_json::from_str(r#"{"kind":"url","url":"https://x.y/"}"#).unwrap();
+        assert_eq!(url.describe()["target"], "https://x.y/");
+        assert!(url.describe()["source"].is_null());
+
+        let unknown: Result<Launch, _> = serde_json::from_str(r#"{"kind":"shortcut","path":"x"}"#);
+        assert!(unknown.is_err());
+    }
 }

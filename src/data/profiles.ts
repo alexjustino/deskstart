@@ -122,3 +122,9 @@ export async function updateStep(id: string, config: StepConfig): Promise<Stored
 export async function deleteStep(id: string): Promise<void> {
   await invoke('step_delete', { id });
 }
+
+/** Move a step one place up (`-1`) or down (`1`); the whole list comes back. */
+export async function moveStep(id: string, direction: -1 | 1): Promise<StoredStep[]> {
+  const raw = await invoke<RawStep[]>('step_move', { id, direction });
+  return raw.map(toStoredStep);
+}

@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added — F1, the profile editor
+
+- Four kinds of step: an application, a folder (opened in Explorer), a file (opened with
+  whatever Windows associates with it), a web page (`http`/`https` only, in the default
+  browser). One form adds and edits them; a step can be moved up and down.
+- Arguments, edited as a list — one field per argument, never a text box split on spaces.
+- Paths may use `%USERPROFILE%`, `%APPDATA%`, `%LOCALAPPDATA%`, `%PROGRAMFILES%`,
+  `%PROGRAMFILES(X86)%` and `%SYSTEMROOT%`. The row shows the path as written and what it
+  became; the form previews the launch with the same function the run uses.
+- The dry run writes the resolved target of every step, and its source when expansion changed
+  it, and starts nothing.
+
 ### Added — F0, the foundation
 
 - A profile: named, with application steps (an absolute program path and an optional working
@@ -27,3 +39,6 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 **001** — `workspace`, `profile`, `step`, `run`, `event`, with the append-only triggers on
 `event`.
+
+**002** — `step` rebuilt to admit the `folder`, `file` and `url` kinds; every row carried
+across, the index recreated. The round-trip test writes at version 1 and reads at head.
