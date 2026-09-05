@@ -3,6 +3,7 @@ import { execFileSync } from 'node:child_process';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 
 import { startSession, type Session } from './session';
+import { Keys, type Element } from './webdriver';
 
 /**
  * The proof of done for the foundation, verbatim from the specification:
@@ -35,6 +36,16 @@ function notepadPids(): number[] {
     },
   );
   return [...output.matchAll(/^"[^"]*","(\d+)"/gim)].map((m) => Number(m[1]));
+}
+
+/**
+ * Empty a controlled input the way a person would. WebDriver's `clear()` sets
+ * the DOM value behind React's back, and React writes its own state straight
+ * back on the next render — the first run of this suite typed a second path
+ * onto the end of the first and refused the result as "not absolute".
+ */
+async function clearField(field: Element): Promise<void> {
+  await field.sendKeys(Keys.CONTROL + 'a' + Keys.CONTROL + Keys.BACKSPACE);
 }
 
 function killProcess(pid: number): void {
@@ -80,11 +91,11 @@ describe('a run', () => {
   it('refuses a relative path before anything is stored', async () => {
     const { driver } = session;
     const program = await driver.find('input[aria-label="Program path"]');
-    await program.clear();
+    await clearField(program);
     await program.sendKeys('notepad.exe');
     await (await driver.findByXPath('//button[normalize-space(.)="Add step"]')).click();
     await driver.waitForText('the path is not absolute');
-    await program.clear();
+    await clearField(program);
     const steps = await driver.findAll('ol[aria-label="Steps"] li');
     expect(steps.length).toBe(1);
   });
