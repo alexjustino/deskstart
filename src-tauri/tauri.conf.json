@@ -1,0 +1,72 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Deskstart",
+  "version": "0.1.0",
+  "identifier": "io.github.alexjustino.deskstart",
+  "build": {
+    "beforeDevCommand": "npm run dev",
+    "devUrl": "http://localhost:1420",
+    "beforeBuildCommand": "npm run build",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "Deskstart",
+        "width": 1180,
+        "height": 760,
+        "minWidth": 860,
+        "minHeight": 540,
+        "resizable": true,
+        "center": true,
+        "decorations": false,
+        "transparent": true,
+        "shadow": true,
+        "windowEffects": {
+          "effects": ["mica"]
+        }
+      }
+    ],
+    "security": {
+      "csp": {
+        "default-src": "'self'",
+        "script-src": "'self'",
+        "style-src": "'self' 'unsafe-inline'",
+        "img-src": "'self' asset: data: blob:",
+        "font-src": "'self' data:",
+        "connect-src": "'self' ipc: http://ipc.localhost",
+        "media-src": "'none'",
+        "object-src": "'none'",
+        "frame-src": "'none'",
+        "base-uri": "'none'",
+        "form-action": "'none'"
+      }
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": ["msi", "nsis"],
+    "publisher": "Alex Justino",
+    "copyright": "Copyright 2026 Alex Justino",
+    "category": "Utility",
+    "shortDescription": "Open your working day with one button",
+    "longDescription": "Deskstart runs a profile of steps — the applications, folders and pages that make up a working setup — in order, with timing, from one button, and keeps a log of every run. It runs entirely on your machine: no account, no cloud, no telemetry.",
+    "licenseFile": "../LICENSE",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "windows": {
+      "webviewInstallMode": {
+        "type": "downloadBootstrapper"
+      },
+      "nsis": {
+        "installMode": "currentUser"
+      }
+    }
+  }
+}

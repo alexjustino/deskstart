@@ -1,0 +1,41 @@
+[package]
+name = "deskstart"
+version = "0.1.0"
+description = "Open your working day with one button: profiles of timed steps, run and logged"
+authors = ["Alex Justino"]
+license = "Apache-2.0"
+repository = "https://github.com/alexjustino/deskstart"
+edition = "2021"
+rust-version = "1.80"
+
+[lib]
+# The `_lib` suffix keeps the library name distinct from the binary on Windows.
+name = "deskstart_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = [] }
+tauri-plugin-log = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+thiserror = "2"
+rusqlite = { version = "0.32", features = ["bundled"] }
+log = "0.4"
+uuid = { version = "1", features = ["v7"] }
+chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
+
+[target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
+tauri-plugin-single-instance = "2"
+
+[target.'cfg(windows)'.dependencies]
+windows = { version = "0.58", features = ["UI_ViewManagement", "Foundation"] }
+
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = "s"
+panic = "abort"
+strip = true

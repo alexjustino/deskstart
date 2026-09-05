@@ -1,0 +1,18 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "The capabilities the main window is granted. Every entry is here because a feature needs it. Shell execution is deliberately absent: a step is started by the host's own typed command, from a program path and an argument vector, never by a shell plugin handed a string.",
+  "windows": ["main"],
+  "permissions": [
+    "core:default",
+    "core:window:allow-start-dragging",
+    "core:window:allow-minimize",
+    "core:window:allow-toggle-maximize",
+    "core:window:allow-is-maximized",
+    "core:window:allow-close",
+    "core:window:allow-set-theme",
+    "core:window:allow-theme",
+    "core:event:default",
+    "log:default"
+  ]
+}

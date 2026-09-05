@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256">
+  <!--
+    The Deskstart mark.
+
+    Three bars — the ordered steps of a profile, the list a person would
+    otherwise walk through by hand every morning — and one triangle: the
+    button that runs them. The triangle is the lighter shape so the eye lands
+    on the action, not the list.
+
+    Drawn to survive sixteen pixels in a taskbar: four shapes, one accent, no
+    stroke thinner than the gap between bars. The blue is the Windows 11
+    default accent, the same value the token layer starts from.
+  -->
+  <defs>
+    <linearGradient id="ground" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#1a8ae0"/>
+      <stop offset="1" stop-color="#0060b0"/>
+    </linearGradient>
+  </defs>
+
+  <!-- The ground: Windows 11 corner radius, at this scale. -->
+  <rect x="0" y="0" width="256" height="256" rx="56" fill="url(#ground)"/>
+
+  <!-- The steps, in order. -->
+  <rect x="52" y="64"  width="88" height="28" rx="10" fill="#ffffff"/>
+  <rect x="52" y="114" width="88" height="28" rx="10" fill="#ffffff"/>
+  <rect x="52" y="164" width="88" height="28" rx="10" fill="#ffffff"/>
+
+  <!-- Run. -->
+  <path d="M 164 76 L 212 128 L 164 180 Z" fill="#a6dcff"/>
+</svg>
