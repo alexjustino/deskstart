@@ -1,0 +1,252 @@
+/*
+ * Deskstart — design tokens
+ * ---------------------------------------------------------------------------
+ * The single source of colour, space, radius, elevation, type and motion.
+ * A component never writes a raw value: if it is not a token here, it does not
+ * exist. This file is the contract the design system gate enforces.
+ *
+ * Values follow Fluent 2 (Windows 11).
+ *
+ * How theming works, and why it is shaped this way:
+ *
+ *   1. Semantic values are declared as plain custom properties under their own
+ *      namespaces (`--surface-*`, `--fg-*`, `--stroke-*`, `--accent-*`,
+ *      `--state-*`). Light is the base definition on bare `:root`, so a token
+ *      always resolves — nothing is defined ONLY inside a media query.
+ *   2. `@theme inline` maps them into Tailwind's `--color-*` namespace, so
+ *      `bg-surface-card` compiles to `var(--surface-card)` rather than to a
+ *      frozen literal. Redefining the semantic variable therefore re-themes
+ *      every utility at once.
+ *   3. Dark is declared twice on purpose: once under `prefers-color-scheme` for
+ *      the system default, once under `[data-theme='dark']` so an explicit
+ *      choice wins in both directions.
+ *
+ * The accent ramp is the exception: `src/app/theme.ts` overwrites it at runtime
+ * with the colour the user chose for their Windows desktop. The values below
+ * are the Windows 11 default, used until the host reports the real one.
+ */
+
+@theme {
+  /* ── Type ────────────────────────────────────────────────────────────── */
+  --font-sans:
+    'Segoe UI Variable Text', 'Segoe UI Variable', 'Segoe UI', system-ui, -apple-system, sans-serif;
+  --font-display:
+    'Segoe UI Variable Display', 'Segoe UI Variable', 'Segoe UI', system-ui, sans-serif;
+  --font-mono: 'Cascadia Code', 'Cascadia Mono', 'Consolas', ui-monospace, monospace;
+
+  /* Fluent ramp: caption -> body -> subtitle -> title -> display */
+  --text-caption: 0.75rem;
+  --text-caption--line-height: 1rem;
+  --text-body: 0.875rem;
+  --text-body--line-height: 1.25rem;
+  --text-body-lg: 1rem;
+  --text-body-lg--line-height: 1.375rem;
+  --text-subtitle: 1.25rem;
+  --text-subtitle--line-height: 1.75rem;
+  --text-title: 1.75rem;
+  --text-title--line-height: 2.25rem;
+  --text-display: 2.5rem;
+  --text-display--line-height: 3.25rem;
+
+  /* ── Radius (Windows 11 geometry) ───────────────────────────────────── */
+  --radius-sm: 3px;
+  --radius-md: 4px;
+  --radius-lg: 6px;
+  --radius-xl: 8px;
+
+  /* ── Elevation — four steps: card, flyout, dialog, toast ────────────── */
+  --shadow-card: 0 1px 2px rgb(0 0 0 / 0.14), 0 0 2px rgb(0 0 0 / 0.12);
+  --shadow-flyout: 0 4px 8px rgb(0 0 0 / 0.14), 0 0 2px rgb(0 0 0 / 0.12);
+  --shadow-dialog: 0 8px 16px rgb(0 0 0 / 0.14), 0 0 2px rgb(0 0 0 / 0.12);
+  --shadow-toast: 0 16px 32px rgb(0 0 0 / 0.24), 0 0 2px rgb(0 0 0 / 0.12);
+
+  /* ── Motion — Fluent 2 curves and durations ─────────────────────────── */
+  --ease-easy: cubic-bezier(0.33, 0, 0.67, 1);
+  --ease-decelerate: cubic-bezier(0.1, 0.9, 0.2, 1);
+  --ease-accelerate: cubic-bezier(0.9, 0.1, 1, 0.2);
+  --animate-duration-faster: 100ms;
+}
+
+/* Map the semantic namespaces into Tailwind's colour namespace by reference,
+   not by value — this is what makes the theme switch at runtime. */
+@theme inline {
+  --color-backdrop: var(--surface-backdrop);
+  --color-layer: var(--surface-layer);
+  --color-layer-alt: var(--surface-layer-alt);
+  --color-card: var(--surface-card);
+  --color-card-hover: var(--surface-card-hover);
+  --color-card-active: var(--surface-card-active);
+  --color-flyout: var(--surface-flyout);
+  --color-overlay: var(--surface-overlay);
+
+  --color-fg: var(--fg-primary);
+  --color-fg-secondary: var(--fg-secondary);
+  --color-fg-tertiary: var(--fg-tertiary);
+  --color-fg-disabled: var(--fg-disabled);
+  --color-fg-on-accent: var(--fg-on-accent);
+
+  --color-stroke: var(--stroke-default);
+  --color-stroke-subtle: var(--stroke-subtle);
+  --color-stroke-strong: var(--stroke-strong);
+
+  --color-accent: var(--accent-base);
+  --color-accent-hover: var(--accent-hover);
+  --color-accent-active: var(--accent-active);
+  --color-accent-subtle: var(--accent-subtle);
+
+  --color-info: var(--state-info);
+  --color-success: var(--state-success);
+  --color-caution: var(--state-caution);
+  --color-danger: var(--state-danger);
+  --color-info-subtle: var(--state-info-subtle);
+  --color-success-subtle: var(--state-success-subtle);
+  --color-caution-subtle: var(--state-caution-subtle);
+  --color-danger-subtle: var(--state-danger-subtle);
+}
+
+/*
+ * ── Light (the base definition) ────────────────────────────────────────────
+ * The light accent is the ramp's first dark step, not the raw accent: that is
+ * what Fluent does (AccentFillColorDefault is Dark1 in light), and it is what
+ * keeps accent text at 4.5:1 on white and on its own tint. Verified by
+ * tokens.test.ts, in both themes.
+ * Surfaces are layered the way Windows 11 layers them:
+ *   backdrop  the Mica material itself — transparent, because the OS paints it
+ *   layer     the content region floating on Mica
+ *   card      an opaque element inside the layer
+ *   flyout    Acrylic popovers, menus, the tray panel
+ */
+:root {
+  color-scheme: light;
+
+  --surface-backdrop: transparent;
+  --surface-layer: rgb(255 255 255 / 0.7);
+  --surface-layer-alt: rgb(249 249 249 / 0.55);
+  --surface-card: #ffffff;
+  --surface-card-hover: #f5f5f5;
+  --surface-card-active: #ededed;
+  --surface-flyout: rgb(252 252 252 / 0.85);
+  --surface-overlay: rgb(0 0 0 / 0.3);
+
+  --fg-primary: #1a1a1a;
+  --fg-secondary: #424242;
+  --fg-tertiary: #616161;
+  --fg-disabled: #bdbdbd;
+  --fg-on-accent: #ffffff;
+
+  --stroke-default: #d1d1d1;
+  --stroke-subtle: #e5e5e5;
+  --stroke-strong: #8a8a8a;
+  --focus-ring: #1a1a1a;
+
+  --accent-base: #005fb8;
+  --accent-hover: #004c94;
+  --accent-active: #003a70;
+  --accent-subtle: rgb(0 95 184 / 0.1);
+
+  --state-info: #005fb8;
+  --state-success: #0f7b0f;
+  --state-caution: #9d5d00;
+  --state-danger: #c42b1c;
+  --state-info-subtle: rgb(0 95 184 / 0.1);
+  --state-success-subtle: rgb(15 123 15 / 0.1);
+  --state-caution-subtle: rgb(157 93 0 / 0.1);
+  --state-danger-subtle: rgb(196 43 28 / 0.1);
+}
+
+/* ── Dark ──────────────────────────────────────────────────────────────── */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    color-scheme: dark;
+
+    --surface-backdrop: transparent;
+    --surface-layer: rgb(58 58 58 / 0.35);
+    --surface-layer-alt: rgb(48 48 48 / 0.45);
+    --surface-card: #2b2b2b;
+    --surface-card-hover: #333333;
+    --surface-card-active: #383838;
+    --surface-flyout: rgb(44 44 44 / 0.85);
+    --surface-overlay: rgb(0 0 0 / 0.5);
+
+    --fg-primary: #ffffff;
+    --fg-secondary: #d6d6d6;
+    --fg-tertiary: #adadad;
+    --fg-disabled: #5c5c5c;
+    --fg-on-accent: #000000;
+
+    --stroke-default: #545454;
+    --stroke-subtle: #3d3d3d;
+    --stroke-strong: #767676;
+    --focus-ring: #ffffff;
+
+    --accent-base: #60cdff;
+    --accent-hover: #4cc2ff;
+    --accent-active: #38b6ff;
+    --accent-subtle: rgb(96 205 255 / 0.12);
+
+    --state-info: #60cdff;
+    --state-success: #6ccb5f;
+    --state-caution: #fce100;
+    --state-danger: #ff99a4;
+    --state-info-subtle: rgb(96 205 255 / 0.12);
+    --state-success-subtle: rgb(108 203 95 / 0.12);
+    --state-caution-subtle: rgb(252 225 0 / 0.12);
+    --state-danger-subtle: rgb(255 153 164 / 0.12);
+  }
+}
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+
+  --surface-backdrop: transparent;
+  --surface-layer: rgb(58 58 58 / 0.35);
+  --surface-layer-alt: rgb(48 48 48 / 0.45);
+  --surface-card: #2b2b2b;
+  --surface-card-hover: #333333;
+  --surface-card-active: #383838;
+  --surface-flyout: rgb(44 44 44 / 0.85);
+  --surface-overlay: rgb(0 0 0 / 0.5);
+
+  --fg-primary: #ffffff;
+  --fg-secondary: #d6d6d6;
+  --fg-tertiary: #adadad;
+  --fg-disabled: #5c5c5c;
+  --fg-on-accent: #000000;
+
+  --stroke-default: #545454;
+  --stroke-subtle: #3d3d3d;
+  --stroke-strong: #767676;
+  --focus-ring: #ffffff;
+
+  --accent-base: #60cdff;
+  --accent-hover: #4cc2ff;
+  --accent-active: #38b6ff;
+  --accent-subtle: rgb(96 205 255 / 0.12);
+
+  --state-info: #60cdff;
+  --state-success: #6ccb5f;
+  --state-caution: #fce100;
+  --state-danger: #ff99a4;
+  --state-info-subtle: rgb(96 205 255 / 0.12);
+  --state-success-subtle: rgb(108 203 95 / 0.12);
+  --state-caution-subtle: rgb(252 225 0 / 0.12);
+  --state-danger-subtle: rgb(255 153 164 / 0.12);
+}
+
+/* ── Density ────────────────────────────────────────────────────────────────
+   Two densities, one variable. Rows and controls read `--density-*` instead of
+   hard-coding a height, so the whole product changes with one attribute. */
+:root,
+:root[data-density='comfortable'] {
+  --density-row: 40px;
+  --density-control: 32px;
+  --density-gap: 0.5rem;
+  --density-pad: 0.75rem;
+}
+
+:root[data-density='compact'] {
+  --density-row: 32px;
+  --density-control: 28px;
+  --density-gap: 0.375rem;
+  --density-pad: 0.5rem;
+}
