@@ -80,11 +80,29 @@ export function describe(line: LogLine): { text: string; detail: string | null }
       return { text: `Would open ${noun(p)}`, detail: detailOf(p) };
     case 'closed': {
       const how = p.how === 'terminated' ? ' (terminated after the grace)' : '';
+      if (p.stop === true) {
+        return { text: `Stopped ${noun(p)}${pidSuffix(p)}${how}`, detail: detailOf(p) };
+      }
       return {
         text: `Closed ${noun(p)} after ${duration(p.heldMs)}${pidSuffix(p)}${how}`,
         detail: detailOf(p),
       };
     }
+    case 'stopped': {
+      const closed = typeof p.closed === 'number' ? p.closed : 0;
+      const notClosed = typeof p.notClosed === 'number' ? p.notClosed : 0;
+      const parts = [`${closed} closed`];
+      if (notClosed > 0) parts.push(`${notClosed} not closed`);
+      return {
+        text: `Stop — ${parts.join(', ')}${p.swept === true ? '; everything else the run started was ended' : ''}`,
+        detail: null,
+      };
+    }
+    case 'no_job':
+      return {
+        text: `Windows gave this run no job object: a Stop reaches only the programs it holds directly`,
+        detail: typeof p.reason === 'string' ? p.reason : null,
+      };
     case 'not_closed':
       return {
         text: `Could not close ${noun(p)}: ${String(p.reason ?? 'no reason recorded')}`,

@@ -11,6 +11,7 @@ import {
 } from '@/domain/profile';
 import { describeTiming, readTiming, type Timing } from '@/domain/timing';
 import { Button } from '@/ui/Button';
+import { Checkbox } from '@/ui/Checkbox';
 import { ChoiceGroup } from '@/ui/ChoiceGroup';
 import { IconButton } from '@/ui/IconButton';
 import { InfoBar } from '@/ui/InfoBar';
@@ -383,10 +384,10 @@ export function StepForm({
                 id="step-repeat"
                 aria-label="Repeat (times)"
                 inputMode="numeric"
-                placeholder="1"
-                value={draft.repeat}
+                value={draft.repeat === 'forever' ? '' : draft.repeat}
                 onChange={(e) => set({ repeat: e.target.value })}
-                disabled={pending || draft.holdS.trim() === ''}
+                placeholder={draft.repeat === 'forever' ? 'until stopped' : '1'}
+                disabled={pending || draft.holdS.trim() === '' || draft.repeat === 'forever'}
               />
               <label htmlFor="step-closed" className="text-body text-fg-secondary">
                 Closed for, between openings (seconds)
@@ -400,6 +401,18 @@ export function StepForm({
                 onChange={(e) => set({ closedS: e.target.value })}
                 disabled={pending || draft.holdS.trim() === ''}
               />
+              <span className="text-body text-fg-secondary">
+                Again and again, until the run is stopped
+              </span>
+              <span className="flex items-center">
+                <Checkbox
+                  label="Repeat until the run is stopped"
+                  checked={draft.repeat.trim() === 'forever'}
+                  onChange={(on) => set({ repeat: on ? 'forever' : '1' })}
+                  disabled={pending || draft.holdS.trim() === ''}
+                />
+              </span>
+              <span hidden />
             </>
           )}
         </div>

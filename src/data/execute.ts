@@ -12,6 +12,11 @@
  * late after a sleep, and the machine copes. A dry run does not sleep: its
  * clock is virtual and jumps to every instant asked for, so a profile with an
  * hour of holds is written down in a second.
+ *
+ * A Stop (F3) is a flag the loop looks at before every action and that wakes
+ * it from any sleep. Nothing queued is started after it; the machine finishes
+ * `stopped`, the host closes what the run opened — and only that — and the
+ * run is finished with that outcome.
  */
 
 import { resolveStep, type Launch, type Step } from '@/domain/profile';
@@ -20,6 +25,7 @@ import { plan, reduce, type Action, type Mode, type RunEvent, type RunState } fr
 import {
   runBegin,
   runFinish,
+  runStop,
   stepClose,
   stepExecute,
   stepWait,
@@ -33,7 +39,34 @@ export interface Execution {
   state: RunState;
 }
 
-const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+/** The one way to interrupt a run from outside the loop. */
+export class Stopper {
+  private requested = false;
+  private wakers: Array<() => void> = [];
+
+  get stopped(): boolean {
+    return this.requested;
+  }
+
+  stop(): void {
+    this.requested = true;
+    for (const wake of this.wakers.splice(0)) wake();
+  }
+
+  /** Sleep, unless a stop comes first. */
+  sleep(ms: number): Promise<void> {
+    if (this.requested) return Promise.resolve();
+    return new Promise((resolve) => {
+      const done = () => {
+        clearTimeout(timer);
+        this.wakers = this.wakers.filter((w) => w !== done);
+        resolve();
+      };
+      const timer = setTimeout(done, ms);
+      this.wakers.push(done);
+    });
+  }
+}
 
 export async function executeProfile(
   profileId: string,
@@ -42,6 +75,7 @@ export async function executeProfile(
   env: Readonly<Record<string, string>>,
   onLine: (line: LogLine) => void = () => undefined,
   onBegin: (run: Run) => void = () => undefined,
+  stopper: Stopper = new Stopper(),
 ): Promise<Execution> {
   const run = await runBegin(profileId, mode);
   // The run exists in the file from this instant; the screen may show it now,
@@ -102,9 +136,20 @@ export async function executeProfile(
     if (event !== null) feed(event);
   };
 
+  let stopFed = false;
+  const takeStop = () => {
+    if (!stopper.stopped || stopFed) return;
+    stopFed = true;
+    // Nothing queued before the stop is started after it.
+    queue.length = 0;
+    wake = null;
+    feed({ kind: 'stop_requested', at: now() });
+  };
+
   feed({ kind: 'begun', at: now() });
 
   for (;;) {
+    takeStop();
     const action = queue.shift();
     if (action === undefined) {
       if (state.phase === 'finished') break;
@@ -115,7 +160,8 @@ export async function executeProfile(
       if (dry) {
         virtualNow = Math.max(virtualNow, at);
       } else {
-        await sleep(Math.max(0, at - Date.now()));
+        await stopper.sleep(Math.max(0, at - Date.now()));
+        if (stopper.stopped) continue;
       }
       if (reason.reason.kind === 'pause') {
         const step = stepOf(reason.reason.stepId);
@@ -133,6 +179,9 @@ export async function executeProfile(
         feedLine(await stepClose(run.id, action.stepId, launchOf(action.stepId), action.heldMs));
         break;
       case 'finish': {
+        if (action.outcome === 'stopped') {
+          for (const line of await runStop(run.id, Object.fromEntries(launches))) onLine(line);
+        }
         const finished = await runFinish(run.id, action.outcome);
         return { run: finished, state };
       }
