@@ -8,5 +8,6 @@
 
 pub mod accent;
 pub mod close;
+pub mod job;
 pub mod open;
 pub mod process;
