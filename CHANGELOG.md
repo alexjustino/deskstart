@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added — F3, Stop
+
+- A Stop button while a run goes. It starts nothing more, wakes the run from any wait, closes
+  what the run opened — asked first, terminated after the grace, one line each — and ends
+  whatever those programs started in turn through the run's Job Object. Nothing the run did
+  not start is touched. The run finishes `stopped`.
+- "Again and again, until the run is stopped" in the step editor.
+
 ### Added — F2, time
 
 - A pause after a step before the next one starts, on any kind of step.

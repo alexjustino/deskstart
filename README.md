@@ -16,10 +16,10 @@ No cloud. No account. No telemetry. No shell.
 ---
 
 > **Status: early.** Deskstart is being built in public, one vertical slice at a time. What
-> exists today is the foundation (F0), the profile editor (F1) and time (F2): profiles of
-> applications, folders, files and web pages, with pauses, holds and cycles; a Run button that
-> really opens them and really closes them when their time is up; and a log that really says
-> what happened. Everything else on this page is marked as planned. Installers arrive with the
+> exists today is the foundation (F0), the profile editor (F1), time (F2) and Stop (F3):
+> profiles of applications, folders, files and web pages, with pauses, holds and cycles; a Run
+> button that really opens them and really closes them when their time is up; a Stop that
+> closes what the run opened and nothing else; and a log that really says what happened. Everything else on this page is marked as planned. Installers arrive with the
 > first release.
 
 ## Why
@@ -52,6 +52,9 @@ twenty minutes, then close it" and "open, close, reopen" are first-class, not a 
 - **Time.** A pause after any step. For an application, a hold — keep it open this long,
   then close it (its windows are asked first; terminated only after a grace) — and a cycle:
   open it N times, closed for a while in between. Holds never block the next step.
+- **Stop.** Closes what the run opened — asked first, terminated after a grace — and
+  whatever those programs started, through the run's Job Object. A program the run did not
+  start is never touched.
 - **Dry run.** The same run on a virtual clock: the whole timeline written at once, nothing
   started, nothing waited for.
 - **The log.** Append-only in the database — triggers refuse any update or delete — read on
@@ -65,7 +68,6 @@ twenty minutes, then close it" and "open, close, reopen" are first-class, not a 
 
 | Slice | What                                                         |
 | ----- | ------------------------------------------------------------ |
-| F3    | Stop, and the run history                                    |
 | F4    | Dependencies: "start X once Y is responding", with a timeout |
 | F5    | Profile as a file: export, import, **review before running** |
 | F6    | Window control: position, size, monitor, state               |
