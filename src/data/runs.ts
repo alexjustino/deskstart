@@ -137,6 +137,12 @@ export async function stepWait(runId: string, stepId: string, ms: number): Promi
   return toLogLine(await invoke<RawEvent>('step_wait', { runId, stepId, ms }));
 }
 
+/** Stop a run: the host closes what the run opened, and only that, one line each. */
+export async function runStop(runId: string, launches: Record<string, Launch>): Promise<LogLine[]> {
+  const raw = await invoke<RawEvent[]>('run_stop', { runId, launches });
+  return raw.map(toLogLine);
+}
+
 export async function runFinish(runId: string, outcome: Outcome): Promise<Run> {
   return toRun(await invoke<RawRun>('run_finish', { runId, outcome }));
 }

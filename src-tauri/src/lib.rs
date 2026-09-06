@@ -89,6 +89,7 @@ pub fn run() {
             commands::runs::step_execute,
             commands::runs::step_close,
             commands::runs::step_wait,
+            commands::runs::run_stop,
             commands::runs::run_finish,
             commands::runs::runs_list,
             commands::runs::events_list,

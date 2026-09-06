@@ -11,6 +11,7 @@ import {
   Globe20Regular,
   Play20Regular,
   PlayCircle20Regular,
+  Stop20Regular,
 } from '@fluentui/react-icons';
 import { useCallback, useMemo, useState, type FormEvent, type ReactNode } from 'react';
 
@@ -264,6 +265,16 @@ function ProfileDetail({ profile }: { profile: Profile }) {
           >
             Dry run
           </Button>
+          {execute.isPending && (
+            <Button
+              icon={<Stop20Regular />}
+              onClick={() => execute.stop()}
+              className="bg-danger-subtle text-danger border-danger/30 hover:bg-danger-subtle"
+              title="Close what this run opened, and only that"
+            >
+              Stop
+            </Button>
+          )}
           <IconButton
             label="Delete profile"
             icon={<Delete20Regular />}

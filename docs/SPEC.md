@@ -275,6 +275,30 @@ of three ran three times and stopped.
   the machine was not put to sleep during a hold. That is a person's test, on the release
   build, and it is on the release checklist.
 
+### Delivered in F3
+
+Stop. A run in progress shows a Stop button; pressing it starts nothing more, wakes the loop
+from any wait, and the host closes what the run opened — and only that (ADR-015). Every
+process the run started is in the run's Job Object from the moment it starts (a job created
+without `KILL_ON_JOB_CLOSE`, so a run that ends on its own leaves its programs open). On
+Stop each held process is asked to close and given the grace, one line each — `closed` or
+`not_closed` with the reason — and then the job is terminated, which reaches whatever those
+processes started in turn; a `stopped` line says how many closed, how many did not, and
+whether the sweep ran. A program the run did not start — one the shell opened on its behalf,
+one a person opened — is never touched, and the suite proves it with a Character Map opened
+by hand that survives. The run finishes `stopped` with the rest skipped. The editor offers
+"again and again, until the run is stopped", which the domain had since F2 and the screen
+could not offer without Stop.
+
+### Deferred out of F3, and why
+
+- **Stop from anywhere.** The button is on the profile screen, next to the run it stops. A
+  stop from the Runs screen, from the tray or from a shortcut needs the run to outlive the
+  screen — the same subject as the tray (F9).
+- **Closing what the run did not start.** The Store Notepad the stub handed off to is not in
+  the job and stays open, said so in the log. Closing a window by title is 1.1's subject, on
+  purpose: a rule that closes windows by name will one day close the wrong one.
+
 ## 8. Definition of done
 
 A slice is done when **all eight** are true.

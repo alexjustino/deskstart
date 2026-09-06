@@ -5,10 +5,11 @@
 //! log before returning it. The interface never learns of an outcome that the
 //! log does not already hold.
 //!
-//! Processes the host starts are **held** — the `Child` handle kept in `Held`
-//! under (run, step) — for as long as the run lasts, so a hold can end with a
-//! close (F2) and a stop can reach them (F3). Dropping a handle never ends a
-//! process; only `step_close` does, and it says how.
+//! Processes the host starts are **held** — the `Child` handle kept under the
+//! run, and the process put in the run's Job Object — for as long as the run
+//! lasts, so a hold can end with a close (F2) and a Stop can reach everything
+//! (F3, ADR-015). Dropping a handle or closing the job never ends a process;
+//! only `step_close` and `run_stop` do, and they say how.
 
 use std::collections::HashMap;
 use std::path::PathBuf;
@@ -21,11 +22,21 @@ use tauri::State;
 use crate::db::models::{Event, Launch, Run};
 use crate::db::{profiles, runs, Db};
 use crate::error::{Error, Result};
-use crate::os::{close, open, process};
+use crate::os::{close, job, open, process};
 
-/// The processes started by runs that have not finished, by (run, step).
+/// What the host holds for one run that has not finished.
 #[derive(Default)]
-pub struct Held(pub Mutex<HashMap<(String, String), Child>>);
+pub struct RunHold {
+    /// The net under everything the run started. None when Windows refused
+    /// one, which the log records at the start of the run.
+    pub job: Option<job::Job>,
+    /// The processes started for each step, by step id.
+    pub children: HashMap<String, Child>,
+}
+
+/// The runs in progress, by run id.
+#[derive(Default)]
+pub struct Held(pub Mutex<HashMap<String, RunHold>>);
 
 /// How long a program gets to close itself before it is terminated.
 const CLOSE_GRACE: Duration = Duration::from_secs(3);
@@ -35,6 +46,7 @@ const CLOSE_GRACE: Duration = Duration::from_secs(3);
 #[tauri::command]
 pub fn run_begin(
     db: State<'_, Db>,
+    held: State<'_, Held>,
     profile_id: String,
     mode: String,
     trigger: String,
@@ -45,7 +57,34 @@ pub fn run_begin(
         return Err(Error::Unreviewed);
     }
     let steps = profiles::list_steps(&conn, &profile_id)?;
-    runs::create_run(&mut conn, &profile, &mode, &trigger, steps.len())
+    let run = runs::create_run(&mut conn, &profile, &mode, &trigger, steps.len())?;
+
+    if run.mode == "real" {
+        let job = match job::Job::create() {
+            Ok(job) => Some(job),
+            Err(failure) => {
+                // Said, not hidden: without a job a Stop reaches only the
+                // processes the host holds handles of.
+                log::warn!("no job object for run {}: {}", run.id, failure.0);
+                runs::append_event(
+                    &mut conn,
+                    &run.id,
+                    None,
+                    "no_job",
+                    &serde_json::json!({ "reason": failure.0 }),
+                )?;
+                None
+            }
+        };
+        held.0.lock().expect("the held lock was poisoned").insert(
+            run.id.clone(),
+            RunHold {
+                job,
+                children: HashMap::new(),
+            },
+        );
+    }
+    Ok(run)
 }
 
 /// Execute one step of a run and record what happened.
@@ -97,12 +136,21 @@ pub fn step_execute(
             working_dir: working_dir.as_ref().map(PathBuf::from),
         })
         .map(|spawned| {
-            // Held for the life of the run: a hold ends with a close, and a
-            // stop must be able to reach it.
-            held.0
-                .lock()
-                .expect("the held lock was poisoned")
-                .insert((run_id.clone(), step_id.clone()), spawned.child);
+            // Held for the life of the run, and put in its job: a hold ends
+            // with a close, and a Stop must be able to reach it.
+            let mut held = held.0.lock().expect("the held lock was poisoned");
+            let hold = held.entry(run_id.clone()).or_default();
+            if let Some(job) = &hold.job {
+                if let Err(failure) = job.assign(&spawned.child) {
+                    log::warn!(
+                        "pid {} not assigned to the run's job: {}",
+                        spawned.pid,
+                        failure.0
+                    );
+                    payload["inJob"] = serde_json::json!(false);
+                }
+            }
+            hold.children.insert(step_id.clone(), spawned.child);
             ("spawned", Some(spawned.pid))
         }),
         Launch::Folder { path, .. } => {
@@ -157,7 +205,8 @@ pub fn step_close(
         .0
         .lock()
         .expect("the held lock was poisoned")
-        .remove(&(run_id.clone(), step_id.clone()));
+        .get_mut(&run_id)
+        .and_then(|hold| hold.children.remove(&step_id));
     let Some(mut child) = child else {
         payload["reason"] =
             serde_json::json!("the run holds no process for this step; nothing to close");
@@ -167,16 +216,20 @@ pub fn step_close(
 
     match close::close(&mut child, CLOSE_GRACE) {
         Ok(closed) => {
-            payload["how"] = serde_json::json!(match closed.how {
-                close::How::Window => "window",
-                close::How::Terminated => "terminated",
-            });
+            payload["how"] = serde_json::json!(how_name(closed.how));
             runs::append_event(&mut conn, &run_id, Some(&step_id), "closed", &payload)
         }
         Err(failure) => {
             payload["reason"] = serde_json::json!(failure.reason());
             runs::append_event(&mut conn, &run_id, Some(&step_id), "not_closed", &payload)
         }
+    }
+}
+
+fn how_name(how: close::How) -> &'static str {
+    match how {
+        close::How::Window => "window",
+        close::How::Terminated => "terminated",
     }
 }
 
@@ -206,9 +259,103 @@ pub fn step_wait(db: State<'_, Db>, run_id: String, step_id: String, ms: i64) ->
     )
 }
 
-/// Close the run with its outcome. The handles it held are released — not
-/// closed: a program the run left open stays open, and only a hold or a stop
-/// ends a program.
+/// Stop a run: close everything it opened, and only that (ADR-015).
+///
+/// Every process the run still holds is asked to close and given its grace,
+/// one line each — `closed` or `not_closed` with the reason. Then the run's
+/// job is terminated, which reaches whatever those processes started in turn.
+/// A process the run did not start — one the shell opened on its behalf, one
+/// a person opened — is never touched. `launches` names each step so the lines
+/// can say what was closed.
+#[tauri::command]
+pub fn run_stop(
+    db: State<'_, Db>,
+    held: State<'_, Held>,
+    run_id: String,
+    launches: HashMap<String, Launch>,
+) -> Result<Vec<Event>> {
+    let mut conn = db.0.lock().expect("the database lock was poisoned");
+    let run = runs::get_run(&conn, &run_id)?;
+    if run.finished_at.is_some() {
+        return Err(Error::InvalidInput("this run has already finished"));
+    }
+    let mut lines = Vec::new();
+    if run.mode == "dry" {
+        lines.push(runs::append_event(
+            &mut conn,
+            &run_id,
+            None,
+            "stopped",
+            &serde_json::json!({ "closed": 0, "notClosed": 0, "swept": false }),
+        )?);
+        return Ok(lines);
+    }
+
+    let hold = held
+        .0
+        .lock()
+        .expect("the held lock was poisoned")
+        .remove(&run_id);
+    let Some(mut hold) = hold else {
+        lines.push(runs::append_event(
+            &mut conn,
+            &run_id,
+            None,
+            "stopped",
+            &serde_json::json!({ "closed": 0, "notClosed": 0, "swept": false }),
+        )?);
+        return Ok(lines);
+    };
+
+    let mut closed = 0;
+    let mut not_closed = 0;
+    let mut children: Vec<(String, Child)> = hold.children.drain().collect();
+    children.sort_by(|a, b| a.0.cmp(&b.0));
+    for (step_id, mut child) in children {
+        let mut payload = launches
+            .get(&step_id)
+            .map(Launch::describe)
+            .unwrap_or_else(|| serde_json::json!({}));
+        payload["stop"] = serde_json::json!(true);
+        payload["pid"] = serde_json::json!(child.id());
+        let line = match close::close(&mut child, CLOSE_GRACE) {
+            Ok(done) => {
+                closed += 1;
+                payload["how"] = serde_json::json!(how_name(done.how));
+                runs::append_event(&mut conn, &run_id, Some(&step_id), "closed", &payload)?
+            }
+            Err(failure) => {
+                not_closed += 1;
+                payload["reason"] = serde_json::json!(failure.reason());
+                runs::append_event(&mut conn, &run_id, Some(&step_id), "not_closed", &payload)?
+            }
+        };
+        lines.push(line);
+    }
+
+    let swept = match &hold.job {
+        Some(job) => match job.terminate() {
+            Ok(()) => true,
+            Err(failure) => {
+                log::warn!("the run's job could not be terminated: {}", failure.0);
+                false
+            }
+        },
+        None => false,
+    };
+    lines.push(runs::append_event(
+        &mut conn,
+        &run_id,
+        None,
+        "stopped",
+        &serde_json::json!({ "closed": closed, "notClosed": not_closed, "swept": swept }),
+    )?);
+    Ok(lines)
+}
+
+/// Close the run with its outcome. What it held is released — not closed: a
+/// program the run left open stays open, and only a hold or a Stop ends a
+/// program. The job handle goes with it, without ending the job's processes.
 #[tauri::command]
 pub fn run_finish(
     db: State<'_, Db>,
@@ -221,7 +368,7 @@ pub fn run_finish(
     held.0
         .lock()
         .expect("the held lock was poisoned")
-        .retain(|(held_run, _), _| held_run != &run_id);
+        .remove(&run_id);
     Ok(run)
 }
 

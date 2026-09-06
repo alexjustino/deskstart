@@ -12,12 +12,13 @@
  */
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useCallback, useRef } from 'react';
 
 import type { Step, StepConfig } from '@/domain/profile';
 import type { Mode } from '@/domain/run';
 import type { Timing } from '@/domain/timing';
 
-import { executeProfile } from './execute';
+import { executeProfile, Stopper } from './execute';
 import * as profileApi from './profiles';
 import * as runApi from './runs';
 import { fetchEnvironment } from './system';
@@ -147,7 +148,10 @@ export function useEvents(runId: string | null) {
  */
 export function useExecuteProfile() {
   const client = useQueryClient();
-  return useMutation({
+  // One stopper per execution: Stop reaches the run in progress and nothing else.
+  const stopper = useRef<Stopper | null>(null);
+  const stop = useCallback(() => stopper.current?.stop(), []);
+  const mutation = useMutation({
     mutationFn: ({
       profileId,
       steps,
@@ -162,8 +166,9 @@ export function useExecuteProfile() {
       env: Readonly<Record<string, string>>;
       onLine?: (line: runApi.LogLine) => void;
       onBegin?: (run: runApi.Run) => void;
-    }) =>
-      executeProfile(
+    }) => {
+      stopper.current = new Stopper();
+      return executeProfile(
         profileId,
         steps,
         mode,
@@ -179,7 +184,9 @@ export function useExecuteProfile() {
           void client.invalidateQueries({ queryKey: ['runs'] });
           onBegin?.(run);
         },
-      ),
+        stopper.current,
+      );
+    },
     // The last line — `run_finished` — is written by the host without an
     // `onLine`, and the refetch the previous line triggered may have read the
     // file before it was there. Read every log again once the run is over, so
@@ -189,6 +196,8 @@ export function useExecuteProfile() {
     onSettled: () => {
       void client.invalidateQueries({ queryKey: ['runs'] });
       void client.invalidateQueries({ queryKey: ['events'] });
+      stopper.current = null;
     },
   });
+  return { ...mutation, stop };
 }

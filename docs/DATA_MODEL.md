@@ -61,20 +61,25 @@ The host stores `config_json` verbatim and parses it only to act, refusing unkno
 
 ### Event kinds
 
-| Kind           | `step_id` | Payload                                                                                 |
-| -------------- | --------- | --------------------------------------------------------------------------------------- |
-| `run_started`  | `NULL`    | `profileName`, `mode`, `trigger`, `steps` (count)                                       |
-| `spawned`      | step      | `kind: "app"`, `program`, `args`, `workingDir`, `source`, `pid`                         |
-| `opened`       | step      | `kind` (`folder`/`file`/`url`), `target`, `source`, `pid` (null when Windows gave none) |
-| `would_spawn`  | step      | as `spawned` without `pid` (dry run)                                                    |
-| `would_open`   | step      | as `opened` without `pid` (dry run)                                                     |
-| `closed`       | step      | the launch, `heldMs`, `pid`, `how` (`window` or `terminated`)                           |
-| `not_closed`   | step      | the launch, `heldMs`, `pid` when known, `reason`                                        |
-| `would_close`  | step      | the launch, `heldMs` (dry run)                                                          |
-| `waited`       | step      | `ms` — the pause after this step, once it elapsed                                       |
-| `would_wait`   | step      | `ms` (dry run)                                                                          |
-| `failed`       | step      | the launch as above, plus `reason` (a sentence)                                         |
-| `run_finished` | `NULL`    | `outcome`                                                                               |
+| Kind          | `step_id` | Payload                                                                                 |
+| ------------- | --------- | --------------------------------------------------------------------------------------- |
+| `run_started` | `NULL`    | `profileName`, `mode`, `trigger`, `steps` (count)                                       |
+| `spawned`     | step      | `kind: "app"`, `program`, `args`, `workingDir`, `source`, `pid`                         |
+| `opened`      | step      | `kind` (`folder`/`file`/`url`), `target`, `source`, `pid` (null when Windows gave none) |
+| `would_spawn` | step      | as `spawned` without `pid` (dry run)                                                    |
+| `would_open`  | step      | as `opened` without `pid` (dry run)                                                     |
+| `closed`      | step      | the launch, `heldMs`, `pid`, `how` (`window` or `terminated`)                           |
+| `not_closed`  | step      | the launch, `heldMs`, `pid` when known, `reason`                                        |
+| `would_close` | step      | the launch, `heldMs` (dry run)                                                          |
+| `waited`      | step      | `ms` — the pause after this step, once it elapsed                                       |
+| `would_wait`  | step      | `ms` (dry run)                                                                          |
+| `stopped`     | `NULL`    | `closed`, `notClosed` (counts), `swept` (the job was terminated)                        |
+| `no_job`      | `NULL`    | `reason` — Windows gave the run no job object; a Stop reaches only held processes       |
+
+A `closed` or `not_closed` line written by a Stop carries `stop: true`; a `spawned` line whose
+process could not be put in the run's job carries `inJob: false`.
+| `failed` | step | the launch as above, plus `reason` (a sentence) |
+| `run_finished` | `NULL` | `outcome` |
 
 Every launch payload carries the target **resolved** — the absolute path or the address the
 host was asked to act on — and `source`, the path as written, when expansion changed it.
