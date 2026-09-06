@@ -39,6 +39,7 @@ import {
   type StepKind,
 } from '@/domain/profile';
 import type { Mode } from '@/domain/run';
+import { describeTiming } from '@/domain/timing';
 import { Button } from '@/ui/Button';
 import { Card } from '@/ui/Card';
 import { ConfirmDialog } from '@/ui/ConfirmDialog';
@@ -217,7 +218,7 @@ function ProfileDetail({ profile }: { profile: Profile }) {
           steps: runnable.map((j) => j.step),
           mode,
           env,
-          onLine: (line) => setActiveRunId(line.runId),
+          onBegin: (run) => setActiveRunId(run.id),
         },
         {
           onSuccess: ({ run }) => {
@@ -432,6 +433,11 @@ function StepList({
                   >
                     {summary(step.config, env)}
                   </span>
+                  {describeTiming(step.timing) && (
+                    <span className="block text-caption text-fg-secondary">
+                      {describeTiming(step.timing)}
+                    </span>
+                  )}
                   {problems.length > 0 && (
                     <span className="block text-caption text-danger">
                       {problems.map((p) => p.problem).join('; ')}
@@ -475,14 +481,14 @@ function StepList({
               <div className="pb-2 pl-9">
                 <StepForm
                   key={id}
-                  initial={step.config}
+                  initial={{ config: step.config, timing: step.timing }}
                   env={env}
                   pending={update.isPending}
                   hostError={update.isError ? describeError(update.error) : null}
                   onCancel={() => setEditingId(null)}
-                  onSubmit={(config) =>
+                  onSubmit={(config, timing) =>
                     update.mutate(
-                      { id, profileId, config },
+                      { id, profileId, config, timing },
                       {
                         onSuccess: () => {
                           setEditingId(null);
@@ -512,9 +518,9 @@ function AddStep({ profileId, env }: { profileId: string; env: Readonly<Record<s
       env={env}
       pending={add.isPending}
       hostError={add.isError ? describeError(add.error) : null}
-      onSubmit={(config) =>
+      onSubmit={(config, timing) =>
         add.mutate(
-          { profileId, config },
+          { profileId, config, timing },
           {
             onSuccess: () => {
               setGeneration((g) => g + 1);

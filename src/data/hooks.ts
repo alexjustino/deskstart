@@ -15,6 +15,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
 import type { Step, StepConfig } from '@/domain/profile';
 import type { Mode } from '@/domain/run';
+import type { Timing } from '@/domain/timing';
 
 import { executeProfile } from './execute';
 import * as profileApi from './profiles';
@@ -73,8 +74,15 @@ export function useSteps(profileId: string | null) {
 export function useAddStep() {
   const client = useQueryClient();
   return useMutation({
-    mutationFn: ({ profileId, config }: { profileId: string; config: StepConfig }) =>
-      profileApi.addStep(profileId, config),
+    mutationFn: ({
+      profileId,
+      config,
+      timing,
+    }: {
+      profileId: string;
+      config: StepConfig;
+      timing: Timing;
+    }) => profileApi.addStep(profileId, config, timing),
     onSuccess: (_step, { profileId }) =>
       client.invalidateQueries({ queryKey: keys.steps(profileId) }),
   });
@@ -83,8 +91,16 @@ export function useAddStep() {
 export function useUpdateStep() {
   const client = useQueryClient();
   return useMutation({
-    mutationFn: ({ id, config }: { id: string; profileId: string; config: StepConfig }) =>
-      profileApi.updateStep(id, config),
+    mutationFn: ({
+      id,
+      config,
+      timing,
+    }: {
+      id: string;
+      profileId: string;
+      config: StepConfig;
+      timing: Timing;
+    }) => profileApi.updateStep(id, config, timing),
     onSuccess: (_step, { profileId }) =>
       client.invalidateQueries({ queryKey: keys.steps(profileId) }),
   });
@@ -138,17 +154,32 @@ export function useExecuteProfile() {
       mode,
       env,
       onLine,
+      onBegin,
     }: {
       profileId: string;
       steps: Step[];
       mode: Mode;
       env: Readonly<Record<string, string>>;
       onLine?: (line: runApi.LogLine) => void;
+      onBegin?: (run: runApi.Run) => void;
     }) =>
-      executeProfile(profileId, steps, mode, env, (line) => {
-        void client.invalidateQueries({ queryKey: keys.events(line.runId) });
-        onLine?.(line);
-      }),
+      executeProfile(
+        profileId,
+        steps,
+        mode,
+        env,
+        (line) => {
+          void client.invalidateQueries({ queryKey: keys.events(line.runId) });
+          onLine?.(line);
+        },
+        (run) => {
+          // The run list must know the run while it runs, or the screen shows
+          // "has not run yet" for the whole of a hold. Found by the end-to-end
+          // suite the first time a run lasted longer than a refetch.
+          void client.invalidateQueries({ queryKey: ['runs'] });
+          onBegin?.(run);
+        },
+      ),
     // The last line — `run_finished` — is written by the host without an
     // `onLine`, and the refetch the previous line triggered may have read the
     // file before it was there. Read every log again once the run is over, so

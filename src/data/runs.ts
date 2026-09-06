@@ -62,6 +62,8 @@ const OUTCOMES: ReadonlySet<string> = new Set([
 
 /** The line kinds that mean the step was done, whatever "done" meant for its kind. */
 const DONE: ReadonlySet<string> = new Set(['spawned', 'opened', 'would_spawn', 'would_open']);
+/** The line kinds that mean the step's program is closed — for real, or on paper. */
+const CLOSED: ReadonlySet<string> = new Set(['closed', 'would_close']);
 
 function toRun(raw: RawRun): Run {
   return {
@@ -97,14 +99,19 @@ function toLogLine(raw: RawEvent): LogLine {
   };
 }
 
-/** What a log line means to the state machine, or nothing when it is not a step event. */
-export function toRunEvent(line: LogLine): RunEvent | null {
-  const at = Date.parse(line.at);
+/**
+ * What a log line means to the state machine, or nothing when it is not a
+ * step event. `at` is the instant the machine should take for it: the host's
+ * timestamp, or the caller's virtual clock in a dry run.
+ */
+export function toRunEvent(line: LogLine, at = Date.parse(line.at)): RunEvent | null {
   if (line.stepId === null) return null;
+  const reason = typeof line.payload.reason === 'string' ? line.payload.reason : 'unknown';
   if (DONE.has(line.kind)) return { kind: 'step_done', stepId: line.stepId, at };
-  if (line.kind === 'failed') {
-    const reason = typeof line.payload.reason === 'string' ? line.payload.reason : 'unknown';
-    return { kind: 'step_failed', stepId: line.stepId, reason, at };
+  if (line.kind === 'failed') return { kind: 'step_failed', stepId: line.stepId, reason, at };
+  if (CLOSED.has(line.kind)) return { kind: 'step_closed', stepId: line.stepId, at };
+  if (line.kind === 'not_closed') {
+    return { kind: 'step_not_closed', stepId: line.stepId, reason, at };
   }
   return null;
 }
@@ -115,6 +122,19 @@ export async function runBegin(profileId: string, mode: Mode): Promise<Run> {
 
 export async function stepExecute(runId: string, stepId: string, launch: Launch): Promise<LogLine> {
   return toLogLine(await invoke<RawEvent>('step_execute', { runId, stepId, launch }));
+}
+
+export async function stepClose(
+  runId: string,
+  stepId: string,
+  launch: Launch,
+  heldMs: number,
+): Promise<LogLine> {
+  return toLogLine(await invoke<RawEvent>('step_close', { runId, stepId, launch, heldMs }));
+}
+
+export async function stepWait(runId: string, stepId: string, ms: number): Promise<LogLine> {
+  return toLogLine(await invoke<RawEvent>('step_wait', { runId, stepId, ms }));
 }
 
 export async function runFinish(runId: string, outcome: Outcome): Promise<Run> {
