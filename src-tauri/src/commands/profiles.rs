@@ -42,15 +42,32 @@ pub fn step_add(
     profile_id: String,
     kind: String,
     config_json: String,
+    timing_json: Option<String>,
 ) -> Result<Step> {
     let conn = db.0.lock().expect("the database lock was poisoned");
-    profiles::add_step(&conn, &profile_id, &kind, &config_json)
+    profiles::add_step(
+        &conn,
+        &profile_id,
+        &kind,
+        &config_json,
+        timing_json.as_deref().unwrap_or("{}"),
+    )
 }
 
 #[tauri::command]
-pub fn step_update(db: State<'_, Db>, id: String, config_json: String) -> Result<Step> {
+pub fn step_update(
+    db: State<'_, Db>,
+    id: String,
+    config_json: String,
+    timing_json: Option<String>,
+) -> Result<Step> {
     let conn = db.0.lock().expect("the database lock was poisoned");
-    profiles::update_step(&conn, &id, &config_json)
+    profiles::update_step(
+        &conn,
+        &id,
+        &config_json,
+        timing_json.as_deref().unwrap_or("{}"),
+    )
 }
 
 #[tauri::command]

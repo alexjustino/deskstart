@@ -7,5 +7,6 @@
 //! started says why rather than vanishing.
 
 pub mod accent;
+pub mod close;
 pub mod open;
 pub mod process;
