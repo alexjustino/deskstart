@@ -243,6 +243,38 @@ schemes, refused by the domain and again by the host.
   export (F5), which need it anyway.
 - **Window placement fields** (position, size, monitor, state). Stored nowhere yet; F6.
 
+### Delivered in F2
+
+A step has time: a pause after it before the next step starts; for an application, a hold —
+keep it open this long, then close it — and a cycle: open it N times in all, closed for a
+while between openings, or again and again until the run is stopped. The machine is a pure
+reducer with one more event, `time { at }`: everything due by that instant fires, nothing
+counts ticks, and a laptop that slept through a hold closes it late and says so by the
+timestamps. Holds do not block the sequence — the next step starts while the first is held.
+The host keeps the handle of every process it starts for the life of the run; a close asks
+the program's windows first (`WM_CLOSE`) and terminates only after a three-second grace, and
+the log says which. A process that had already exited — a stub that handed off — is
+`not_closed` with that reason, and nothing else is touched. A dry run runs the same machine
+on a virtual clock: an hour of holds is written down in a second, as `would_close` and
+`would_wait` lines. Measured on the real binary: a 5 s hold closed at 5 s ± 250 ms; a cycle
+of three ran three times and stopped.
+
+### Deferred out of F2, and why
+
+- **Stopping a cycle that repeats forever.** The domain has `repeat: 'forever'` and the
+  reducer ends it only on `stop_requested`; the screen offers no Stop yet, so the editor
+  offers no "forever". Both arrive together in F3, with the Job Object that makes Stop reach
+  everything a run opened.
+- **A hold on a folder, a file or a web page.** They are opened by Windows, not started by
+  us; there is no process to close (ADR-018). The editor refuses a hold on them and says why.
+  Closing a window by title is 1.1's subject.
+- **Surviving the window.** The loop that keeps time runs in the application; close the
+  window and a held program stays open, unclosed. The tray that keeps the process alive
+  arrives with the triggers (F9).
+- **Sleep and resume on hardware.** The reducer is tested with a clock that jumps an hour;
+  the machine was not put to sleep during a hold. That is a person's test, on the release
+  build, and it is on the release checklist.
+
 ## 8. Definition of done
 
 A slice is done when **all eight** are true.

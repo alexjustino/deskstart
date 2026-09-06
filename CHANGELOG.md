@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added — F2, time
+
+- A pause after a step before the next one starts, on any kind of step.
+- For an application: a hold — keep it open this long, then close it — and a cycle: open it
+  N times in all, closed for a while between openings. Holds do not block the sequence.
+- Closing asks the program's windows first and terminates only after a three-second grace;
+  the log says which happened, and says `not_closed` with the reason when the process was
+  already gone.
+- A dry run writes the whole timeline at once — `would_close`, `would_wait` — on a virtual
+  clock. A real run logs `waited` after each pause.
+
+### Fixed
+
+- The profile screen showed "This profile has not run yet" for the whole of a run that
+  lasted longer than an instant: the run list only learned of a run once it was over. It
+  learns of it when it begins. Found by the end-to-end suite the first time a run held a
+  program for five seconds.
+
 ### Added — F1, the profile editor
 
 - Four kinds of step: an application, a folder (opened in Explorer), a file (opened with
