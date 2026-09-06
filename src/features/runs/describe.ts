@@ -9,6 +9,7 @@
 
 import type { LogLine } from '@/data/runs';
 import { lastSegment } from '@/domain/profile';
+import { describeDuration } from '@/domain/timing';
 import type { Outcome } from '@/domain/run';
 import type { ChipTone } from '@/ui/chipTone';
 
@@ -51,6 +52,10 @@ function detailOf(p: Record<string, unknown>): string | null {
   return typeof p.source === 'string' && p.source !== '' ? `${target} — from ${p.source}` : target;
 }
 
+function duration(ms: unknown): string {
+  return typeof ms === 'number' ? describeDuration(ms) : 'a while';
+}
+
 function pidSuffix(p: Record<string, unknown>): string {
   return typeof p.pid === 'number' ? ` — PID ${p.pid}` : '';
 }
@@ -73,6 +78,24 @@ export function describe(line: LogLine): { text: string; detail: string | null }
       return { text: `Would start ${nameOf(p)}`, detail: detailOf(p) };
     case 'would_open':
       return { text: `Would open ${noun(p)}`, detail: detailOf(p) };
+    case 'closed': {
+      const how = p.how === 'terminated' ? ' (terminated after the grace)' : '';
+      return {
+        text: `Closed ${noun(p)} after ${duration(p.heldMs)}${pidSuffix(p)}${how}`,
+        detail: detailOf(p),
+      };
+    }
+    case 'not_closed':
+      return {
+        text: `Could not close ${noun(p)}: ${String(p.reason ?? 'no reason recorded')}`,
+        detail: detailOf(p),
+      };
+    case 'would_close':
+      return { text: `Would close ${noun(p)} after ${duration(p.heldMs)}`, detail: detailOf(p) };
+    case 'waited':
+      return { text: `Waited ${duration(p.ms)}`, detail: null };
+    case 'would_wait':
+      return { text: `Would wait ${duration(p.ms)}`, detail: null };
     case 'failed': {
       const verb = p.kind === 'app' || p.kind === undefined ? 'start' : 'open';
       return {

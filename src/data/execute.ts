@@ -2,25 +2,38 @@
  * The execution loop: the host's actions driven by the domain's decisions.
  *
  * One reducer (`domain/run`), one host command per action. The loop begins a
- * run, feeds the reducer `begun`, and then — for as long as the reducer asks
- * for a step — resolves that step (`domain/profile`), has the host execute the
- * resolved launch, and feeds back the line the host wrote. The log is written
- * before the interface sees anything (ADR-011): every `onLine` here is a line
- * that is already on disk.
+ * run, feeds the reducer `begun`, and then — for as long as the reducer asks —
+ * executes, closes, or waits. The log is written before the interface sees
+ * anything (ADR-011): every `onLine` here is a line that is already on disk.
  *
- * Resolution is the same function the editor previews with, so what a person
- * saw before pressing Run is what the host is asked to do.
+ * Time is the host's clock and nothing else. A `wait_until` is remembered,
+ * never queued: when no action is pending the loop sleeps until the soonest
+ * instant asked for, then feeds one `time` event with the clock as it is —
+ * late after a sleep, and the machine copes. A dry run does not sleep: its
+ * clock is virtual and jumps to every instant asked for, so a profile with an
+ * hour of holds is written down in a second.
  */
 
-import { resolveStep, type Step } from '@/domain/profile';
-import { plan, reduce, type Action, type Mode, type RunState } from '@/domain/run';
+import { resolveStep, type Launch, type Step } from '@/domain/profile';
+import { plan, reduce, type Action, type Mode, type RunEvent, type RunState } from '@/domain/run';
 
-import { runBegin, runFinish, stepExecute, toRunEvent, type LogLine, type Run } from './runs';
+import {
+  runBegin,
+  runFinish,
+  stepClose,
+  stepExecute,
+  stepWait,
+  toRunEvent,
+  type LogLine,
+  type Run,
+} from './runs';
 
 export interface Execution {
   run: Run;
   state: RunState;
 }
+
+const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
 export async function executeProfile(
   profileId: string,
@@ -28,42 +41,105 @@ export async function executeProfile(
   mode: Mode,
   env: Readonly<Record<string, string>>,
   onLine: (line: LogLine) => void = () => undefined,
+  onBegin: (run: Run) => void = () => undefined,
 ): Promise<Execution> {
   const run = await runBegin(profileId, mode);
-  let state = plan(
-    steps.map((step) => ({ id: step.id })),
-    mode,
-  );
+  // The run exists in the file from this instant; the screen may show it now,
+  // not when it is over. A run with an hour of holds is still a run.
+  onBegin(run);
+  const dry = mode === 'dry';
 
-  let { state: next, actions } = reduce(state, { kind: 'begun', at: Date.parse(run.startedAt) });
-  state = next;
-
-  const queue: Action[] = [...actions];
-  while (queue.length > 0) {
-    const action = queue.shift();
-    if (action === undefined) break;
-
-    if (action.kind === 'finish') {
-      const finished = await runFinish(run.id, action.outcome);
-      return { run: finished, state };
-    }
-
-    const step = steps.find((s) => s.id === action.stepId);
-    if (step === undefined) throw new Error('the run asked for a step the profile does not have');
+  // Every launch resolved once, before anything runs: the editor refused to
+  // store an unresolvable step and Run is disabled while one exists, so a
+  // miss here is a bug worth a loud failure.
+  const launches = new Map<string, Launch>();
+  for (const step of steps) {
     const resolved = resolveStep(step.config, env);
     if (!resolved.ok) {
-      // The editor refuses to store an unresolvable step and Run is disabled
-      // while one exists, so reaching this is a bug worth a loud failure.
       throw new Error(`a step could not be resolved: ${resolved.problems[0]?.problem ?? '?'}`);
     }
+    launches.set(step.id, resolved.launch);
+  }
+  const launchOf = (stepId: string): Launch => {
+    const launch = launches.get(stepId);
+    if (launch === undefined) throw new Error('the run asked for a step the profile does not have');
+    return launch;
+  };
+  const stepOf = (stepId: string): Step => {
+    const step = steps.find((s) => s.id === stepId);
+    if (step === undefined) throw new Error('the run asked for a step the profile does not have');
+    return step;
+  };
 
-    const line = await stepExecute(run.id, step.id, resolved.launch);
+  let state = plan(
+    steps.map((step) => ({ id: step.id, timing: step.timing })),
+    mode,
+  );
+  // The dry run's clock; the real run reads the host's timestamps.
+  let virtualNow = Date.parse(run.startedAt);
+  const now = () => (dry ? virtualNow : Date.now());
+
+  type Wake = { at: number; reason: Action & { kind: 'wait_until' } };
+  const queue: Action[] = [];
+  // Written by `feed` (a closure), so it is read through `pending()` below —
+  // straight-line narrowing would otherwise decide it is always null.
+  let wake: Wake | null = null;
+  const pending = (): Wake | null => wake;
+  const feed = (event: RunEvent) => {
+    const next = reduce(state, event);
+    state = next.state;
+    for (const action of next.actions) {
+      if (action.kind === 'wait_until') {
+        if (wake === null || action.at < wake.at) wake = { at: action.at, reason: action };
+      } else {
+        queue.push(action);
+      }
+    }
+  };
+  const feedLine = (line: LogLine) => {
     onLine(line);
-    const event = toRunEvent(line);
-    if (event === null) continue;
-    ({ state: next, actions } = reduce(state, event));
-    state = next;
-    queue.push(...actions);
+    const event = toRunEvent(line, dry ? virtualNow : Date.parse(line.at));
+    if (event !== null) feed(event);
+  };
+
+  feed({ kind: 'begun', at: now() });
+
+  for (;;) {
+    const action = queue.shift();
+    if (action === undefined) {
+      if (state.phase === 'finished') break;
+      const next = pending();
+      if (next === null) throw new Error('the run has nothing to do and no reason to wait');
+      const { at, reason } = next;
+      wake = null;
+      if (dry) {
+        virtualNow = Math.max(virtualNow, at);
+      } else {
+        await sleep(Math.max(0, at - Date.now()));
+      }
+      if (reason.reason.kind === 'pause') {
+        const step = stepOf(reason.reason.stepId);
+        onLine(await stepWait(run.id, step.id, step.timing.pauseAfterMs));
+      }
+      feed({ kind: 'time', at: now() });
+      continue;
+    }
+
+    switch (action.kind) {
+      case 'execute':
+        feedLine(await stepExecute(run.id, action.stepId, launchOf(action.stepId)));
+        break;
+      case 'close':
+        feedLine(await stepClose(run.id, action.stepId, launchOf(action.stepId), action.heldMs));
+        break;
+      case 'finish': {
+        const finished = await runFinish(run.id, action.outcome);
+        return { run: finished, state };
+      }
+      case 'wait_until':
+        // Never queued; handled above.
+        break;
+    }
   }
 
   // The reducer always ends with a finish; reaching here means it did not,

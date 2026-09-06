@@ -15,6 +15,7 @@ import {
   type Step,
   type StepConfig,
 } from '@/domain/profile';
+import { parseStoredTiming, serializeTiming, type Timing } from '@/domain/timing';
 
 export interface Profile {
   id: string;
@@ -68,18 +69,25 @@ function toProfile(raw: RawProfile): Profile {
  */
 function toStoredStep(raw: RawStep): StoredStep {
   const parsed = parseStoredStep(raw.kind, raw.config_json);
-  if (!parsed.ok) {
+  const timing = parseStoredTiming(raw.timing_json);
+  if (!parsed.ok || Array.isArray(timing)) {
     return {
       readable: false,
       id: raw.id,
       profileId: raw.profile_id,
       position: raw.position,
-      problems: parsed.problems,
+      problems: [...(parsed.ok ? [] : parsed.problems), ...(Array.isArray(timing) ? timing : [])],
     };
   }
   return {
     readable: true,
-    step: { id: raw.id, profileId: raw.profile_id, position: raw.position, config: parsed.config },
+    step: {
+      id: raw.id,
+      profileId: raw.profile_id,
+      position: raw.position,
+      config: parsed.config,
+      timing,
+    },
   };
 }
 
@@ -105,17 +113,30 @@ export async function listSteps(profileId: string): Promise<StoredStep[]> {
   return raw.map(toStoredStep);
 }
 
-export async function addStep(profileId: string, config: StepConfig): Promise<StoredStep> {
+export async function addStep(
+  profileId: string,
+  config: StepConfig,
+  timing: Timing,
+): Promise<StoredStep> {
   const raw = await invoke<RawStep>('step_add', {
     profileId,
     kind: config.kind,
     configJson: serializeStepConfig(config),
+    timingJson: serializeTiming(timing),
   });
   return toStoredStep(raw);
 }
 
-export async function updateStep(id: string, config: StepConfig): Promise<StoredStep> {
-  const raw = await invoke<RawStep>('step_update', { id, configJson: serializeStepConfig(config) });
+export async function updateStep(
+  id: string,
+  config: StepConfig,
+  timing: Timing,
+): Promise<StoredStep> {
+  const raw = await invoke<RawStep>('step_update', {
+    id,
+    configJson: serializeStepConfig(config),
+    timingJson: serializeTiming(timing),
+  });
   return toStoredStep(raw);
 }
 

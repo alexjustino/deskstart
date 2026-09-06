@@ -17,6 +17,8 @@
 //! - F1: folder, file and url steps (migration 002), opened by verb on a
 //!   validated target; the allow-listed environment for path expansion; a
 //!   step can be moved within its profile.
+//! - F2: the processes a run starts are held for its life; a hold ends with
+//!   a close (windows asked, then terminated after a grace); pauses are logged.
 
 pub mod commands;
 pub mod db;
@@ -63,6 +65,7 @@ pub fn run() {
         .setup(|app| {
             let connection = db::open(app.handle())?;
             app.manage(db::Db(Mutex::new(connection)));
+            app.manage(commands::runs::Held::default());
             log::info!(
                 "workspace opened; Deskstart {} ready",
                 env!("CARGO_PKG_VERSION")
@@ -84,6 +87,8 @@ pub fn run() {
             commands::profiles::step_move,
             commands::runs::run_begin,
             commands::runs::step_execute,
+            commands::runs::step_close,
+            commands::runs::step_wait,
             commands::runs::run_finish,
             commands::runs::runs_list,
             commands::runs::events_list,

@@ -28,7 +28,7 @@ Migrations are forward-only and numbered (`VERSIONING.md`).
 | `position`    | order within the profile; integer, dense                                                                                                        |
 | `kind`        | `app`, `folder`, `file` or `url` (`CHECK`, widened by migration 002)                                                                            |
 | `config_json` | the step's own shape, written and validated by the domain (ADR-010); e.g. `{"program": "C:\\...\\notepad.exe", "args": [], "workingDir": null}` |
-| `timing_json` | `{}` until F2                                                                                                                                   |
+| `timing_json` | `{ pauseAfterMs, holdMs, repeat, closedMs }`, each field only when not the default; `{}` is the default (F2)                                    |
 
 The host stores `config_json` verbatim and parses it only to act, refusing unknown fields.
 
@@ -68,6 +68,11 @@ The host stores `config_json` verbatim and parses it only to act, refusing unkno
 | `opened`       | step      | `kind` (`folder`/`file`/`url`), `target`, `source`, `pid` (null when Windows gave none) |
 | `would_spawn`  | step      | as `spawned` without `pid` (dry run)                                                    |
 | `would_open`   | step      | as `opened` without `pid` (dry run)                                                     |
+| `closed`       | step      | the launch, `heldMs`, `pid`, `how` (`window` or `terminated`)                           |
+| `not_closed`   | step      | the launch, `heldMs`, `pid` when known, `reason`                                        |
+| `would_close`  | step      | the launch, `heldMs` (dry run)                                                          |
+| `waited`       | step      | `ms` — the pause after this step, once it elapsed                                       |
+| `would_wait`   | step      | `ms` (dry run)                                                                          |
 | `failed`       | step      | the launch as above, plus `reason` (a sentence)                                         |
 | `run_finished` | `NULL`    | `outcome`                                                                               |
 

@@ -122,6 +122,7 @@ pub fn add_step(
     profile_id: &str,
     kind: &str,
     config_json: &str,
+    timing_json: &str,
 ) -> Result<Step> {
     get_profile(conn, profile_id)?;
     if !STEP_KINDS.contains(&kind) {
@@ -129,6 +130,9 @@ pub fn add_step(
     }
     if serde_json::from_str::<serde_json::Value>(config_json).is_err() {
         return Err(Error::InvalidInput("the step configuration is not valid"));
+    }
+    if serde_json::from_str::<serde_json::Value>(timing_json).is_err() {
+        return Err(Error::InvalidInput("the step timing is not valid"));
     }
     let position: i64 = conn.query_row(
         "SELECT coalesce(max(position), -1) + 1 FROM step WHERE profile_id = ?1",
@@ -139,20 +143,28 @@ pub fn add_step(
     let stamp = now();
     conn.execute(
         "INSERT INTO step (id, profile_id, position, kind, config_json, timing_json, created_at, updated_at)
-         VALUES (?1, ?2, ?3, ?4, ?5, '{}', ?6, ?6)",
-        params![id, profile_id, position, kind, config_json, stamp],
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?7)",
+        params![id, profile_id, position, kind, config_json, timing_json, stamp],
     )?;
     touch_profile(conn, profile_id)?;
     get_step(conn, &id)
 }
 
-pub fn update_step(conn: &Connection, id: &str, config_json: &str) -> Result<Step> {
+pub fn update_step(
+    conn: &Connection,
+    id: &str,
+    config_json: &str,
+    timing_json: &str,
+) -> Result<Step> {
     if serde_json::from_str::<serde_json::Value>(config_json).is_err() {
         return Err(Error::InvalidInput("the step configuration is not valid"));
     }
+    if serde_json::from_str::<serde_json::Value>(timing_json).is_err() {
+        return Err(Error::InvalidInput("the step timing is not valid"));
+    }
     let changed = conn.execute(
-        "UPDATE step SET config_json = ?2, updated_at = ?3 WHERE id = ?1",
-        params![id, config_json, now()],
+        "UPDATE step SET config_json = ?2, timing_json = ?3, updated_at = ?4 WHERE id = ?1",
+        params![id, config_json, timing_json, now()],
     )?;
     if changed == 0 {
         return Err(Error::NotFound);
@@ -259,6 +271,7 @@ mod tests {
             &profile.id,
             "app",
             r#"{"program":"a.exe","args":[]}"#,
+            "{}",
         )
         .unwrap();
         let b = add_step(
@@ -266,6 +279,7 @@ mod tests {
             &profile.id,
             "app",
             r#"{"program":"b.exe","args":[]}"#,
+            "{}",
         )
         .unwrap();
         assert!(a.position < b.position);
@@ -280,15 +294,15 @@ mod tests {
         let conn = memory();
         let profile = create_profile(&conn, "Morning").unwrap();
         assert!(matches!(
-            add_step(&conn, &profile.id, "app", "not json"),
+            add_step(&conn, &profile.id, "app", "not json", "{}"),
             Err(Error::InvalidInput(_))
         ));
         assert!(matches!(
-            add_step(&conn, &profile.id, "shortcut", "{}"),
+            add_step(&conn, &profile.id, "shortcut", "{}", "{}"),
             Err(Error::InvalidInput(_))
         ));
         assert!(matches!(
-            add_step(&conn, "missing", "app", "{}"),
+            add_step(&conn, "missing", "app", "{}", "{}"),
             Err(Error::NotFound)
         ));
     }
@@ -297,9 +311,9 @@ mod tests {
     fn a_step_moves_one_place_and_stays_put_at_the_edge() {
         let mut conn = memory();
         let profile = create_profile(&conn, "Morning").unwrap();
-        let a = add_step(&conn, &profile.id, "app", r#"{"program":"a.exe"}"#).unwrap();
-        let b = add_step(&conn, &profile.id, "url", r#"{"url":"https://b"}"#).unwrap();
-        let c = add_step(&conn, &profile.id, "folder", r#"{"path":"C:/c"}"#).unwrap();
+        let a = add_step(&conn, &profile.id, "app", r#"{"program":"a.exe"}"#, "{}").unwrap();
+        let b = add_step(&conn, &profile.id, "url", r#"{"url":"https://b"}"#, "{}").unwrap();
+        let c = add_step(&conn, &profile.id, "folder", r#"{"path":"C:/c"}"#, "{}").unwrap();
         let order = |steps: &[Step]| steps.iter().map(|s| s.id.clone()).collect::<Vec<_>>();
 
         let moved = move_step(&mut conn, &c.id, -1).unwrap();
