@@ -13,6 +13,8 @@
  * resolution.
  */
 
+import type { Timing } from './timing';
+
 export const PROFILE_SCHEMA_VERSION = 1;
 
 export const STEP_KINDS = ['app', 'folder', 'file', 'url'] as const;
@@ -46,12 +48,13 @@ export interface UrlStep {
 
 export type StepConfig = AppStep | FolderStep | FileStep | UrlStep;
 
-/** A step as stored: its configuration plus the identity the host gave it. */
+/** A step as stored: its configuration, its timing, and the identity the host gave it. */
 export interface Step {
   id: string;
   profileId: string;
   position: number;
   config: StepConfig;
+  timing: Timing;
 }
 
 /** The shape of a profile as a file: no identifiers, only what it means. */
