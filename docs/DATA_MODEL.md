@@ -29,6 +29,7 @@ Migrations are forward-only and numbered (`VERSIONING.md`).
 | `kind`        | `app`, `folder`, `file` or `url` (`CHECK`, widened by migration 002)                                                                                                                                                                   |
 | `config_json` | the step's own shape, written and validated by the domain (ADR-010); e.g. `{"program": "C:\\...\\notepad.exe", "args": [], "workingDir": null}`                                                                                        |
 | `wait_json`   | what the step waits for before it starts (F4): `{ stepId, probe: { kind: "window" \| "port", port }, timeoutMs }`; `{}` is "nothing"                                                                                                   |
+| `place_json`  | where the step's window goes once it is open (F6, migration 005): `{ monitor, rect: { x, y, width, height }, state }`; `{}` is "wherever it opens". A rectangle is read in the coordinates of the screen it names (ADR-021)            |
 | `reviewed`    | `1` when the step has been seen and accepted on this machine (F5, migration 004). A step written here is `1` from the moment it is written; only import writes `0`, and the profile's `imported_unreviewed` clears when no `0` is left |
 | `timing_json` | `{ pauseAfterMs, holdMs, repeat, closedMs }`, each field only when not the default; `{}` is the default (F2)                                                                                                                           |
 
@@ -81,6 +82,9 @@ The host stores `config_json` verbatim and parses it only to act, refusing unkno
 | `would_wait_for` | step      | as `waiting_for` (dry run)                                                              |
 | `ready`          | step      | `waitedMs` — what it waited for answered                                                |
 | `skipped`        | step      | `reason` — why the step did not start; the profile carried on                           |
+| `placed`         | step      | `detail` — what was done; `note` — what could not be done as asked                      |
+| `not_placed`     | step      | `note` — why the window was not placed; the run carries on                              |
+| `would_place`    | step      | `monitor`, `state`, `rect` (dry run)                                                    |
 
 A probe itself is never a line: it is asked four times a second while a step waits, and a
 log with four lines a second is not a log. What reaches the log is the beginning of the wait,

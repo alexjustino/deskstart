@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added — F6, where the window goes
+
+- A step can say which **screen** its window opens on, **where** on that screen, and whether it
+  opens normal, maximised or minimised. Any of the three may be left alone. A rectangle is read
+  in the coordinates of the screen it names.
+- Only an application is placed, and only the window of the process the run started. A folder, a
+  file or a web page opens in a window Windows owns, and is not touched.
+- A screen the profile names and this machine has not got: the window lands on the primary and
+  the log says so. A program that never shows a window of its own is a line saying that, and the
+  run carries on.
+- A dry run writes what it would place and moves nothing.
+- Migration **005** adds `place_json` to a step; every step that exists asks for nothing.
+
+### Fixed
+
+- The step editor's rows of choices — the window state, and "responding means" since F4 — sat in
+  a twelve-rem column they do not fit, pushing a button off the card and making the whole page
+  scroll sideways. Found by looking at the capture of the new section.
+
 ### Added — F5, a profile as a file
 
 - **Export**: the profile written as a versioned JSON document — what it opens, its time and its

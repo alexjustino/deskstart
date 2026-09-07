@@ -189,7 +189,7 @@ loop is wrong, that shows on day one.
 | F3     | Stop, and the run history                            | Stop closes only what the run opened — a Notepad opened by hand survives; every run is listed with its outcome and opens onto its events                                       |
 | F4     | Dependencies and readiness                           | X does not start until Y's window exists (or its port answers); Y timing out marks X skipped **with the reason**, and the profile continues                                    |
 | F5     | Profile as a file: export, import, review            | an exported profile round-trips; an imported one **cannot run until every step is accepted**; a tampered path is shown absolute                                                |
-| F6     | Window control                                       | Notepad lands on the chosen monitor at the chosen rectangle and state; a missing monitor is reported and the window lands on the primary                                       |
+| F6     | Window control                                       | **done** — a window lands at the chosen rectangle and state, measured by Windows itself; a screen that is not there is reported and the primary is used                        |
 | F7     | Context steps: bookmarks, terminal, editor           | a bookmark folder opens every page in one browser window; `wt` opens the named profile in the directory; a missing tool is a visible reason                                    |
 | F8     | Virtual machines                                     | two machines start and their consoles appear (**host proof by a person**); a missing hypervisor is a reason, not a hang                                                        |
 | F9     | Triggers: schedule, shortcut, autostart              | a task registered by the app fires at the minute set and the run appears in the log; the shortcut runs the profile over another program                                        |
@@ -289,6 +289,43 @@ one a person opened — is never touched, and the suite proves it with a Charact
 by hand that survives. The run finishes `stopped` with the rest skipped. The editor offers
 "again and again, until the run is stopped", which the domain had since F2 and the screen
 could not offer without Stop.
+
+### Delivered in F6
+
+A step says where its window goes: which screen — numbered the way a person numbers them, the
+primary first and then left to right — where on that screen, and normal, maximised or minimised.
+Each of the three may be left alone. A rectangle is read in the coordinates of the **screen it
+names**, so a profile written for the second monitor says `0, 0` and not `1920, 0`.
+
+Only an application is placed, and only the window of the process the run started (ADR-021). The
+reducer asks for the placement once per opening — after the step is open, before the sequence
+moves on — so a step that cycles is placed every time it comes back and a step that failed to
+start is not placed at all. What could not be done as asked is said: a screen this machine has
+not got lands the window on the primary **and the log says so**; a program that never shows a
+window of its own within five seconds is a line saying that, and the run carries on.
+
+The end-to-end suite measures the window through `GetWindowRect`, from outside the product: a
+test that read the placement back from Deskstart would only prove Deskstart remembers what it
+was told.
+
+The rules that need two parts of a step at once — a folder that would be held, a web page that
+would be placed — moved into the domain, where the editor and the **file reader** both ask them.
+Until F6 the hold rule lived in the form alone, so a document could carry what the form would
+have refused.
+
+### Deferred out of F6, and why
+
+- **Placing a window this product did not open** — the browser, an Explorer window, a program
+  that was already running. It needs matching windows by title or class, which is a rule that
+  eventually moves the wrong window; it is 1.1's subject, with a screen of its own (ADR-021).
+- **Capturing the current arrangement as a profile.** Reading back where every window is today
+  and writing it down is the natural twin of this slice, and it is 1.1 for the same reason: what
+  it captures is mostly windows nothing here opened.
+- **Always on top, a chosen z-order, a virtual desktop.** Each is another verb on somebody
+  else's window, and none of them is what "open my day" needs first.
+- **Waiting longer than five seconds for a window.** The wait is fixed and not a field: a step
+  that needs a longer wait already has one — F4's, which is about a step being _ready_, not
+  about where it sits.
 
 ### Delivered in F5
 
