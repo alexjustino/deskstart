@@ -210,12 +210,16 @@ function ReviewDetail({
       </p>
 
       {resolved.ok ? (
-        <p data-selectable className="break-all font-mono text-caption text-fg-secondary">
-          {resolved.launch.kind === 'url' ? resolved.launch.url : targetOf(resolved.launch)}
+        <>
+          <p data-selectable className="break-all font-mono text-caption text-fg-secondary">
+            {resolved.launch.kind === 'url' ? resolved.launch.url : targetOf(resolved.launch)}
+          </p>
           {resolved.launch.source !== null && (
-            <span className="text-fg-tertiary"> (written as {resolved.launch.source})</span>
+            <p data-selectable className="break-all font-mono text-caption text-fg-tertiary">
+              written as {resolved.launch.source}
+            </p>
           )}
-        </p>
+        </>
       ) : (
         <p className="text-caption text-danger">
           This step does not resolve on this machine, so it will not run:{' '}
