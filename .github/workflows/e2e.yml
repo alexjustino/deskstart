@@ -54,6 +54,11 @@ jobs:
           $driver = Join-Path $env:EdgeWebDriver 'msedgedriver.exe'
           if (-not (Test-Path $driver)) { throw "no msedgedriver at $driver" }
           & $driver --version
+          # Known: this suite does not yet run on a hosted runner. With the
+          # driver path fixed every session fails at "DevToolsActivePort file
+          # doesn't exist" — WebView2 not starting there — and telling it there
+          # is no GPU did not change that. It is dispatched, not a gate, and the
+          # suite's verdict comes from a real desktop until this is understood.
           $env:DESKSTART_E2E_EDGEDRIVER = $driver
           npm run e2e
 
