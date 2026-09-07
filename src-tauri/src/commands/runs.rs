@@ -22,7 +22,7 @@ use tauri::State;
 use crate::db::models::{Event, Launch, Run};
 use crate::db::{profiles, runs, Db};
 use crate::error::{Error, Result};
-use crate::os::{close, job, open, process};
+use crate::os::{close, job, open, probe, process};
 
 /// What the host holds for one run that has not finished.
 #[derive(Default)]
@@ -231,6 +231,115 @@ fn how_name(how: close::How) -> &'static str {
         close::How::Window => "window",
         close::How::Terminated => "terminated",
     }
+}
+
+/// What a step waits for, as the domain resolved it.
+#[derive(Debug, Clone, serde::Deserialize)]
+#[serde(tag = "kind", rename_all = "lowercase")]
+pub enum Probe {
+    /// The process the awaited step started has a visible window of its own.
+    Window,
+    /// Something answers on this machine's TCP port.
+    Port { port: u16 },
+}
+
+impl Probe {
+    fn describe(&self) -> String {
+        match self {
+            Probe::Window => "a window".into(),
+            Probe::Port { port } => format!("port {port}"),
+        }
+    }
+}
+
+/// Ask whether what a step waits for is responding.
+///
+/// This writes **no** line: it is asked four times a second while a step
+/// waits, and a log with four lines a second is not a log. What reaches the
+/// log is the beginning of the wait, its end, and nothing in between.
+#[tauri::command]
+pub fn step_probe(
+    held: State<'_, Held>,
+    run_id: String,
+    awaited_step_id: String,
+    probe: Probe,
+) -> Result<bool> {
+    Ok(match probe {
+        Probe::Window => {
+            let held = held.0.lock().expect("the held lock was poisoned");
+            match held
+                .get(&run_id)
+                .and_then(|hold| hold.children.get(&awaited_step_id))
+            {
+                // The run does not hold a process for that step — it opened a
+                // folder, or the process is gone. Neither will grow a window.
+                None => false,
+                Some(child) => probe::has_window(child.id()),
+            }
+        }
+        Probe::Port { port } => probe::port_answers(port),
+    })
+}
+
+/// The line that opens a wait: what this step waits for, and for how long.
+#[tauri::command]
+pub fn step_waiting_for(
+    db: State<'_, Db>,
+    run_id: String,
+    step_id: String,
+    awaited_step_id: String,
+    probe: Probe,
+    timeout_ms: i64,
+) -> Result<Event> {
+    let mut conn = db.0.lock().expect("the database lock was poisoned");
+    let run = runs::get_run(&conn, &run_id)?;
+    let payload = serde_json::json!({
+        "awaitedStepId": awaited_step_id,
+        "probe": probe.describe(),
+        "timeoutMs": timeout_ms,
+    });
+    let kind = if run.mode == "dry" {
+        "would_wait_for"
+    } else {
+        "waiting_for"
+    };
+    runs::append_event(&mut conn, &run_id, Some(&step_id), kind, &payload)
+}
+
+/// The line that closes a wait: it answered, after this long.
+#[tauri::command]
+pub fn step_ready(
+    db: State<'_, Db>,
+    run_id: String,
+    step_id: String,
+    waited_ms: i64,
+) -> Result<Event> {
+    let mut conn = db.0.lock().expect("the database lock was poisoned");
+    runs::append_event(
+        &mut conn,
+        &run_id,
+        Some(&step_id),
+        "ready",
+        &serde_json::json!({ "waitedMs": waited_ms }),
+    )
+}
+
+/// The line for a step that will not start, and why. The run carries on.
+#[tauri::command]
+pub fn step_skipped(
+    db: State<'_, Db>,
+    run_id: String,
+    step_id: String,
+    reason: String,
+) -> Result<Event> {
+    let mut conn = db.0.lock().expect("the database lock was poisoned");
+    runs::append_event(
+        &mut conn,
+        &run_id,
+        Some(&step_id),
+        "skipped",
+        &serde_json::json!({ "reason": reason }),
+    )
 }
 
 /// Record a pause the run observed (or, dry, would have): the line that keeps

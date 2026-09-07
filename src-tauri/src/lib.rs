@@ -19,6 +19,8 @@
 //!   step can be moved within its profile.
 //! - F2: the processes a run starts are held for its life; a hold ends with
 //!   a close (windows asked, then terminated after a grace); pauses are logged.
+//! - F4: what a step waits for (migration 003), asked of the host by window
+//!   or by port while the step waits.
 
 pub mod commands;
 pub mod db;
@@ -89,6 +91,10 @@ pub fn run() {
             commands::runs::step_execute,
             commands::runs::step_close,
             commands::runs::step_wait,
+            commands::runs::step_probe,
+            commands::runs::step_waiting_for,
+            commands::runs::step_ready,
+            commands::runs::step_skipped,
             commands::runs::run_stop,
             commands::runs::run_finish,
             commands::runs::runs_list,
