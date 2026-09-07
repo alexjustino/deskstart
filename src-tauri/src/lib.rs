@@ -21,6 +21,9 @@
 //!   a close (windows asked, then terminated after a grace); pauses are logged.
 //! - F4: what a step waits for (migration 003), asked of the host by window
 //!   or by port while the step waits.
+//! - F5: a profile read from and written to one file the person chose, and
+//!   imported unreviewed (migration 004) — accepted a step at a time before it
+//!   may run at all.
 
 pub mod commands;
 pub mod db;
@@ -49,6 +52,10 @@ pub fn run() {
     }
 
     builder
+        // The system's own file dialogs, and nothing else from the filesystem:
+        // the plugin returns a path, and the host's own command reads or writes
+        // exactly that one file (F5).
+        .plugin(tauri_plugin_dialog::init())
         .plugin(
             tauri_plugin_log::Builder::new()
                 // `Builder::new` arrives with a default target set. Adding to it
@@ -87,6 +94,11 @@ pub fn run() {
             commands::profiles::step_update,
             commands::profiles::step_delete,
             commands::profiles::step_move,
+            commands::profiles::profile_import,
+            commands::profiles::step_accept,
+            commands::profiles::profile_accept,
+            commands::profiles::profile_file_read,
+            commands::profiles::profile_file_write,
             commands::runs::run_begin,
             commands::runs::step_execute,
             commands::runs::step_close,

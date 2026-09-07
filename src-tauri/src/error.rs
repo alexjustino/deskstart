@@ -25,6 +25,9 @@ pub enum Error {
     Unreviewed,
 
     #[error("{0}")]
+    File(&'static str),
+
+    #[error("{0}")]
     InvalidInput(&'static str),
 }
 
@@ -48,6 +51,7 @@ impl Serialize for Error {
             Error::DataDir => "data_dir",
             Error::NotFound => "not_found",
             Error::Unreviewed => "unreviewed",
+            Error::File(_) => "file",
             Error::InvalidInput(_) => "invalid_input",
         };
         // The detail goes to the log; the frontend gets the sentence.
