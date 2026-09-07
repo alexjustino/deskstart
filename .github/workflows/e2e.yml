@@ -55,6 +55,10 @@ jobs:
           if (-not (Test-Path $driver)) { throw "no msedgedriver at $driver" }
           & $driver --version
           $env:DESKSTART_E2E_EDGEDRIVER = $driver
+          # A hosted runner has no GPU and a WebView2 that cannot start one
+          # fails as "DevToolsActivePort file doesn't exist", which reads like a
+          # broken suite and is not one.
+          $env:WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS = '--disable-gpu --disable-software-rasterizer'
           npm run e2e
 
       - name: Keep the screenshots
