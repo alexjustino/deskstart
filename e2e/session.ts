@@ -18,6 +18,7 @@
 
 import { spawn, type ChildProcess } from 'node:child_process';
 import { copyFile, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { connect } from 'node:net';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
@@ -193,14 +194,40 @@ function stopStrayInstances(): Promise<void> {
 }
 
 /** Wait until the driver port is free, so the next driver can bind it. */
+/** Does anything still accept a connection on this port of this machine? */
+function portAnswers(port: number): Promise<boolean> {
+  return new Promise((resolve) => {
+    const socket = connect({ host: '127.0.0.1', port });
+    const settle = (answers: boolean) => {
+      socket.destroy();
+      resolve(answers);
+    };
+    socket.setTimeout(500);
+    socket.once('connect', () => settle(true));
+    socket.once('timeout', () => settle(false));
+    socket.once('error', () => settle(false));
+  });
+}
+
+/**
+ * Wait until the driver is really gone — both of it.
+ *
+ * `tauri-driver` answers on one port and starts `msedgedriver` on another. A
+ * new driver that binds the first while the old one still holds the second
+ * comes up, answers `/status`, and then dies when it cannot start its own
+ * native driver — which reaches the test as a refused connection one call
+ * later. So both ports are waited for, not just the one that talks.
+ */
 async function waitForDriverGone(): Promise<void> {
-  const deadline = Date.now() + 10_000;
+  const deadline = Date.now() + 15_000;
   while (Date.now() < deadline) {
+    let talking = true;
     try {
       await fetch(`${BASE}/status`);
     } catch {
-      return;
+      talking = false;
     }
+    if (!talking && !(await portAnswers(NATIVE_PORT))) return;
     await new Promise((resolve) => setTimeout(resolve, 100));
   }
 }
