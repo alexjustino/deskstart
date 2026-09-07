@@ -40,6 +40,7 @@ import {
   type StepKind,
 } from '@/domain/profile';
 import type { Mode } from '@/domain/run';
+import { describeWaitFor, waitForProblems } from '@/domain/readiness';
 import { describeTiming } from '@/domain/timing';
 import { Button } from '@/ui/Button';
 import { Card } from '@/ui/Card';
@@ -52,7 +53,7 @@ import { announce } from '@/ui/announce';
 
 import { LogLines, RunHeading } from '../runs/LogLines';
 import { KIND_LABELS } from './kinds';
-import { StepForm } from './StepForm';
+import { StepForm, type EarlierStep } from './StepForm';
 
 /**
  * Profiles: the list on the left, the selected profile on the right, and the
@@ -189,19 +190,24 @@ function ProfileDetail({ profile }: { profile: Profile }) {
   // Every step judged once: readable, and resolvable here. Both are shown on
   // the row, and either blocks Run — a profile never runs with a step the
   // person cannot see for what it is.
-  const judged: Judged[] = useMemo(
-    () =>
-      (steps.data ?? []).map((stored) => {
-        if (!stored.readable) return { stored, step: null, problems: stored.problems };
-        const resolved = resolveStep(stored.step.config, env);
-        return {
-          stored,
-          step: stored.step,
-          problems: resolved.ok ? [] : resolved.problems,
-        };
-      }),
-    [steps.data, env],
-  );
+  const judged: Judged[] = useMemo(() => {
+    const stored = steps.data ?? [];
+    // What every step waits for is judged against the profile as it is now: a
+    // step that waits for one that was deleted, or moved after it, says so.
+    const waiters = stored.map((s) => ({
+      id: s.readable ? s.step.id : s.id,
+      waitFor: s.readable ? s.step.waitFor : null,
+    }));
+    return stored.map((entry, index) => {
+      if (!entry.readable) return { stored: entry, step: null, problems: entry.problems };
+      const resolved = resolveStep(entry.step.config, env);
+      return {
+        stored: entry,
+        step: entry.step,
+        problems: [...(resolved.ok ? [] : resolved.problems), ...waitForProblems(waiters, index)],
+      };
+    });
+  }, [steps.data, env]);
   const runnable = judged.filter((j): j is Judged & { step: Step } => j.step !== null);
   const blocked = judged.filter((j) => j.problems.length > 0).length;
 
@@ -303,7 +309,7 @@ function ProfileDetail({ profile }: { profile: Profile }) {
 
       <Card title="Steps" description="What this profile opens, in this order.">
         <StepList profileId={profile.id} judged={judged} env={env} busy={execute.isPending} />
-        <AddStep profileId={profile.id} env={env} />
+        <AddStep profileId={profile.id} env={env} earlier={titlesOf(judged, env)} />
       </Card>
 
       <Card
@@ -394,6 +400,13 @@ function summary(config: StepConfig, env: Readonly<Record<string, string>>): str
   return source !== null ? `${written} → ${target}` : written;
 }
 
+/** What each readable step is called, in order: the "waits for" list. */
+function titlesOf(judged: Judged[], env: Readonly<Record<string, string>>): EarlierStep[] {
+  return judged
+    .filter((j): j is Judged & { step: Step } => j.step !== null)
+    .map((j) => ({ id: j.step.id, title: titleOf(j.step.config, env) }));
+}
+
 function StepList({
   profileId,
   judged,
@@ -444,6 +457,27 @@ function StepList({
                   >
                     {summary(step.config, env)}
                   </span>
+                  {describeWaitFor(
+                    step.waitFor,
+                    judged.find((j) => j.step?.id === step.waitFor?.stepId)?.step
+                      ? titleOf(
+                          judged.find((j) => j.step?.id === step.waitFor?.stepId)!.step!.config,
+                          env,
+                        )
+                      : null,
+                  ) && (
+                    <span className="block text-caption text-fg-secondary">
+                      {describeWaitFor(
+                        step.waitFor,
+                        judged.find((j) => j.step?.id === step.waitFor?.stepId)?.step
+                          ? titleOf(
+                              judged.find((j) => j.step?.id === step.waitFor?.stepId)!.step!.config,
+                              env,
+                            )
+                          : null,
+                      )}
+                    </span>
+                  )}
                   {describeTiming(step.timing) && (
                     <span className="block text-caption text-fg-secondary">
                       {describeTiming(step.timing)}
@@ -492,14 +526,15 @@ function StepList({
               <div className="pb-2 pl-9">
                 <StepForm
                   key={id}
-                  initial={{ config: step.config, timing: step.timing }}
+                  initial={{ config: step.config, timing: step.timing, waitFor: step.waitFor }}
+                  earlier={titlesOf(judged.slice(0, index), env)}
                   env={env}
                   pending={update.isPending}
                   hostError={update.isError ? describeError(update.error) : null}
                   onCancel={() => setEditingId(null)}
-                  onSubmit={(config, timing) =>
+                  onSubmit={(config, timing, waitFor) =>
                     update.mutate(
-                      { id, profileId, config, timing },
+                      { id, profileId, config, timing, waitFor },
                       {
                         onSuccess: () => {
                           setEditingId(null);
@@ -518,7 +553,15 @@ function StepList({
   );
 }
 
-function AddStep({ profileId, env }: { profileId: string; env: Readonly<Record<string, string>> }) {
+function AddStep({
+  profileId,
+  env,
+  earlier,
+}: {
+  profileId: string;
+  env: Readonly<Record<string, string>>;
+  earlier: readonly EarlierStep[];
+}) {
   const add = useAddStep();
   // A new key after every success gives the form a clean slate.
   const [generation, setGeneration] = useState(0);
@@ -526,12 +569,13 @@ function AddStep({ profileId, env }: { profileId: string; env: Readonly<Record<s
     <StepForm
       key={generation}
       initial={null}
+      earlier={earlier}
       env={env}
       pending={add.isPending}
       hostError={add.isError ? describeError(add.error) : null}
-      onSubmit={(config, timing) =>
+      onSubmit={(config, timing, waitFor) =>
         add.mutate(
-          { profileId, config, timing },
+          { profileId, config, timing, waitFor },
           {
             onSuccess: () => {
               setGeneration((g) => g + 1);

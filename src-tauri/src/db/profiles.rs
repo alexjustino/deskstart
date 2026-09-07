@@ -7,8 +7,8 @@ use crate::db::{new_id, now};
 use crate::error::{Error, Result};
 
 const PROFILE_COLUMNS: &str = "id, name, position, imported_unreviewed, created_at, updated_at";
-const STEP_COLUMNS: &str =
-    "id, profile_id, position, kind, config_json, timing_json, created_at, updated_at";
+const STEP_COLUMNS: &str = "id, profile_id, position, kind, config_json, timing_json, \
+     wait_json, created_at, updated_at";
 
 fn read_profile(row: &rusqlite::Row<'_>) -> rusqlite::Result<Profile> {
     Ok(Profile {
@@ -29,8 +29,9 @@ fn read_step(row: &rusqlite::Row<'_>) -> rusqlite::Result<Step> {
         kind: row.get(3)?,
         config_json: row.get(4)?,
         timing_json: row.get(5)?,
-        created_at: row.get(6)?,
-        updated_at: row.get(7)?,
+        wait_json: row.get(6)?,
+        created_at: row.get(7)?,
+        updated_at: row.get(8)?,
     })
 }
 
@@ -123,6 +124,7 @@ pub fn add_step(
     kind: &str,
     config_json: &str,
     timing_json: &str,
+    wait_json: &str,
 ) -> Result<Step> {
     get_profile(conn, profile_id)?;
     if !STEP_KINDS.contains(&kind) {
@@ -142,9 +144,18 @@ pub fn add_step(
     let id = new_id();
     let stamp = now();
     conn.execute(
-        "INSERT INTO step (id, profile_id, position, kind, config_json, timing_json, created_at, updated_at)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?7)",
-        params![id, profile_id, position, kind, config_json, timing_json, stamp],
+        "INSERT INTO step (id, profile_id, position, kind, config_json, timing_json, wait_json, created_at, updated_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?8)",
+        params![
+            id,
+            profile_id,
+            position,
+            kind,
+            config_json,
+            timing_json,
+            wait_json,
+            stamp
+        ],
     )?;
     touch_profile(conn, profile_id)?;
     get_step(conn, &id)
@@ -155,6 +166,7 @@ pub fn update_step(
     id: &str,
     config_json: &str,
     timing_json: &str,
+    wait_json: &str,
 ) -> Result<Step> {
     if serde_json::from_str::<serde_json::Value>(config_json).is_err() {
         return Err(Error::InvalidInput("the step configuration is not valid"));
@@ -163,8 +175,9 @@ pub fn update_step(
         return Err(Error::InvalidInput("the step timing is not valid"));
     }
     let changed = conn.execute(
-        "UPDATE step SET config_json = ?2, timing_json = ?3, updated_at = ?4 WHERE id = ?1",
-        params![id, config_json, timing_json, now()],
+        "UPDATE step SET config_json = ?2, timing_json = ?3, wait_json = ?4, updated_at = ?5
+         WHERE id = ?1",
+        params![id, config_json, timing_json, wait_json, now()],
     )?;
     if changed == 0 {
         return Err(Error::NotFound);
@@ -272,6 +285,7 @@ mod tests {
             "app",
             r#"{"program":"a.exe","args":[]}"#,
             "{}",
+            "{}",
         )
         .unwrap();
         let b = add_step(
@@ -279,6 +293,7 @@ mod tests {
             &profile.id,
             "app",
             r#"{"program":"b.exe","args":[]}"#,
+            "{}",
             "{}",
         )
         .unwrap();
@@ -294,15 +309,15 @@ mod tests {
         let conn = memory();
         let profile = create_profile(&conn, "Morning").unwrap();
         assert!(matches!(
-            add_step(&conn, &profile.id, "app", "not json", "{}"),
+            add_step(&conn, &profile.id, "app", "not json", "{}", "{}"),
             Err(Error::InvalidInput(_))
         ));
         assert!(matches!(
-            add_step(&conn, &profile.id, "shortcut", "{}", "{}"),
+            add_step(&conn, &profile.id, "shortcut", "{}", "{}", "{}"),
             Err(Error::InvalidInput(_))
         ));
         assert!(matches!(
-            add_step(&conn, "missing", "app", "{}", "{}"),
+            add_step(&conn, "missing", "app", "{}", "{}", "{}"),
             Err(Error::NotFound)
         ));
     }
@@ -311,9 +326,33 @@ mod tests {
     fn a_step_moves_one_place_and_stays_put_at_the_edge() {
         let mut conn = memory();
         let profile = create_profile(&conn, "Morning").unwrap();
-        let a = add_step(&conn, &profile.id, "app", r#"{"program":"a.exe"}"#, "{}").unwrap();
-        let b = add_step(&conn, &profile.id, "url", r#"{"url":"https://b"}"#, "{}").unwrap();
-        let c = add_step(&conn, &profile.id, "folder", r#"{"path":"C:/c"}"#, "{}").unwrap();
+        let a = add_step(
+            &conn,
+            &profile.id,
+            "app",
+            r#"{"program":"a.exe"}"#,
+            "{}",
+            "{}",
+        )
+        .unwrap();
+        let b = add_step(
+            &conn,
+            &profile.id,
+            "url",
+            r#"{"url":"https://b"}"#,
+            "{}",
+            "{}",
+        )
+        .unwrap();
+        let c = add_step(
+            &conn,
+            &profile.id,
+            "folder",
+            r#"{"path":"C:/c"}"#,
+            "{}",
+            "{}",
+        )
+        .unwrap();
         let order = |steps: &[Step]| steps.iter().map(|s| s.id.clone()).collect::<Vec<_>>();
 
         let moved = move_step(&mut conn, &c.id, -1).unwrap();

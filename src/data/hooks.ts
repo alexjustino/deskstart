@@ -16,6 +16,7 @@ import { useCallback, useRef } from 'react';
 
 import type { Step, StepConfig } from '@/domain/profile';
 import type { Mode } from '@/domain/run';
+import type { WaitFor } from '@/domain/readiness';
 import type { Timing } from '@/domain/timing';
 
 import { executeProfile, Stopper } from './execute';
@@ -79,11 +80,13 @@ export function useAddStep() {
       profileId,
       config,
       timing,
+      waitFor,
     }: {
       profileId: string;
       config: StepConfig;
       timing: Timing;
-    }) => profileApi.addStep(profileId, config, timing),
+      waitFor: WaitFor | null;
+    }) => profileApi.addStep(profileId, config, timing, waitFor),
     onSuccess: (_step, { profileId }) =>
       client.invalidateQueries({ queryKey: keys.steps(profileId) }),
   });
@@ -96,12 +99,14 @@ export function useUpdateStep() {
       id,
       config,
       timing,
+      waitFor,
     }: {
       id: string;
       profileId: string;
       config: StepConfig;
       timing: Timing;
-    }) => profileApi.updateStep(id, config, timing),
+      waitFor: WaitFor | null;
+    }) => profileApi.updateStep(id, config, timing, waitFor),
     onSuccess: (_step, { profileId }) =>
       client.invalidateQueries({ queryKey: keys.steps(profileId) }),
   });

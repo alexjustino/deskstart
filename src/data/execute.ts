@@ -28,7 +28,11 @@ import {
   runStop,
   stepClose,
   stepExecute,
+  stepProbe,
+  stepReady,
+  stepSkipped,
   stepWait,
+  stepWaitingFor,
   toRunEvent,
   type LogLine,
   type Run,
@@ -106,7 +110,7 @@ export async function executeProfile(
   };
 
   let state = plan(
-    steps.map((step) => ({ id: step.id, timing: step.timing })),
+    steps.map((step) => ({ id: step.id, timing: step.timing, waitFor: step.waitFor })),
     mode,
   );
   // The dry run's clock; the real run reads the host's timestamps.
@@ -177,6 +181,27 @@ export async function executeProfile(
         break;
       case 'close':
         feedLine(await stepClose(run.id, action.stepId, launchOf(action.stepId), action.heldMs));
+        break;
+      case 'probe': {
+        const step = stepOf(action.stepId);
+        const waitFor = step.waitFor;
+        if (waitFor === null) throw new Error('a step was probed that waits for nothing');
+        if (action.first) {
+          onLine(
+            await stepWaitingFor(run.id, step.id, waitFor.stepId, waitFor.probe, waitFor.timeoutMs),
+          );
+        }
+        // A dry run performs no probe: it says what it would wait for and
+        // carries on, so a profile that waits a minute is written down at once.
+        const ready = dry ? true : await stepProbe(run.id, waitFor.stepId, waitFor.probe);
+        feed({ kind: 'probe_result', stepId: step.id, ready, at: now() });
+        break;
+      }
+      case 'ready':
+        if (!dry) onLine(await stepReady(run.id, action.stepId, action.waitedMs));
+        break;
+      case 'skip':
+        onLine(await stepSkipped(run.id, action.stepId, action.reason));
         break;
       case 'finish': {
         if (action.outcome === 'stopped') {

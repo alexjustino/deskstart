@@ -9,6 +9,7 @@ import {
   type StepConfig,
   type StepKind,
 } from '@/domain/profile';
+import { DEFAULT_TIMEOUT_MS, describeWaitFor, readWaitFor, type WaitFor } from '@/domain/readiness';
 import { describeTiming, readTiming, type Timing } from '@/domain/timing';
 import { Button } from '@/ui/Button';
 import { Checkbox } from '@/ui/Checkbox';
@@ -16,6 +17,7 @@ import { ChoiceGroup } from '@/ui/ChoiceGroup';
 import { IconButton } from '@/ui/IconButton';
 import { InfoBar } from '@/ui/InfoBar';
 import { Input } from '@/ui/Input';
+import { Select } from '@/ui/Select';
 
 import { KIND_LABELS } from './kinds';
 
@@ -44,6 +46,17 @@ interface Draft {
   holdS: string;
   repeat: string;
   closedS: string;
+  /** The earlier step this one waits for; empty means it waits for nothing. */
+  waitStepId: string;
+  waitProbe: 'window' | 'port';
+  waitPort: string;
+  waitTimeoutS: string;
+}
+
+/** An earlier step, as the "waits for" list offers it. */
+export interface EarlierStep {
+  id: string;
+  title: string;
 }
 
 const EMPTY: Draft = {
@@ -57,20 +70,30 @@ const EMPTY: Draft = {
   holdS: '',
   repeat: '1',
   closedS: '',
+  waitStepId: '',
+  waitProbe: 'window',
+  waitPort: '',
+  waitTimeoutS: String(DEFAULT_TIMEOUT_MS / 1000),
 };
 
 function seconds(ms: number): string {
   return ms === 0 ? '' : String(ms / 1000);
 }
 
-function draftOf(initial: { config: StepConfig; timing: Timing } | null): Draft {
+function draftOf(
+  initial: { config: StepConfig; timing: Timing; waitFor: WaitFor | null } | null,
+): Draft {
   if (initial === null) return EMPTY;
-  const { config, timing } = initial;
+  const { config, timing, waitFor } = initial;
   const time = {
     pauseAfterS: seconds(timing.pauseAfterMs),
     holdS: timing.holdMs === null ? '' : String(timing.holdMs / 1000),
     repeat: timing.repeat === 'forever' ? 'forever' : String(timing.repeat),
     closedS: seconds(timing.closedMs),
+    waitStepId: waitFor?.stepId ?? '',
+    waitProbe: waitFor?.probe.kind ?? ('window' as const),
+    waitPort: waitFor?.probe.kind === 'port' ? String(waitFor.probe.port) : '',
+    waitTimeoutS: String((waitFor?.timeoutMs ?? DEFAULT_TIMEOUT_MS) / 1000),
   };
   switch (config.kind) {
     case 'app':
@@ -119,6 +142,20 @@ function millis(text: string, path: string, what: string): number | Problem {
   return Math.round(value * 1000);
 }
 
+/** The draft's waiting as a document; `readWaitFor` decides if it is one. */
+function waitDocumentOf(draft: Draft): Record<string, unknown> | null {
+  if (draft.waitStepId === '') return null;
+  const timeout = millis(draft.waitTimeoutS, 'waitFor.timeoutMs', 'the timeout');
+  return {
+    stepId: draft.waitStepId,
+    probe:
+      draft.waitProbe === 'window'
+        ? { kind: 'window' }
+        : { kind: 'port', port: Number(draft.waitPort.trim()) },
+    timeoutMs: typeof timeout === 'number' && timeout > 0 ? timeout : 0,
+  };
+}
+
 /** The draft's timing as a document; `readTiming` decides if it is one. */
 function timingOf(draft: Draft): Record<string, unknown> | Problem[] {
   const problems: Problem[] = [];
@@ -141,6 +178,7 @@ function timingOf(draft: Draft): Record<string, unknown> | Problem[] {
 
 export function StepForm({
   initial,
+  earlier,
   env,
   pending,
   hostError,
@@ -148,12 +186,14 @@ export function StepForm({
   onCancel,
 }: {
   /** The step being edited, or null to add one. */
-  initial: { config: StepConfig; timing: Timing } | null;
+  initial: { config: StepConfig; timing: Timing; waitFor: WaitFor | null } | null;
+  /** The steps before this one: the only ones it may wait for. */
+  earlier: readonly EarlierStep[];
   env: Readonly<Record<string, string>>;
   pending: boolean;
   /** What the host answered when the last submit was refused, if anything. */
   hostError: string | null;
-  onSubmit: (config: StepConfig, timing: Timing) => void;
+  onSubmit: (config: StepConfig, timing: Timing, waitFor: WaitFor | null) => void;
   onCancel?: () => void;
 }) {
   const [draft, setDraft] = useState<Draft>(() => draftOf(initial));
@@ -169,6 +209,10 @@ export function StepForm({
   const timingDocument = timingOf(draft);
   const timing = Array.isArray(timingDocument) ? timingDocument : readTiming(timingDocument);
   const timingSentence = Array.isArray(timing) ? null : describeTiming(timing);
+  const waitDocument = waitDocumentOf(draft);
+  const waitFor = readWaitFor(waitDocument);
+  const awaitedTitle = earlier.find((s) => s.id === draft.waitStepId)?.title ?? null;
+  const waitSentence = Array.isArray(waitFor) ? null : describeWaitFor(waitFor, awaitedTitle);
 
   const addArgument = () => {
     if (argument === '') return;
@@ -201,8 +245,12 @@ export function StepForm({
       ]);
       return;
     }
+    if (Array.isArray(waitFor)) {
+      setProblems(waitFor);
+      return;
+    }
     setProblems([]);
-    onSubmit(config, timing);
+    onSubmit(config, timing, waitFor);
   };
 
   const target = (() => {
@@ -420,6 +468,77 @@ export function StepForm({
           {timingSentence ?? 'Opens and moves on to the next step at once.'}
         </p>
       </fieldset>
+
+      {earlier.length > 0 && (
+        <fieldset className="flex flex-col gap-2 rounded-md border border-stroke-subtle p-3">
+          <legend className="px-1 text-caption font-semibold text-fg-tertiary uppercase">
+            Waits for
+          </legend>
+          <div className="grid grid-cols-[minmax(0,1fr)_12rem] items-center gap-2">
+            <label htmlFor="step-wait" className="text-body text-fg-secondary">
+              Start this step only once an earlier one is responding
+            </label>
+            <Select
+              id="step-wait"
+              aria-label="Wait for this step"
+              value={draft.waitStepId}
+              onChange={(e) => set({ waitStepId: e.target.value })}
+              disabled={pending}
+            >
+              <option value="">Nothing — start at once</option>
+              {earlier.map((step, index) => (
+                <option key={step.id} value={step.id}>
+                  {index + 1}. {step.title}
+                </option>
+              ))}
+            </Select>
+            {draft.waitStepId !== '' && (
+              <>
+                <span className="text-body text-fg-secondary">Responding means</span>
+                <ChoiceGroup
+                  label="Responding means"
+                  options={['window', 'port'] as const}
+                  value={draft.waitProbe}
+                  onChange={(waitProbe) => set({ waitProbe })}
+                  labels={{ window: 'A window', port: 'A port' }}
+                  disabled={pending}
+                />
+                {draft.waitProbe === 'port' && (
+                  <>
+                    <label htmlFor="step-wait-port" className="text-body text-fg-secondary">
+                      The port it listens on
+                    </label>
+                    <Input
+                      id="step-wait-port"
+                      aria-label="Port"
+                      inputMode="numeric"
+                      placeholder="5173"
+                      value={draft.waitPort}
+                      onChange={(e) => set({ waitPort: e.target.value })}
+                      disabled={pending}
+                    />
+                  </>
+                )}
+                <label htmlFor="step-wait-timeout" className="text-body text-fg-secondary">
+                  Give up after (seconds), and skip this step
+                </label>
+                <Input
+                  id="step-wait-timeout"
+                  aria-label="Give up after (seconds)"
+                  inputMode="decimal"
+                  placeholder="30"
+                  value={draft.waitTimeoutS}
+                  onChange={(e) => set({ waitTimeoutS: e.target.value })}
+                  disabled={pending}
+                />
+              </>
+            )}
+          </div>
+          <p className="text-caption text-fg-secondary">
+            {waitSentence ?? 'Starts as soon as the step before it has been started.'}
+          </p>
+        </fieldset>
+      )}
 
       {(problems.length > 0 || hostError) && (
         <InfoBar

@@ -43,6 +43,7 @@ pub fn step_add(
     kind: String,
     config_json: String,
     timing_json: Option<String>,
+    wait_json: Option<String>,
 ) -> Result<Step> {
     let conn = db.0.lock().expect("the database lock was poisoned");
     profiles::add_step(
@@ -51,6 +52,7 @@ pub fn step_add(
         &kind,
         &config_json,
         timing_json.as_deref().unwrap_or("{}"),
+        wait_json.as_deref().unwrap_or("{}"),
     )
 }
 
@@ -60,6 +62,7 @@ pub fn step_update(
     id: String,
     config_json: String,
     timing_json: Option<String>,
+    wait_json: Option<String>,
 ) -> Result<Step> {
     let conn = db.0.lock().expect("the database lock was poisoned");
     profiles::update_step(
@@ -67,6 +70,7 @@ pub fn step_update(
         &id,
         &config_json,
         timing_json.as_deref().unwrap_or("{}"),
+        wait_json.as_deref().unwrap_or("{}"),
     )
 }
 

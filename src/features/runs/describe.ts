@@ -114,6 +114,23 @@ export function describe(line: LogLine): { text: string; detail: string | null }
       return { text: `Waited ${duration(p.ms)}`, detail: null };
     case 'would_wait':
       return { text: `Would wait ${duration(p.ms)}`, detail: null };
+    case 'waiting_for':
+      return {
+        text: `Waiting for ${String(p.probe ?? 'something')} — up to ${duration(p.timeoutMs)}`,
+        detail: null,
+      };
+    case 'would_wait_for':
+      return {
+        text: `Would wait for ${String(p.probe ?? 'something')} — up to ${duration(p.timeoutMs)}`,
+        detail: null,
+      };
+    case 'ready':
+      return { text: `Ready after ${duration(p.waitedMs)}`, detail: null };
+    case 'skipped':
+      return {
+        text: `Skipped — ${String(p.reason ?? 'no reason recorded')}`,
+        detail: null,
+      };
     case 'failed': {
       const verb = p.kind === 'app' || p.kind === undefined ? 'start' : 'open';
       return {

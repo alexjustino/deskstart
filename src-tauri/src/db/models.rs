@@ -31,6 +31,8 @@ pub struct Step {
     pub kind: String,
     pub config_json: String,
     pub timing_json: String,
+    /// What the step waits for before it starts (F4); `{}` is "nothing".
+    pub wait_json: String,
     pub created_at: String,
     pub updated_at: String,
 }
