@@ -58,8 +58,17 @@ pub struct ImportStep {
     pub place_json: String,
 }
 
-/// The step kinds the host knows how to act on. The schema's CHECK says the same.
-pub const STEP_KINDS: [&str; 4] = ["app", "folder", "file", "url"];
+/// The step kinds the host knows how to act on. The schema's CHECK says the
+/// same, and migration 006 is where the two were last made to agree.
+pub const STEP_KINDS: [&str; 7] = [
+    "app",
+    "folder",
+    "file",
+    "url",
+    "bookmarks",
+    "terminal",
+    "editor",
+];
 
 /// What the domain asks the host to do for one step: every path already
 /// resolved and absolute. `source` is the path as written when expansion

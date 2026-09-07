@@ -37,7 +37,8 @@ describe('reading a bookmark folder', () => {
     const result = readBookmarkFolder(FILE, 'Work');
     expect(result.ok).toBe(true);
     if (!result.ok) return;
-    expect(result.folder.path).toBe('bookmarks bar/work');
+    expect(result.folder.path).toBe('Bookmarks bar/Work');
+    expect(result.folder.name).toBe('Work');
     expect(result.folder.urls).toEqual([
       'https://board.example.com/',
       'https://repo.example.com/x',
@@ -76,8 +77,8 @@ describe('reading a bookmark folder', () => {
     expect(result.ok).toBe(false);
     if (result.ok) return;
     expect(result.problem).toBe('no bookmark folder called Weekend');
-    expect(result.folders).toContain('bookmarks bar/work');
-    expect(result.folders).toContain('bookmarks bar/reading');
+    expect(result.folders).toContain('Bookmarks bar/Work');
+    expect(result.folders).toContain('Bookmarks bar/Reading');
   });
 
   it('never throws on a file that is not one', () => {

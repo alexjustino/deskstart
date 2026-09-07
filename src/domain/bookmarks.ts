@@ -64,22 +64,33 @@ function isFolder(node: Node): boolean {
   return node.type === 'folder' || Array.isArray(node.children);
 }
 
-/** Every folder in the file, by the path a person would write. */
-function walk(node: Node, prefix: string, found: Map<string, Node>): void {
+/** A folder as found: the node, and the path with the browser's own capitals. */
+interface Found {
+  node: Node;
+  path: string;
+}
+
+/**
+ * Every folder in the file, keyed by the path in lower case — matching is not
+ * case-sensitive, because nobody remembers whether they wrote "Work" or "work"
+ * — and carrying the path as the browser spells it, because that is what the
+ * log and the screen must say back.
+ */
+function walk(node: Node, prefix: string, found: Map<string, Found>): void {
   for (const child of childrenOf(node)) {
     if (!isFolder(child)) continue;
     const name = nameOf(child);
     if (name === '') continue;
     const path = prefix === '' ? name : `${prefix}/${name}`;
     // A repeated path keeps the first one found: depth-first, the browser's order.
-    if (!found.has(path.toLowerCase())) found.set(path.toLowerCase(), child);
+    if (!found.has(path.toLowerCase())) found.set(path.toLowerCase(), { node: child, path });
     walk(child, path, found);
   }
 }
 
 /** The roots Chrome and Edge write: the bar, the other bookmarks, the mobile ones. */
-function roots(parsed: unknown): Map<string, Node> {
-  const found = new Map<string, Node>();
+function roots(parsed: unknown): Map<string, Found> {
+  const found = new Map<string, Found>();
   if (!isRecord(parsed)) return found;
   const rootsValue = parsed.roots;
   if (!isRecord(rootsValue)) return found;
@@ -88,7 +99,7 @@ function roots(parsed: unknown): Map<string, Node> {
     const node = value as Node;
     const name = nameOf(node);
     if (name !== '') {
-      if (!found.has(name.toLowerCase())) found.set(name.toLowerCase(), node);
+      if (!found.has(name.toLowerCase())) found.set(name.toLowerCase(), { node, path: name });
       walk(node, name, found);
     } else {
       walk(node, '', found);
@@ -123,19 +134,20 @@ export function readBookmarkFolder(json: string, wanted: string): FolderResult {
       folders: [],
     };
   }
-  const paths = [...found.keys()];
+  const keys = [...found.keys()];
   const key = asked.replace(/^\/+|\/+$/g, '').toLowerCase();
   // The full path first; then the last segment, so "Work" finds "Bookmarks bar/Work".
-  const matchedPath =
-    paths.find((path) => path === key) ?? paths.find((path) => path.split('/').pop() === key);
-  const node = matchedPath === undefined ? undefined : found.get(matchedPath);
-  if (node === undefined || matchedPath === undefined) {
+  const matched =
+    keys.find((path) => path === key) ?? keys.find((path) => path.split('/').pop() === key);
+  const folder = matched === undefined ? undefined : found.get(matched);
+  if (folder === undefined) {
     return {
       ok: false,
       problem: `no bookmark folder called ${asked}`,
-      folders: [...found.keys()].slice(0, 40),
+      folders: [...found.values()].map((entry) => entry.path).slice(0, 40),
     };
   }
+  const node = folder.node;
 
   const urls: string[] = [];
   const left: Problem[] = [];
@@ -153,8 +165,8 @@ export function readBookmarkFolder(json: string, wanted: string): FolderResult {
   return {
     ok: true,
     folder: {
-      name: matchedPath.split('/').pop() ?? matchedPath,
-      path: matchedPath,
+      name: folder.path.split('/').pop() ?? folder.path,
+      path: folder.path,
       urls,
       left,
     },

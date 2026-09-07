@@ -440,17 +440,35 @@ export function StepForm({
         {editing ? 'Edit step' : 'Add a step'}
       </p>
 
-      <ChoiceGroup
-        label="Kind"
-        options={STEP_KINDS}
-        value={draft.kind}
-        onChange={(kind) => {
-          setProblems([]);
-          set({ kind });
-        }}
-        labels={KIND_LABELS}
-        disabled={pending || editing}
-      />
+      {/*
+        Seven kinds, and more coming: past four options a row of buttons stops
+        being a row — it wraps, or it pushes the last kind off the card, which
+        is what the capture of F7 showed. The design system's own rule for a
+        longer list is a Select (see `ui/ChoiceGroup`), and this is the list
+        that outgrew it.
+      */}
+      <div className="flex items-center gap-3">
+        <span className="w-28 shrink-0 text-caption font-semibold text-fg-tertiary uppercase">
+          Kind
+        </span>
+        <span className="w-64">
+          <Select
+            aria-label="Kind"
+            value={draft.kind}
+            onChange={(e) => {
+              setProblems([]);
+              set({ kind: e.target.value as StepKind });
+            }}
+            disabled={pending || editing}
+          >
+            {STEP_KINDS.map((kind) => (
+              <option key={kind} value={kind}>
+                {KIND_LABELS[kind]}
+              </option>
+            ))}
+          </Select>
+        </span>
+      </div>
 
       {draft.kind === 'app' && (
         <>

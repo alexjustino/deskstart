@@ -500,7 +500,10 @@ function summary(config: StepConfig, env: Readonly<Record<string, string>>): str
       case 'url':
         return resolved.launch.url;
       case 'tool':
-        return resolved.launch.what;
+        // What changed is the path the tool was given, if it was given one:
+        // "%USERPROFILE% → C:\Users\Alex" says more than the tool's name,
+        // which the row already carries as the title.
+        return resolved.launch.args.at(-1) ?? resolved.launch.what;
       case 'bookmarks':
         return resolved.launch.folder;
     }
