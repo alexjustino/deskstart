@@ -42,11 +42,20 @@ jobs:
         run: npm run e2e:build
 
       - name: Run the suite
-        # The runner image ships Microsoft Edge WebDriver at $env:EdgeWebDriver.
-        run: npm run e2e
+        # The runner image ships Microsoft Edge WebDriver in a directory named
+        # by the machine's own `EdgeWebDriver` variable. That is a variable of
+        # the runner, not of the workflow, so `${{ env.EdgeWebDriver }}` is
+        # empty and `tauri-driver` gets a driver path of `\msedgedriver.exe` —
+        # it exits at once and every file fails with "tauri-driver did not come
+        # up on port 4444". Read it in the shell, where it exists.
         shell: pwsh
-        env:
-          DESKSTART_E2E_EDGEDRIVER: ${{ env.EdgeWebDriver }}\msedgedriver.exe
+        run: |
+          if (-not $env:EdgeWebDriver) { throw 'the runner has no EdgeWebDriver directory' }
+          $driver = Join-Path $env:EdgeWebDriver 'msedgedriver.exe'
+          if (-not (Test-Path $driver)) { throw "no msedgedriver at $driver" }
+          & $driver --version
+          $env:DESKSTART_E2E_EDGEDRIVER = $driver
+          npm run e2e
 
       - name: Keep the screenshots
         if: always()
