@@ -7,7 +7,7 @@ use tauri::{AppHandle, State};
 
 use crate::db::{migrations, Db, DATA_DIR_ENV};
 use crate::error::Result;
-use crate::os::accent;
+use crate::os::{accent, window};
 
 /// What Diagnostics and About read. Never a hand-typed constant: the version
 /// comes from the running binary.
@@ -102,4 +102,15 @@ mod tests {
             .get("SYSTEMROOT")
             .is_some_and(|v| v.ends_with("Windows")));
     }
+}
+
+/// The screens this machine has, primary first (F6).
+///
+/// The editor offers this list and a placement names a number from it, so what
+/// a person picks and what the run does mean the same thing. A machine that
+/// answers with nothing — no screen the host could enumerate — is a list the
+/// editor shows as such rather than a silent empty dropdown.
+#[tauri::command]
+pub fn monitors() -> Vec<window::Monitor> {
+    window::monitors()
 }

@@ -22,7 +22,7 @@ use tauri::State;
 use crate::db::models::{Event, Launch, Run};
 use crate::db::{profiles, runs, Db};
 use crate::error::{Error, Result};
-use crate::os::{close, job, open, probe, process};
+use crate::os::{close, job, open, probe, process, window};
 
 /// What the host holds for one run that has not finished.
 #[derive(Default)]
@@ -40,6 +40,12 @@ pub struct Held(pub Mutex<HashMap<String, RunHold>>);
 
 /// How long a program gets to close itself before it is terminated.
 const CLOSE_GRACE: Duration = Duration::from_secs(3);
+
+/// How long the host looks for the window it was asked to place (F6). A window
+/// is not there the instant the process is; five seconds is long enough for a
+/// program that shows one and short enough that a program that never will does
+/// not hold the profile up.
+const WINDOW_TIMEOUT: Duration = Duration::from_secs(5);
 
 /// Begin a run of a profile. Refused for a profile that was imported and not
 /// yet reviewed (ADR-013): the review gate lives here as well as in the domain.
@@ -495,4 +501,71 @@ pub fn runs_list(
 pub fn events_list(db: State<'_, Db>, run_id: String) -> Result<Vec<Event>> {
     let conn = db.0.lock().expect("the database lock was poisoned");
     runs::list_events(&conn, &run_id)
+}
+
+/// Put a step's window where the step says, and write what happened (F6).
+///
+/// The placement was decided by the domain; this looks for the window of the
+/// process **this run started** — never any other — waits a moment for it to
+/// appear, and reports. What could not be done as asked is a note on the line,
+/// not a silence: a screen that is not there says so, and a program that never
+/// shows a window of its own says that (risk R2).
+#[tauri::command]
+pub fn step_place(
+    db: State<'_, Db>,
+    held: State<'_, Held>,
+    run_id: String,
+    step_id: String,
+    placement: window::Placement,
+) -> Result<Event> {
+    let mut conn = db.0.lock().expect("the database lock was poisoned");
+    let run = runs::get_run(&conn, &run_id)?;
+    if run.finished_at.is_some() {
+        return Err(Error::InvalidInput("this run has already finished"));
+    }
+
+    // A dry run says what it would do and touches no window.
+    if run.mode == "dry" {
+        return runs::append_event(
+            &mut conn,
+            &run_id,
+            Some(&step_id),
+            "would_place",
+            &serde_json::json!({
+                "monitor": placement.monitor,
+                "state": placement.state,
+                "rect": placement.rect.map(|r| serde_json::json!({
+                    "x": r.x, "y": r.y, "width": r.width, "height": r.height
+                })),
+            }),
+        );
+    }
+
+    let pid = {
+        let held = held.0.lock().expect("the held lock was poisoned");
+        held.get(&run_id)
+            .and_then(|hold| hold.children.get(&step_id))
+            .map(|child| child.id())
+    };
+    let report = match pid {
+        // Only a program this run started has a window this product may touch.
+        None => window::Placed {
+            placed: false,
+            detail: String::new(),
+            note: Some("this run did not start a program for that step".to_string()),
+        },
+        Some(pid) => window::place(pid, &placement, WINDOW_TIMEOUT),
+    };
+
+    runs::append_event(
+        &mut conn,
+        &run_id,
+        Some(&step_id),
+        if report.placed {
+            "placed"
+        } else {
+            "not_placed"
+        },
+        &serde_json::json!({ "detail": report.detail, "note": report.note }),
+    )
 }

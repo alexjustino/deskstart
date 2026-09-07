@@ -53,6 +53,7 @@ pub fn step_add(
     config_json: String,
     timing_json: Option<String>,
     wait_json: Option<String>,
+    place_json: Option<String>,
 ) -> Result<Step> {
     let conn = db.0.lock().expect("the database lock was poisoned");
     profiles::add_step(
@@ -62,6 +63,7 @@ pub fn step_add(
         &config_json,
         timing_json.as_deref().unwrap_or("{}"),
         wait_json.as_deref().unwrap_or("{}"),
+        place_json.as_deref().unwrap_or("{}"),
     )
 }
 
@@ -72,6 +74,7 @@ pub fn step_update(
     config_json: String,
     timing_json: Option<String>,
     wait_json: Option<String>,
+    place_json: Option<String>,
 ) -> Result<Step> {
     let conn = db.0.lock().expect("the database lock was poisoned");
     profiles::update_step(
@@ -80,6 +83,7 @@ pub fn step_update(
         &config_json,
         timing_json.as_deref().unwrap_or("{}"),
         wait_json.as_deref().unwrap_or("{}"),
+        place_json.as_deref().unwrap_or("{}"),
     )
 }
 

@@ -24,6 +24,8 @@
 //! - F5: a profile read from and written to one file the person chose, and
 //!   imported unreviewed (migration 004) — accepted a step at a time before it
 //!   may run at all.
+//! - F6: the screens this machine has, and the window of a process the run
+//!   started put where the step says (migration 005).
 
 pub mod commands;
 pub mod db;
@@ -85,6 +87,7 @@ pub fn run() {
             commands::system::system_info,
             commands::system::accent_ramp,
             commands::system::environment,
+            commands::system::monitors,
             commands::profiles::profiles_list,
             commands::profiles::profile_create,
             commands::profiles::profile_rename,
@@ -103,6 +106,7 @@ pub fn run() {
             commands::runs::step_execute,
             commands::runs::step_close,
             commands::runs::step_wait,
+            commands::runs::step_place,
             commands::runs::step_probe,
             commands::runs::step_waiting_for,
             commands::runs::step_ready,
