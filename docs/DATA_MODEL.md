@@ -28,6 +28,7 @@ Migrations are forward-only and numbered (`VERSIONING.md`).
 | `position`    | order within the profile; integer, dense                                                                                                        |
 | `kind`        | `app`, `folder`, `file` or `url` (`CHECK`, widened by migration 002)                                                                            |
 | `config_json` | the step's own shape, written and validated by the domain (ADR-010); e.g. `{"program": "C:\\...\\notepad.exe", "args": [], "workingDir": null}` |
+| `wait_json`   | what the step waits for before it starts (F4): `{ stepId, probe: { kind: "window" \| "port", port }, timeoutMs }`; `{}` is "nothing"            |
 | `timing_json` | `{ pauseAfterMs, holdMs, repeat, closedMs }`, each field only when not the default; `{}` is the default (F2)                                    |
 
 The host stores `config_json` verbatim and parses it only to act, refusing unknown fields.
@@ -61,20 +62,28 @@ The host stores `config_json` verbatim and parses it only to act, refusing unkno
 
 ### Event kinds
 
-| Kind          | `step_id` | Payload                                                                                 |
-| ------------- | --------- | --------------------------------------------------------------------------------------- |
-| `run_started` | `NULL`    | `profileName`, `mode`, `trigger`, `steps` (count)                                       |
-| `spawned`     | step      | `kind: "app"`, `program`, `args`, `workingDir`, `source`, `pid`                         |
-| `opened`      | step      | `kind` (`folder`/`file`/`url`), `target`, `source`, `pid` (null when Windows gave none) |
-| `would_spawn` | step      | as `spawned` without `pid` (dry run)                                                    |
-| `would_open`  | step      | as `opened` without `pid` (dry run)                                                     |
-| `closed`      | step      | the launch, `heldMs`, `pid`, `how` (`window` or `terminated`)                           |
-| `not_closed`  | step      | the launch, `heldMs`, `pid` when known, `reason`                                        |
-| `would_close` | step      | the launch, `heldMs` (dry run)                                                          |
-| `waited`      | step      | `ms` — the pause after this step, once it elapsed                                       |
-| `would_wait`  | step      | `ms` (dry run)                                                                          |
-| `stopped`     | `NULL`    | `closed`, `notClosed` (counts), `swept` (the job was terminated)                        |
-| `no_job`      | `NULL`    | `reason` — Windows gave the run no job object; a Stop reaches only held processes       |
+| Kind             | `step_id` | Payload                                                                                 |
+| ---------------- | --------- | --------------------------------------------------------------------------------------- |
+| `run_started`    | `NULL`    | `profileName`, `mode`, `trigger`, `steps` (count)                                       |
+| `spawned`        | step      | `kind: "app"`, `program`, `args`, `workingDir`, `source`, `pid`                         |
+| `opened`         | step      | `kind` (`folder`/`file`/`url`), `target`, `source`, `pid` (null when Windows gave none) |
+| `would_spawn`    | step      | as `spawned` without `pid` (dry run)                                                    |
+| `would_open`     | step      | as `opened` without `pid` (dry run)                                                     |
+| `closed`         | step      | the launch, `heldMs`, `pid`, `how` (`window` or `terminated`)                           |
+| `not_closed`     | step      | the launch, `heldMs`, `pid` when known, `reason`                                        |
+| `would_close`    | step      | the launch, `heldMs` (dry run)                                                          |
+| `waited`         | step      | `ms` — the pause after this step, once it elapsed                                       |
+| `would_wait`     | step      | `ms` (dry run)                                                                          |
+| `stopped`        | `NULL`    | `closed`, `notClosed` (counts), `swept` (the job was terminated)                        |
+| `no_job`         | `NULL`    | `reason` — Windows gave the run no job object; a Stop reaches only held processes       |
+| `waiting_for`    | step      | `awaitedStepId`, `probe` (as a sentence), `timeoutMs`                                   |
+| `would_wait_for` | step      | as `waiting_for` (dry run)                                                              |
+| `ready`          | step      | `waitedMs` — what it waited for answered                                                |
+| `skipped`        | step      | `reason` — why the step did not start; the profile carried on                           |
+
+A probe itself is never a line: it is asked four times a second while a step waits, and a
+log with four lines a second is not a log. What reaches the log is the beginning of the wait,
+its end, and nothing in between.
 
 A `closed` or `not_closed` line written by a Stop carries `stop: true`; a `spawned` line whose
 process could not be put in the run's job carries `inJob: false`.

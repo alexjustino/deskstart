@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added — F4, waiting for what a step needs
+
+- A step can wait for an **earlier** step to be responding before it starts: a window of its
+  own, or a port on this machine that answers. It waits up to a timeout of its own.
+- When the timeout runs out the step is skipped **with the reason** and the profile carries
+  on. A step whose awaited step never started is skipped at once, without waiting.
+- A step that waits for one that was deleted, or moved after it, is a problem on its row and
+  blocks Run. Waiting only points backwards, so two steps can never wait for each other.
+- Migration **003** adds `wait_json` to a step; every step that exists waits for nothing,
+  which is what it did before the column existed.
+
 ### Added — F3, Stop
 
 - A Stop button while a run goes. It starts nothing more, wakes the run from any wait, closes

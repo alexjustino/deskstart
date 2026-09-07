@@ -290,6 +290,39 @@ by hand that survives. The run finishes `stopped` with the rest skipped. The edi
 "again and again, until the run is stopped", which the domain had since F2 and the screen
 could not offer without Stop.
 
+### Delivered in F4
+
+A step can wait for an **earlier** step to be responding before it starts: a window of its
+own, or a TCP port on this machine that answers. It waits up to a timeout of its own; when
+the timeout runs out the step is **skipped with the reason** and the profile carries on. A
+step whose awaited step never started is skipped at once rather than spending its whole
+timeout on something that cannot happen.
+
+Waiting only ever points backwards, and that is the whole cycle prevention: two steps cannot
+wait for each other because the shape does not allow it to be written. A step that waits for
+one that was deleted, or moved after it, is shown as a problem on its row and blocks Run —
+the same gate F1 built for a step whose path does not resolve.
+
+The host is asked four times a second while a step waits, and writes **no** line for a probe:
+what reaches the log is the beginning of the wait, its end, and nothing in between. A dry run
+performs no probe at all — it writes what it would wait for and carries on, so a profile with
+a minute of waiting is still written down in a second.
+
+### Deferred out of F4, and why
+
+- **Waiting for something no step started.** The port probe already asks the operating
+  system, not the awaited step, so "wait for the database that was already running" is one
+  field away. It is not offered because the sentence would then have no subject: a wait reads
+  "wait for step 1 — port 5432", and a wait for nothing in particular needs its own wording
+  and its own screen. It arrives when a profile has something to say about the machine rather
+  than about itself.
+- **Waiting for an HTTP response rather than a socket.** A port that accepts a connection is
+  not always a server that is ready to serve. Asking for a status code means a client, a
+  path, a method and a notion of "healthy" — a bigger feature that wants its own slice.
+- **A window with a particular title.** The probe asks whether the process has a visible
+  window, not which. Matching titles is the same machinery 1.1 needs for window rules, and
+  the same hazard: a rule that matches by name will one day match the wrong one.
+
 ### Deferred out of F3, and why
 
 - **Stop from anywhere.** The button is on the profile screen, next to the run it stops. A

@@ -16,7 +16,8 @@ No cloud. No account. No telemetry. No shell.
 ---
 
 > **Status: early.** Deskstart is being built in public, one vertical slice at a time. What
-> exists today is the foundation (F0), the profile editor (F1), time (F2) and Stop (F3):
+> exists today is the foundation (F0), the profile editor (F1), time (F2), Stop (F3) and
+> waiting (F4):
 > profiles of applications, folders, files and web pages, with pauses, holds and cycles; a Run
 > button that really opens them and really closes them when their time is up; a Stop that
 > closes what the run opened and nothing else; and a log that really says what happened. Everything else on this page is marked as planned. Installers arrive with the
@@ -52,6 +53,9 @@ twenty minutes, then close it" and "open, close, reopen" are first-class, not a 
 - **Time.** A pause after any step. For an application, a hold — keep it open this long,
   then close it (its windows are asked first; terminated only after a grace) — and a cycle:
   open it N times, closed for a while in between. Holds never block the next step.
+- **Waiting.** A step can wait for an earlier one to be responding — a window of its own, or
+  a port that answers — up to a timeout. When the timeout runs out the step is skipped with
+  the reason and the profile carries on.
 - **Stop.** Closes what the run opened — asked first, terminated after a grace — and
   whatever those programs started, through the run's Job Object. A program the run did not
   start is never touched.
@@ -68,7 +72,6 @@ twenty minutes, then close it" and "open, close, reopen" are first-class, not a 
 
 | Slice | What                                                         |
 | ----- | ------------------------------------------------------------ |
-| F4    | Dependencies: "start X once Y is responding", with a timeout |
 | F5    | Profile as a file: export, import, **review before running** |
 | F6    | Window control: position, size, monitor, state               |
 | F7    | Context steps: a bookmark folder, Windows Terminal, VS Code  |
