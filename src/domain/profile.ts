@@ -20,7 +20,15 @@ import type { Timing } from './timing';
 
 export const PROFILE_SCHEMA_VERSION = 1;
 
-export const STEP_KINDS = ['app', 'folder', 'file', 'url'] as const;
+export const STEP_KINDS = [
+  'app',
+  'folder',
+  'file',
+  'url',
+  'bookmarks',
+  'terminal',
+  'editor',
+] as const;
 export type StepKind = (typeof STEP_KINDS)[number];
 
 /** An application to start: a program, its arguments, where it runs. */
@@ -49,7 +57,35 @@ export interface UrlStep {
   url: string;
 }
 
-export type StepConfig = AppStep | FolderStep | FileStep | UrlStep;
+/** The browsers whose bookmarks this product knows how to read. */
+export const BROWSERS = ['chrome', 'edge'] as const;
+export type Browser = (typeof BROWSERS)[number];
+
+/** A folder of bookmarks, opened as one browser window (F7). */
+export interface BookmarksStep {
+  kind: 'bookmarks';
+  browser: Browser;
+  /** The folder's name, or a path like `Bookmarks bar/Work` when it repeats. */
+  folder: string;
+}
+
+/** A Windows Terminal window, on a named profile, in a directory. */
+export interface TerminalStep {
+  kind: 'terminal';
+  /** The Windows Terminal profile, or null for its default. */
+  profile: string | null;
+  /** Where it opens, or null for wherever Windows Terminal would. */
+  directory: string | null;
+}
+
+/** A folder or workspace opened in VS Code. */
+export interface EditorStep {
+  kind: 'editor';
+  path: string;
+}
+
+export type StepConfig =
+  AppStep | FolderStep | FileStep | UrlStep | BookmarksStep | TerminalStep | EditorStep;
 
 /** A step as stored: its configuration, its timing, and the identity the host gave it. */
 export interface Step {
@@ -81,6 +117,9 @@ const FIELDS: Record<StepKind, ReadonlySet<string>> = {
   folder: new Set(['kind', 'path']),
   file: new Set(['kind', 'path']),
   url: new Set(['kind', 'url']),
+  bookmarks: new Set(['kind', 'browser', 'folder']),
+  terminal: new Set(['kind', 'profile', 'directory']),
+  editor: new Set(['kind', 'path']),
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -164,6 +203,51 @@ export function readStepConfig(value: unknown, path = 'step'): StepConfig | Prob
       }
       if (problems.length > 0) return problems;
       return { kind, url: url as string };
+    }
+    case 'bookmarks': {
+      const browser = value.browser ?? 'chrome';
+      if (!(BROWSERS as readonly unknown[]).includes(browser)) {
+        problems.push({
+          path: `${path}.browser`,
+          problem: `bookmarks are read from ${BROWSERS.join(' or ')}`,
+        });
+      }
+      const folder = requiredText(value.folder);
+      if (folder === null) {
+        problems.push({ path: `${path}.folder`, problem: 'name the bookmark folder to open' });
+      }
+      if (problems.length > 0) return problems;
+      return { kind, browser: browser as Browser, folder: folder as string };
+    }
+    case 'terminal': {
+      const profile = value.profile ?? null;
+      if (profile !== null && requiredText(profile) === null) {
+        problems.push({
+          path: `${path}.profile`,
+          problem: 'the terminal profile is a name, or left empty for the default',
+        });
+      }
+      const directory = value.directory ?? null;
+      if (directory !== null && requiredText(directory) === null) {
+        problems.push({
+          path: `${path}.directory`,
+          problem: 'the directory is a path, or left empty',
+        });
+      }
+      if (problems.length > 0) return problems;
+      return {
+        kind,
+        profile: profile === null ? null : (profile as string).trim(),
+        directory: directory === null ? null : (directory as string).trim(),
+      };
+    }
+    case 'editor': {
+      const target = requiredText(value.path);
+      if (target === null) {
+        problems.push({ path: `${path}.path`, problem: 'a folder or workspace path is required' });
+      }
+      if (problems.length > 0) return problems;
+      return { kind, path: target as string };
     }
   }
 }
@@ -276,6 +360,15 @@ export function readUrl(raw: string): UrlResult {
  * is the path as written when expansion changed it, so the log and the screen
  * can show both.
  */
+/**
+ * A tool this product knows how to call (F7, ADR-022). The host holds the
+ * paths — it is the only side that may look at a disk — and the domain decides
+ * the arguments, always as a vector, always the user's values as whole
+ * arguments (ADR-014).
+ */
+export const TOOLS = ['chrome', 'edge', 'terminal', 'editor'] as const;
+export type ToolId = (typeof TOOLS)[number];
+
 export type Launch =
   | {
       kind: 'app';
@@ -286,7 +379,22 @@ export type Launch =
     }
   | { kind: 'folder'; path: string; source: string | null }
   | { kind: 'file'; path: string; source: string | null }
-  | { kind: 'url'; url: string; source: null };
+  | { kind: 'url'; url: string; source: null }
+  /** A tool, started by the host from the path it found for it. */
+  | {
+      kind: 'tool';
+      tool: ToolId;
+      args: string[];
+      /** What this is, in the log: "Windows Terminal", "3 pages from Work". */
+      what: string;
+      source: string | null;
+    }
+  /**
+   * A bookmark folder, not yet read. The host never receives this: the loop
+   * asks it for the file, the domain reads the folder out of it, and what the
+   * host is finally handed is a browser and a list of addresses.
+   */
+  | { kind: 'bookmarks'; browser: Browser; folder: string; source: null };
 
 export type ResolveResult = { ok: true; launch: Launch } | { ok: false; problems: Problem[] };
 
@@ -340,6 +448,55 @@ export function resolveStep(
       if (!url.ok) return { ok: false, problems: [{ path: 'url', problem: url.problem }] };
       return { ok: true, launch: { kind: 'url', url: url.url, source: null } };
     }
+    case 'bookmarks': {
+      return {
+        ok: true,
+        launch: {
+          kind: 'bookmarks',
+          browser: config.browser,
+          folder: config.folder,
+          source: null,
+        },
+      };
+    }
+    case 'terminal': {
+      const args: string[] = [];
+      let source: string | null = null;
+      if (config.profile !== null) args.push('-p', config.profile);
+      if (config.directory !== null) {
+        const directory = resolvePath(config.directory, env);
+        if (!directory.ok) {
+          return { ok: false, problems: [{ path: 'directory', problem: directory.problem }] };
+        }
+        args.push('-d', directory.path);
+        source = sourceOf(config.directory, directory.path);
+      }
+      return {
+        ok: true,
+        launch: {
+          kind: 'tool',
+          tool: 'terminal',
+          args,
+          what:
+            config.profile === null ? 'Windows Terminal' : `Windows Terminal — ${config.profile}`,
+          source,
+        },
+      };
+    }
+    case 'editor': {
+      const target = resolvePath(config.path, env);
+      if (!target.ok) return { ok: false, problems: [{ path: 'path', problem: target.problem }] };
+      return {
+        ok: true,
+        launch: {
+          kind: 'tool',
+          tool: 'editor',
+          args: [target.path],
+          what: `VS Code — ${lastSegment(target.path)}`,
+          source: sourceOf(config.path, target.path),
+        },
+      };
+    }
   }
 }
 
@@ -360,6 +517,12 @@ export function stepTitle(config: StepConfig): string {
         return config.url;
       }
     }
+    case 'bookmarks':
+      return lastSegment(config.folder);
+    case 'terminal':
+      return config.profile ?? 'Windows Terminal';
+    case 'editor':
+      return lastSegment(config.path);
   }
 }
 

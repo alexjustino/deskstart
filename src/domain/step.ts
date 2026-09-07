@@ -26,6 +26,27 @@ const AS_WRITTEN: Record<StepConfig['kind'], string> = {
   folder: 'a folder',
   file: 'a file',
   url: 'a web page',
+  bookmarks: 'a bookmark folder',
+  terminal: 'a terminal',
+  editor: 'an editor window',
+};
+
+/**
+ * Why this kind's window is not this product's to hold or place.
+ *
+ * Two different reasons, and the difference is worth saying: Windows opens the
+ * first three in a window that was never ours, while the tools of F7 are
+ * started by us and then hand the window to a process of their own — a
+ * browser, a terminal host, an editor that was already running. Either way the
+ * process this product holds is not the one with the window (risk R2).
+ */
+const WHY_NOT: Record<Exclude<StepConfig['kind'], 'app'>, string> = {
+  folder: 'is opened by Windows and is not ours to close',
+  file: 'is opened by Windows and is not ours to close',
+  url: 'is opened by Windows and is not ours to close',
+  bookmarks: 'hands its window to the browser, which this product did not start',
+  terminal: 'hands its window to Windows Terminal, which outlives the process that asked for it',
+  editor: 'hands its window to the editor, which may have been running already',
 };
 
 /**
@@ -35,17 +56,18 @@ const AS_WRITTEN: Record<StepConfig['kind'], string> = {
 export function stepProblems(config: StepConfig, timing: Timing, placement: Placement): Problem[] {
   if (config.kind === 'app') return [];
   const what = AS_WRITTEN[config.kind];
+  const why = WHY_NOT[config.kind];
   const problems: Problem[] = [];
   if (timing.holdMs !== null) {
     problems.push({
       path: 'timing.holdMs',
-      problem: `only an application can be held and closed; ${what} is opened by Windows and is not ours to close`,
+      problem: `only an application can be held and closed; ${what} ${why}`,
     });
   }
   if (isPlaced(placement)) {
     problems.push({
       path: 'placement',
-      problem: `only an application's window can be placed; ${what} opens in a window Windows owns, not this one`,
+      problem: `only an application's window can be placed; ${what} ${why}`,
     });
   }
   return problems;

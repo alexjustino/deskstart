@@ -177,6 +177,20 @@ export async function stepReady(runId: string, stepId: string, waitedMs: number)
   return toLogLine(await invoke<RawEvent>('step_ready', { runId, stepId, waitedMs }));
 }
 
+/**
+ * The line for a step the loop could not start — a bookmark folder that is not
+ * there. Every other failure is the host's own; this one is found between the
+ * file and the browser, and is written in the same shape.
+ */
+export async function stepFailed(
+  runId: string,
+  stepId: string,
+  launch: Launch,
+  reason: string,
+): Promise<LogLine> {
+  return toLogLine(await invoke<RawEvent>('step_failed', { runId, stepId, launch, reason }));
+}
+
 /** The line for a step that will not start, and why. */
 export async function stepSkipped(runId: string, stepId: string, reason: string): Promise<LogLine> {
   return toLogLine(await invoke<RawEvent>('step_skipped', { runId, stepId, reason }));

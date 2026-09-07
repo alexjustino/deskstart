@@ -34,7 +34,7 @@ async function clearField(field: Element): Promise<void> {
 async function chooseKind(session: Session, label: string): Promise<void> {
   await (
     await session.driver.findByXPath(
-      `//form[@aria-label="Add a step"]//button[@role="radio" and normalize-space(.)="${label}"]`,
+      `//select[@aria-label="Kind"]/option[normalize-space(.)="${label}"]`,
     )
   ).click();
 }

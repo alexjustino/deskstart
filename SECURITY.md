@@ -75,6 +75,21 @@ reader.
 Command-line triggers take a profile **id**, never a file path: a scheduled task or a shortcut
 can only run what is already in your workspace and already reviewed.
 
+### What a step that calls a tool can do
+
+Four tools, and only four: Chrome, Edge, Windows Terminal and VS Code (ADR-022). A profile never
+carries a program path for one — it carries an id from that closed list, and Deskstart finds the
+program itself, in the places Windows installs it. `PATH` is never searched, so nothing that puts
+a `chrome.exe` earlier on `PATH` can be started by a profile.
+
+The arguments are still a vector, still written by the product from the fields you filled in. A
+terminal step opens a terminal on a profile in a directory; it cannot carry a command to run,
+because a profile that carries a command line is a script, and a profile is data (ADR-010).
+
+A browser's bookmarks file is **read, never written**. What is opened from it are the `http` and
+`https` addresses in the one folder named — never its subfolders, never a `file:` or
+`javascript:` bookmark, and never more than fifty pages.
+
 ### What the log promises
 
 The run log is **append-only** (ADR-011). Database triggers refuse any update or delete of an

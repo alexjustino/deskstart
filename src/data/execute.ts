@@ -19,16 +19,20 @@
  * run is finished with that outcome.
  */
 
+import { pagesToOpen, readBookmarkFolder } from '@/domain/bookmarks';
 import { resolveStep, type Launch, type Step } from '@/domain/profile';
 import { whyNotRunnable } from '@/domain/review';
 import { plan, reduce, type Action, type Mode, type RunEvent, type RunState } from '@/domain/run';
 
+import { describeError } from './errors';
+import { readBookmarks } from './system';
 import {
   runBegin,
   runFinish,
   runStop,
   stepClose,
   stepExecute,
+  stepFailed,
   stepPlace,
   stepProbe,
   stepReady,
@@ -43,6 +47,50 @@ import {
 export interface Execution {
   run: Run;
   state: RunState;
+}
+
+/**
+ * A bookmark folder, turned into the pages it holds (F7).
+ *
+ * The host hands over the browser's file, the domain finds the folder in it,
+ * and what comes back is a browser and a list of addresses — one window's
+ * worth. The host is never asked to understand a bookmark. A folder that is
+ * not there, or holds nothing this product would open, comes back as the
+ * sentence the log will carry.
+ */
+async function pagesOf(
+  launch: Launch & { kind: 'bookmarks' },
+): Promise<{ ok: true; launch: Launch } | { ok: false; reason: string }> {
+  let file: string;
+  try {
+    file = await readBookmarks(launch.browser);
+  } catch (cause) {
+    return { ok: false, reason: describeError(cause) };
+  }
+  const read = readBookmarkFolder(file, launch.folder);
+  if (!read.ok) {
+    const near = read.folders.slice(0, 3);
+    return {
+      ok: false,
+      reason: near.length === 0 ? read.problem : `${read.problem} — there is ${near.join(', ')}`,
+    };
+  }
+  const { urls, note } = pagesToOpen(read.folder);
+  if (urls.length === 0) {
+    return { ok: false, reason: `${read.folder.path} holds no page this product would open` };
+  }
+  const pages = `${urls.length} ${urls.length === 1 ? 'page' : 'pages'} from ${read.folder.name}`;
+  return {
+    ok: true,
+    launch: {
+      kind: 'tool',
+      tool: launch.browser,
+      // One window, every page in it: the browser takes the rest as tabs.
+      args: ['--new-window', ...urls],
+      what: note === null ? pages : `${pages} (${note})`,
+      source: null,
+    },
+  };
 }
 
 /** The one way to interrupt a run from outside the loop. */
@@ -195,9 +243,22 @@ export async function executeProfile(
     }
 
     switch (action.kind) {
-      case 'execute':
-        feedLine(await stepExecute(run.id, action.stepId, launchOf(action.stepId)));
+      case 'execute': {
+        const asked = launchOf(action.stepId);
+        // A bookmark folder is read here, between the file and the browser: it
+        // is the one failure the host is not the one to find.
+        if (asked.kind === 'bookmarks') {
+          const pages = await pagesOf(asked);
+          if (!pages.ok) {
+            feedLine(await stepFailed(run.id, action.stepId, asked, pages.reason));
+            break;
+          }
+          feedLine(await stepExecute(run.id, action.stepId, pages.launch));
+          break;
+        }
+        feedLine(await stepExecute(run.id, action.stepId, asked));
         break;
+      }
       case 'close':
         feedLine(await stepClose(run.id, action.stepId, launchOf(action.stepId), action.heldMs));
         break;

@@ -26,8 +26,18 @@ use crate::error::{Error, Result};
 /// anything above it is not a profile.
 pub const MAX_BYTES: u64 = 1024 * 1024;
 
+/// The most a browser's bookmarks file may be. It holds everything a person
+/// ever kept, so it is allowed to be much larger than a profile — and still
+/// bounded, because it is still a file this product did not write.
+pub const MAX_BOOKMARKS_BYTES: u64 = 32 * 1024 * 1024;
+
 /// Read a profile file as text, or say why it could not be.
 pub fn read_text(path: &Path) -> Result<String> {
+    read_text_capped(path, MAX_BYTES)
+}
+
+/// The same, with the cap the caller's kind of file deserves.
+pub fn read_text_capped(path: &Path, cap: u64) -> Result<String> {
     let metadata = fs::metadata(path).map_err(|error| {
         log::warn!("profile file not readable: {error}");
         Error::File("that file could not be opened")
@@ -35,8 +45,8 @@ pub fn read_text(path: &Path) -> Result<String> {
     if !metadata.is_file() {
         return Err(Error::File("that is not a file"));
     }
-    if metadata.len() > MAX_BYTES {
-        return Err(Error::File("that file is too large to be a profile"));
+    if metadata.len() > cap {
+        return Err(Error::File("that file is too large to be read"));
     }
     let bytes = fs::read(path).map_err(|error| {
         log::warn!("profile file not readable: {error}");

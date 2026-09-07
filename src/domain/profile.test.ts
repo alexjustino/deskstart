@@ -191,3 +191,72 @@ describe('stepTitle', () => {
     expect(lastSegment('C:\\')).toBe('C:');
   });
 });
+
+describe('the steps that call a tool', () => {
+  it('reads a bookmark folder, a terminal and an editor', () => {
+    expect(readStepConfig({ kind: 'bookmarks', folder: ' Work ' })).toEqual({
+      kind: 'bookmarks',
+      browser: 'chrome',
+      folder: 'Work',
+    });
+    expect(readStepConfig({ kind: 'terminal' })).toEqual({
+      kind: 'terminal',
+      profile: null,
+      directory: null,
+    });
+    expect(readStepConfig({ kind: 'editor', path: 'C:\\src\\project' })).toEqual({
+      kind: 'editor',
+      path: 'C:\\src\\project',
+    });
+  });
+
+  it('refuses a browser it does not read, and a folder with no name', () => {
+    expect(readStepConfig({ kind: 'bookmarks', browser: 'firefox', folder: 'Work' })).toEqual([
+      { path: 'step.browser', problem: 'bookmarks are read from chrome or edge' },
+    ]);
+    expect(readStepConfig({ kind: 'bookmarks', folder: '  ' })).toEqual([
+      { path: 'step.folder', problem: 'name the bookmark folder to open' },
+    ]);
+  });
+
+  it('refuses a field that is not part of the kind', () => {
+    expect(readStepConfig({ kind: 'terminal', command: 'rm -rf' })).toEqual([
+      { path: 'step.command', problem: 'this field is not part of a terminal step' },
+    ]);
+  });
+
+  it('turns a terminal into an argument vector, never a string', () => {
+    const config = readStepConfig({
+      kind: 'terminal',
+      profile: 'PowerShell && whoami',
+      directory: '%USERPROFILE%/src',
+    });
+    if (Array.isArray(config)) throw new Error('the step reads');
+    const resolved = resolveStep(config, ENV);
+    expect(resolved).toEqual({
+      ok: true,
+      launch: {
+        kind: 'tool',
+        tool: 'terminal',
+        args: ['-p', 'PowerShell && whoami', '-d', 'C:\\Users\\Alex\\src'],
+        what: 'Windows Terminal — PowerShell && whoami',
+        source: '%USERPROFILE%/src',
+      },
+    });
+  });
+
+  it('refuses an editor path that does not resolve here', () => {
+    const config = readStepConfig({ kind: 'editor', path: 'project' });
+    if (Array.isArray(config)) throw new Error('the step reads');
+    expect(resolveStep(config, ENV).ok).toBe(false);
+  });
+
+  it('leaves a bookmark folder unread: the host is never handed one', () => {
+    const config = readStepConfig({ kind: 'bookmarks', browser: 'edge', folder: 'Work' });
+    if (Array.isArray(config)) throw new Error('the step reads');
+    expect(resolveStep(config, ENV)).toEqual({
+      ok: true,
+      launch: { kind: 'bookmarks', browser: 'edge', folder: 'Work', source: null },
+    });
+  });
+});

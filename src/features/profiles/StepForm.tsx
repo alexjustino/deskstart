@@ -2,9 +2,11 @@ import { Add20Regular, Dismiss20Regular } from '@fluentui/react-icons';
 import { useState, type FormEvent } from 'react';
 
 import {
+  BROWSERS,
   readStepConfig,
   resolveStep,
   STEP_KINDS,
+  type Browser,
   type Problem,
   type StepConfig,
   type StepKind,
@@ -49,6 +51,12 @@ interface Draft {
   workingDir: string;
   path: string;
   url: string;
+  /** Bookmarks: which browser, and the folder in it. */
+  browser: Browser;
+  folder: string;
+  /** Terminal: the Windows Terminal profile, and where it opens. */
+  terminalProfile: string;
+  directory: string;
   pauseAfterS: string;
   holdS: string;
   repeat: string;
@@ -73,6 +81,13 @@ export interface EarlierStep {
   title: string;
 }
 
+/** A tool this product can call, as the editor knows it (F7). */
+export interface ToolState {
+  id: string;
+  name: string;
+  found: boolean;
+}
+
 /** A screen, as the "where" list offers it. */
 export interface Screen {
   number: number;
@@ -88,6 +103,10 @@ const EMPTY: Draft = {
   workingDir: '',
   path: '',
   url: '',
+  browser: 'chrome',
+  folder: '',
+  terminalProfile: '',
+  directory: '',
   pauseAfterS: '',
   holdS: '',
   repeat: '1',
@@ -149,6 +168,24 @@ function draftOf(
       return { ...EMPTY, ...time, kind: config.kind, path: config.path };
     case 'url':
       return { ...EMPTY, ...time, kind: 'url', url: config.url };
+    case 'bookmarks':
+      return {
+        ...EMPTY,
+        ...time,
+        kind: 'bookmarks',
+        browser: config.browser,
+        folder: config.folder,
+      };
+    case 'terminal':
+      return {
+        ...EMPTY,
+        ...time,
+        kind: 'terminal',
+        terminalProfile: config.profile ?? '',
+        directory: config.directory ?? '',
+      };
+    case 'editor':
+      return { ...EMPTY, ...time, kind: 'editor', path: config.path };
   }
 }
 
@@ -167,6 +204,16 @@ function documentOf(draft: Draft): Record<string, unknown> {
       return { kind: draft.kind, path: draft.path };
     case 'url':
       return { kind: 'url', url: draft.url };
+    case 'bookmarks':
+      return { kind: 'bookmarks', browser: draft.browser, folder: draft.folder };
+    case 'terminal':
+      return {
+        kind: 'terminal',
+        profile: draft.terminalProfile.trim() === '' ? null : draft.terminalProfile,
+        directory: draft.directory.trim() === '' ? null : draft.directory,
+      };
+    case 'editor':
+      return { kind: 'editor', path: draft.path };
   }
 }
 
@@ -258,6 +305,7 @@ export function StepForm({
   initial,
   earlier,
   screens,
+  tools,
   env,
   pending,
   hostError,
@@ -275,6 +323,8 @@ export function StepForm({
   earlier: readonly EarlierStep[];
   /** The screens this machine has, as the host numbers them. */
   screens: readonly Screen[];
+  /** The tools this machine has, and the ones it has not. */
+  tools: readonly ToolState[];
   env: Readonly<Record<string, string>>;
   pending: boolean;
   /** What the host answered when the last submit was refused, if anything. */
@@ -307,6 +357,16 @@ export function StepForm({
   const placeDocument = placementOf(draft);
   const placement = Array.isArray(placeDocument) ? placeDocument : readPlacement(placeDocument);
   const placeSentence = Array.isArray(placement) ? null : describePlacement(placement);
+
+  // What this kind of step needs installed, and whether this machine has it.
+  const needs =
+    draft.kind === 'bookmarks'
+      ? draft.browser
+      : draft.kind === 'terminal' || draft.kind === 'editor'
+        ? draft.kind
+        : null;
+  const tool = needs === null ? undefined : tools.find((candidate) => candidate.id === needs);
+  const missingTool = tool !== undefined && !tool.found ? tool.name : null;
 
   const addArgument = () => {
     if (argument === '') return;
@@ -361,6 +421,10 @@ export function StepForm({
         return `Will open ${launch.path}`;
       case 'url':
         return `Will open ${launch.url} in the default browser`;
+      case 'tool':
+        return `Will open ${launch.what}${launch.source !== null ? ` — from ${launch.source}` : ''}`;
+      case 'bookmarks':
+        return `Will open every page in ${launch.folder}, from ${launch.browser === 'chrome' ? 'Chrome' : 'Edge'}, as one window`;
     }
   })();
 
@@ -376,17 +440,35 @@ export function StepForm({
         {editing ? 'Edit step' : 'Add a step'}
       </p>
 
-      <ChoiceGroup
-        label="Kind"
-        options={STEP_KINDS}
-        value={draft.kind}
-        onChange={(kind) => {
-          setProblems([]);
-          set({ kind });
-        }}
-        labels={KIND_LABELS}
-        disabled={pending || editing}
-      />
+      {/*
+        Seven kinds, and more coming: past four options a row of buttons stops
+        being a row — it wraps, or it pushes the last kind off the card, which
+        is what the capture of F7 showed. The design system's own rule for a
+        longer list is a Select (see `ui/ChoiceGroup`), and this is the list
+        that outgrew it.
+      */}
+      <div className="flex items-center gap-3">
+        <span className="w-28 shrink-0 text-caption font-semibold text-fg-tertiary uppercase">
+          Kind
+        </span>
+        <span className="w-64">
+          <Select
+            aria-label="Kind"
+            value={draft.kind}
+            onChange={(e) => {
+              setProblems([]);
+              set({ kind: e.target.value as StepKind });
+            }}
+            disabled={pending || editing}
+          >
+            {STEP_KINDS.map((kind) => (
+              <option key={kind} value={kind}>
+                {KIND_LABELS[kind]}
+              </option>
+            ))}
+          </Select>
+        </span>
+      </div>
 
       {draft.kind === 'app' && (
         <>
@@ -471,6 +553,59 @@ export function StepForm({
           onChange={(e) => set({ path: e.target.value })}
           disabled={pending}
           spellCheck={false}
+        />
+      )}
+
+      {draft.kind === 'bookmarks' && (
+        <>
+          <ChoiceGroup
+            label="Bookmarks in"
+            options={BROWSERS}
+            value={draft.browser}
+            onChange={(browser) => set({ browser })}
+            labels={{ chrome: 'Chrome', edge: 'Edge' }}
+            disabled={pending}
+          />
+          <Input
+            aria-label="Bookmark folder"
+            placeholder="The folder's name, e.g. Work — or Bookmarks bar/Work"
+            value={draft.folder}
+            onChange={(e) => set({ folder: e.target.value })}
+            disabled={pending}
+          />
+          <p className="text-caption text-fg-tertiary">
+            Every page directly in that folder opens as one browser window. Pages in its subfolders
+            stay where they are.
+          </p>
+        </>
+      )}
+
+      {draft.kind === 'terminal' && (
+        <>
+          <Input
+            aria-label="Terminal profile"
+            placeholder="The Windows Terminal profile, e.g. PowerShell (optional)"
+            value={draft.terminalProfile}
+            onChange={(e) => set({ terminalProfile: e.target.value })}
+            disabled={pending}
+          />
+          <Input
+            aria-label="Terminal directory"
+            placeholder="Where it opens, e.g. %USERPROFILE%\\src (optional)"
+            value={draft.directory}
+            onChange={(e) => set({ directory: e.target.value })}
+            disabled={pending}
+          />
+        </>
+      )}
+
+      {draft.kind === 'editor' && (
+        <Input
+          aria-label="Folder or workspace"
+          placeholder="Folder or .code-workspace to open, e.g. %USERPROFILE%\\src\\project"
+          value={draft.path}
+          onChange={(e) => set({ path: e.target.value })}
+          disabled={pending}
         />
       )}
 
@@ -719,6 +854,13 @@ export function StepForm({
             {waitSentence ?? 'Starts as soon as the step before it has been started.'}
           </p>
         </fieldset>
+      )}
+
+      {missingTool !== null && (
+        <InfoBar severity="caution" title={`${missingTool} is not installed here`}>
+          The step can still be saved — a profile is often written on one machine and run on
+          another. On this one it will not start, and the log will say this.
+        </InfoBar>
       )}
 
       {(problems.length > 0 || hostError) && (

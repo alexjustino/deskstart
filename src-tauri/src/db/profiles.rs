@@ -698,4 +698,23 @@ mod tests {
         .unwrap();
         assert_eq!(cleared.place_json, "{}");
     }
+
+    #[test]
+    fn every_kind_the_host_declares_can_actually_be_stored() {
+        // The list in `models` and the schema's CHECK are two statements of the
+        // same thing, in two languages, edited by hand. F7 added three kinds to
+        // one of them and not the other, and nothing said so until a step could
+        // not be added on a real machine. This is what says so.
+        let conn = memory();
+        let profile = create_profile(&conn, "Every kind").unwrap();
+        for kind in STEP_KINDS {
+            let step = add_step(&conn, &profile.id, kind, "{}", "{}", "{}", "{}")
+                .unwrap_or_else(|error| panic!("a {kind} step could not be stored: {error:?}"));
+            assert_eq!(step.kind, kind);
+        }
+        assert_eq!(
+            list_steps(&conn, &profile.id).unwrap().len(),
+            STEP_KINDS.len()
+        );
+    }
 }

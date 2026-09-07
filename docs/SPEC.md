@@ -190,7 +190,7 @@ loop is wrong, that shows on day one.
 | F4     | Dependencies and readiness                           | X does not start until Y's window exists (or its port answers); Y timing out marks X skipped **with the reason**, and the profile continues                                    |
 | F5     | Profile as a file: export, import, review            | an exported profile round-trips; an imported one **cannot run until every step is accepted**; a tampered path is shown absolute                                                |
 | F6     | Window control                                       | **done** — a window lands at the chosen rectangle and state, measured by Windows itself; a screen that is not there is reported and the primary is used                        |
-| F7     | Context steps: bookmarks, terminal, editor           | a bookmark folder opens every page in one browser window; `wt` opens the named profile in the directory; a missing tool is a visible reason                                    |
+| F7     | Context steps: bookmarks, terminal, editor           | **done** — a real bookmark folder is read and its pages named; Windows Terminal really opens in the directory; a folder that is not there names the ones that are              |
 | F8     | Virtual machines                                     | two machines start and their consoles appear (**host proof by a person**); a missing hypervisor is a reason, not a hang                                                        |
 | F9     | Triggers: schedule, shortcut, autostart              | a task registered by the app fires at the minute set and the run appears in the log; the shortcut runs the profile over another program                                        |
 | F10    | Settings, Diagnostics, About, backup                 | Diagnostics shows every adapter as found / not found with the path; a restored backup restores every profile and run                                                           |
@@ -289,6 +289,46 @@ one a person opened — is never touched, and the suite proves it with a Charact
 by hand that survives. The run finishes `stopped` with the rest skipped. The editor offers
 "again and again, until the run is stopped", which the domain had since F2 and the screen
 could not offer without Stop.
+
+### Delivered in F7
+
+Three steps that call something this product did not write. A **bookmark folder** — Chrome's or
+Edge's, by the folder's name or by a path when the name repeats — opens every page directly in it
+as one browser window. A **terminal**: Windows Terminal, on a named profile, in a directory. An
+**editor**: a folder or workspace opened in VS Code.
+
+Each tool is found where Windows installs it and never on `PATH` (ADR-022); a profile carries an
+id from a closed list, never a program path, and the arguments stay a vector. A tool that is not
+installed is said twice: in the editor while the step is written, and in the log as the reason
+the step did not start.
+
+The bookmarks file is read by the host and understood by the domain. A folder is what it
+contains and not what its subfolders contain; addresses go through the same `http`/`https` gate
+as everywhere else, so a bookmark to a `javascript:` address is left out and said; more than
+fifty pages opens the first fifty and says so. A folder that is not there names the folders that
+are, and the profile carries on past it.
+
+None of the three may be held, cycled or placed — and the reason is now written per kind. Windows
+owns a folder's window; these hand theirs to a browser, a terminal host or an editor that may
+have been running already (risk R2 again, in three new coats).
+
+### Deferred out of F7, and why
+
+- **A browser profile other than `Default`.** Both browsers keep one bookmarks file per profile,
+  and reading another is one path away. It is a field this slice did not add rather than a guess
+  it makes: "Work" in the wrong profile is not the folder you meant.
+- **Firefox.** Its bookmarks live in a SQLite database that the running browser holds open, not
+  in a JSON file. It is 1.1's line in the roadmap, and it needs its own reader.
+- **A terminal that runs a command.** `wt` can be told what to run, and this product will not
+  tell it: a profile that carries a command line is a profile that carries a script, which is the
+  one thing ADR-010 exists to prevent. A terminal step opens a terminal, on a profile, in a
+  directory.
+- **An editor that is not VS Code.** The kind is `editor` rather than `vscode` so a second one
+  can be added without a migration, but adding it now would be a list with one real entry and
+  three guesses in it.
+- **Everything a tool could be asked to do.** New window, private window, an editor's workspace
+  flags: each is a field, and each field is a thing to explain, to review, and to be wrong about.
+  They arrive when a profile needs them.
 
 ### Delivered in F6
 

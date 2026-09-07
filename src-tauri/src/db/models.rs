@@ -58,8 +58,17 @@ pub struct ImportStep {
     pub place_json: String,
 }
 
-/// The step kinds the host knows how to act on. The schema's CHECK says the same.
-pub const STEP_KINDS: [&str; 4] = ["app", "folder", "file", "url"];
+/// The step kinds the host knows how to act on. The schema's CHECK says the
+/// same, and migration 006 is where the two were last made to agree.
+pub const STEP_KINDS: [&str; 7] = [
+    "app",
+    "folder",
+    "file",
+    "url",
+    "bookmarks",
+    "terminal",
+    "editor",
+];
 
 /// What the domain asks the host to do for one step: every path already
 /// resolved and absolute. `source` is the path as written when expansion
@@ -92,6 +101,31 @@ pub enum Launch {
         #[serde(default)]
         source: Option<String>,
     },
+    /// A tool the host knows where to find (F7, ADR-022): an id from a closed
+    /// list and an argument vector. The path is never in the profile.
+    Tool {
+        tool: String,
+        #[serde(default)]
+        args: Vec<String>,
+        /// What this is, in the log: "Windows Terminal", "3 pages from Work".
+        #[serde(default)]
+        what: String,
+        #[serde(default)]
+        source: Option<String>,
+    },
+    /// A bookmark folder that has not been read yet.
+    ///
+    /// The host is never asked to open one of these: the loop reads the
+    /// browser's file, the domain finds the folder in it, and what arrives
+    /// here is a `Tool` launch with the addresses. This variant exists so a
+    /// step that never ran can still be named — by `run_stop`, for instance —
+    /// and `step_execute` refuses it rather than guessing.
+    Bookmarks {
+        browser: String,
+        folder: String,
+        #[serde(default)]
+        source: Option<String>,
+    },
 }
 
 impl Launch {
@@ -101,6 +135,14 @@ impl Launch {
             Launch::Folder { .. } => "folder",
             Launch::File { .. } => "file",
             Launch::Url { .. } => "url",
+            // A tool launch belongs to the step kind that made it: the browser
+            // ones can only have come from a bookmark folder.
+            Launch::Tool { tool, .. } => match tool.as_str() {
+                "terminal" => "terminal",
+                "editor" => "editor",
+                _ => "bookmarks",
+            },
+            Launch::Bookmarks { .. } => "bookmarks",
         }
     }
 
@@ -125,6 +167,28 @@ impl Launch {
             Launch::Url { url, source } => {
                 serde_json::json!({ "kind": "url", "target": url, "source": source })
             }
+            Launch::Tool {
+                tool,
+                args,
+                what,
+                source,
+            } => serde_json::json!({
+                "kind": self.kind(),
+                "tool": tool,
+                "target": what,
+                "args": args,
+                "source": source,
+            }),
+            Launch::Bookmarks {
+                browser,
+                folder,
+                source,
+            } => serde_json::json!({
+                "kind": "bookmarks",
+                "tool": browser,
+                "target": folder,
+                "source": source,
+            }),
         }
     }
 }

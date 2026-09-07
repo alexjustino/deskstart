@@ -27,6 +27,7 @@ part that matters most later — the cost we accepted.
 | [019](#adr-019) | A profile file carries positions, never identifiers                                      | Accepted |
 | [020](#adr-020) | One file at a time, through the system's own dialog                                      | Accepted |
 | [021](#adr-021) | A window is placed only if the run opened it                                             | Accepted |
+| [022](#adr-022) | A tool is found where it is installed, never on PATH                                     | Accepted |
 
 ---
 
@@ -367,3 +368,32 @@ off, risk R2 — is a line saying that, and the run carries on. Neither is silen
 **Cost accepted.** A profile cannot arrange a browser window, which is the second thing people
 will ask for. Placement also happens after the step is open, so the sequence waits for it: at
 most those five seconds, once per opening, and only for a step that asked to be placed.
+
+## ADR-022 — A tool is found where it is installed, never on PATH {#adr-022}
+
+**Context.** F7 calls four programs this product did not write: Chrome, Edge, Windows Terminal
+and VS Code. Something has to decide which `chrome.exe` runs.
+
+**Decision.** Each tool is looked for in the places Windows installs it — under `%PROGRAMFILES%`,
+`%PROGRAMFILES(X86)%` or `%LOCALAPPDATA%`, by an absolute path — and nowhere else. `PATH` is
+never searched. A profile never carries a program path for a tool: it carries an **id** from a
+closed list (`chrome`, `edge`, `terminal`, `editor`), and the host turns that id into a path of
+its own choosing. The arguments are still a vector the domain wrote (ADR-014).
+
+**Why not PATH.** Two reasons, and either alone would be enough. `PATH` is a list anything on the
+machine can add to, so "start whatever `code` means today" is a promise this product cannot keep
+tomorrow. And what `PATH` holds for VS Code is `code.cmd`, a batch file — which cannot be started
+without a shell, and there is no shell here.
+
+**What a person sees.** `tools_list` says, for each tool, whether it is here and where. The
+editor shows it while a step is being written; the run records it as the reason a step did not
+start. Neither is silence (ADR-016).
+
+**Cost accepted.** A tool installed somewhere unusual is "not installed" as far as this product
+is concerned, and the answer is a new candidate path in `os/tools.rs`, not a setting. Portable
+and scoop-style installs are the ones this will meet first.
+
+**Bookmarks.** The same principle, one step further: the host reads the browser's `Bookmarks`
+file (the `Default` profile) and hands over the text; **what a folder is** — which pages are in
+it, what a name matches, which addresses are openable — is `domain/bookmarks`, and the host never
+learns. What it is finally asked to do is start a browser with a list of `http` addresses.
