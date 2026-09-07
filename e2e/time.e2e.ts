@@ -220,9 +220,7 @@ describe('time', () => {
   it('refuses a hold on a folder, and a repeat without a hold', async () => {
     const { driver } = session;
     await (
-      await driver.findByXPath(
-        '//form[@aria-label="Add a step"]//button[@role="radio" and normalize-space(.)="Folder"]',
-      )
+      await driver.findByXPath('//select[@aria-label="Kind"]/option[normalize-space(.)="Folder"]')
     ).click();
     // The hold fields are for applications only: a folder offers none.
     const holds = await driver.findAll(
@@ -231,7 +229,7 @@ describe('time', () => {
     expect(holds.length).toBe(0);
     await (
       await driver.findByXPath(
-        '//form[@aria-label="Add a step"]//button[@role="radio" and normalize-space(.)="Application"]',
+        '//select[@aria-label="Kind"]/option[normalize-space(.)="Application"]',
       )
     ).click();
     const repeat = await driver.waitForElement(
