@@ -24,7 +24,7 @@ import type { Timing } from '@/domain/timing';
 import { executeProfile, Stopper, type Runnable } from './execute';
 import * as profileApi from './profiles';
 import * as runApi from './runs';
-import { fetchEnvironment, fetchMonitors } from './system';
+import { fetchEnvironment, fetchMonitors, fetchTools } from './system';
 
 export const keys = {
   profiles: ['profiles'] as const,
@@ -33,6 +33,7 @@ export const keys = {
   events: (runId: string) => ['events', runId] as const,
   environment: ['environment'] as const,
   monitors: ['monitors'] as const,
+  tools: ['tools'] as const,
 };
 
 export function useProfiles() {
@@ -47,6 +48,11 @@ export function useEnvironment() {
 /** The screens this machine has. Read once: the editor offers them by number. */
 export function useMonitors() {
   return useQuery({ queryKey: keys.monitors, queryFn: fetchMonitors });
+}
+
+/** The tools this machine has, and the ones it has not (F7). */
+export function useTools() {
+  return useQuery({ queryKey: keys.tools, queryFn: fetchTools });
 }
 
 export function useCreateProfile() {

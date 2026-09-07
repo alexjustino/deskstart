@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { describeError } from '@/data/errors';
 import { useAcceptProfile, useAcceptStep, useDeleteStep } from '@/data/hooks';
 import type { Profile, StoredStep } from '@/data/profiles';
-import { resolveStep, stepTitle, type Step } from '@/domain/profile';
+import { resolveStep, stepTitle, type Launch, type Step } from '@/domain/profile';
 import { describePlacement } from '@/domain/placement';
 import { describeWaitFor } from '@/domain/readiness';
 import type { ReviewState } from '@/domain/review';
@@ -214,7 +214,7 @@ function ReviewDetail({
       {resolved.ok ? (
         <>
           <p data-selectable className="break-all font-mono text-caption text-fg-secondary">
-            {resolved.launch.kind === 'url' ? resolved.launch.url : targetOf(resolved.launch)}
+            {describeTarget(resolved.launch)}
           </p>
           {resolved.launch.source !== null && (
             <p data-selectable className="break-all font-mono text-caption text-fg-tertiary">
@@ -264,6 +264,18 @@ function ReviewDetail({
 }
 
 /** The absolute thing the host is handed, whatever kind of step it is. */
-function targetOf(launch: { kind: string; path?: string; program?: string }): string {
-  return launch.program ?? launch.path ?? '';
+function describeTarget(launch: Launch): string {
+  switch (launch.kind) {
+    case 'app':
+      return launch.program;
+    case 'folder':
+    case 'file':
+      return launch.path;
+    case 'url':
+      return launch.url;
+    case 'tool':
+      return `${launch.what}${launch.args.length > 0 ? ` — ${launch.args.join(' ')}` : ''}`;
+    case 'bookmarks':
+      return `${launch.folder} — every page in it, from ${launch.browser}`;
+  }
 }

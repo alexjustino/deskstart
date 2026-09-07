@@ -42,7 +42,11 @@ function nameOf(p: Record<string, unknown>): string {
 
 /** "folder src" / "notes.txt" / "github.com": the noun the sentence needs. */
 function noun(p: Record<string, unknown>): string {
-  return p.kind === 'folder' ? `folder ${nameOf(p)}` : nameOf(p);
+  if (p.kind === 'folder') return `folder ${nameOf(p)}`;
+  // A tool step's target is already the sentence: "Windows Terminal — dev",
+  // "3 pages from Work". Cutting it at a slash would spoil it.
+  if (p.tool !== undefined && typeof p.target === 'string') return p.target;
+  return nameOf(p);
 }
 
 /** The resolved target, and where it came from when expansion changed it. */

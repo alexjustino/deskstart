@@ -4,6 +4,8 @@ import {
   ArrowImport20Regular,
   ArrowDown20Regular,
   ArrowUp20Regular,
+  Bookmark20Regular,
+  Code20Regular,
   Delete20Regular,
   Document20Regular,
   DocumentSearch20Regular,
@@ -14,6 +16,7 @@ import {
   PlayCircle20Regular,
   Share20Regular,
   Stop20Regular,
+  WindowConsole20Regular,
 } from '@fluentui/react-icons';
 import { useCallback, useMemo, useState, type FormEvent, type ReactNode } from 'react';
 
@@ -31,6 +34,7 @@ import {
   useProfiles,
   useRuns,
   useSteps,
+  useTools,
   useUpdateStep,
 } from '@/data/hooks';
 import type { Profile, StoredStep } from '@/data/profiles';
@@ -61,7 +65,7 @@ import { ExportProfile } from './ExportProfile';
 import { ImportProfile } from './ImportProfile';
 import { ReviewSteps } from './ReviewSteps';
 import { KIND_LABELS } from './kinds';
-import { StepForm, type EarlierStep, type Screen } from './StepForm';
+import { StepForm, type EarlierStep, type Screen, type ToolState } from './StepForm';
 
 /**
  * Profiles: the list on the left, the selected profile on the right, and the
@@ -203,6 +207,7 @@ function ProfileDetail({ profile }: { profile: Profile }) {
   const steps = useSteps(profile.id);
   const environment = useEnvironment();
   const screens = useMonitors();
+  const tools = useTools();
   const runs = useRuns(profile.id);
   const execute = useExecuteProfile();
   const remove = useDeleteProfile();
@@ -375,6 +380,7 @@ function ProfileDetail({ profile }: { profile: Profile }) {
             judged={judged}
             env={env}
             screens={screens.data ?? []}
+            tools={tools.data ?? []}
             busy={execute.isPending}
           />
           <AddStep
@@ -382,6 +388,7 @@ function ProfileDetail({ profile }: { profile: Profile }) {
             env={env}
             earlier={titlesOf(judged, env)}
             screens={screens.data ?? []}
+            tools={tools.data ?? []}
           />
         </Card>
       )}
@@ -435,6 +442,9 @@ const KIND_ICONS: Record<StepKind, ReactNode> = {
   folder: <Folder20Regular />,
   file: <Document20Regular />,
   url: <Globe20Regular />,
+  bookmarks: <Bookmark20Regular />,
+  terminal: <WindowConsole20Regular />,
+  editor: <Code20Regular />,
 };
 
 /** What a person calls the step, judged after expansion: the folder's real name, not `%USERPROFILE%`. */
@@ -448,6 +458,10 @@ function titleOf(config: StepConfig, env: Readonly<Record<string, string>>): str
     case 'file':
       return stepTitle({ kind: resolved.launch.kind, path: resolved.launch.path });
     case 'url':
+    case 'bookmarks':
+    case 'tool':
+      // A bookmark folder, a terminal and an editor are called what the person
+      // wrote, not what the tool's path happens to be.
       return stepTitle(config);
   }
 }
@@ -464,6 +478,15 @@ function summary(config: StepConfig, env: Readonly<Record<string, string>>): str
         return config.path;
       case 'url':
         return config.url;
+      case 'bookmarks':
+        return `${config.folder} — ${config.browser === 'chrome' ? 'Chrome' : 'Edge'}`;
+      case 'terminal':
+        return (
+          [config.profile, config.directory].filter((part) => part !== null).join(' · ') ||
+          'the default profile'
+        );
+      case 'editor':
+        return config.path;
     }
   })();
   if (!resolved.ok) return written;
@@ -476,6 +499,10 @@ function summary(config: StepConfig, env: Readonly<Record<string, string>>): str
         return resolved.launch.path;
       case 'url':
         return resolved.launch.url;
+      case 'tool':
+        return resolved.launch.what;
+      case 'bookmarks':
+        return resolved.launch.folder;
     }
   })();
   const source = resolved.launch.source;
@@ -494,12 +521,14 @@ function StepList({
   judged,
   env,
   screens,
+  tools,
   busy,
 }: {
   profileId: string;
   judged: Judged[];
   env: Readonly<Record<string, string>>;
   screens: readonly Screen[];
+  tools: readonly ToolState[];
   busy: boolean;
 }) {
   const remove = useDeleteStep();
@@ -623,6 +652,7 @@ function StepList({
                   }}
                   earlier={titlesOf(judged.slice(0, index), env)}
                   screens={screens}
+                  tools={tools}
                   env={env}
                   pending={update.isPending}
                   hostError={update.isError ? describeError(update.error) : null}
@@ -653,11 +683,13 @@ function AddStep({
   env,
   earlier,
   screens,
+  tools,
 }: {
   profileId: string;
   env: Readonly<Record<string, string>>;
   earlier: readonly EarlierStep[];
   screens: readonly Screen[];
+  tools: readonly ToolState[];
 }) {
   const add = useAddStep();
   // A new key after every success gives the form a clean slate.
@@ -668,6 +700,7 @@ function AddStep({
       initial={null}
       earlier={earlier}
       screens={screens}
+      tools={tools}
       env={env}
       pending={add.isPending}
       hostError={add.isError ? describeError(add.error) : null}

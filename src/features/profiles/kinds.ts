@@ -6,6 +6,9 @@ export const KIND_LABELS: Record<StepKind, string> = {
   folder: 'Folder',
   file: 'File',
   url: 'Web page',
+  bookmarks: 'Bookmark folder',
+  terminal: 'Terminal',
+  editor: 'VS Code',
 };
 
 /**
@@ -18,4 +21,7 @@ export const HOW_IT_OPENS: Record<StepKind, string> = {
   folder: 'opened in Windows Explorer',
   file: 'opened with whatever Windows opens this kind of file with',
   url: 'opened in your default browser',
+  bookmarks: 'every page in that folder, opened as one browser window',
+  terminal: 'opened in Windows Terminal',
+  editor: 'opened in VS Code',
 };

@@ -111,3 +111,24 @@ export interface Monitor {
 export async function fetchMonitors(): Promise<Monitor[]> {
   return invoke<Monitor[]>('monitors');
 }
+
+/** One tool this product can call, and whether this machine has it (F7). */
+export interface Tool {
+  id: string;
+  name: string;
+  found: boolean;
+  path: string | null;
+}
+
+/** The tools, found or not. Both are said: a step that names a missing one says so. */
+export async function fetchTools(): Promise<Tool[]> {
+  return invoke<Tool[]>('tools_list');
+}
+
+/**
+ * One browser's bookmarks file, as text. What a folder is, and which pages are
+ * in it, is `domain/bookmarks` — this only fetches the bytes.
+ */
+export async function readBookmarks(browser: string): Promise<string> {
+  return invoke<string>('bookmarks_read', { browser });
+}
