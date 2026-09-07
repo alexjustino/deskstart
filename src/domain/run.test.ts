@@ -1,10 +1,16 @@
 import { describe, expect, it } from 'vitest';
 
 import { outcomeOf, plan, reduce, type Action, type RunEvent, type RunState } from './run';
+import { PROBE_EVERY_MS, type WaitFor } from './readiness';
 import { DEFAULT_TIMING, type Timing } from './timing';
 
-function step(id: string, timing: Partial<Timing> = {}) {
-  return { id, timing: { ...DEFAULT_TIMING, ...timing } };
+function step(id: string, timing: Partial<Timing> = {}, waitFor: WaitFor | null = null) {
+  return { id, timing: { ...DEFAULT_TIMING, ...timing }, waitFor };
+}
+
+/** Wait for `stepId` to have a window, with the timeout given. */
+function waits(stepId: string, timeoutMs = 1000): WaitFor {
+  return { stepId, probe: { kind: 'window' }, timeoutMs };
 }
 
 const STEPS = [step('a'), step('b'), step('c')];
@@ -26,7 +32,15 @@ function drive(initial: RunState, events: RunEvent[]) {
  * and `step_closed` at once, and advancing a fake clock to every `wait_until`.
  * Every instant the machine sees comes from here, never from Date.
  */
-function simulate(initial: RunState, options: { failing?: string[]; unclosable?: string[] } = {}) {
+function simulate(
+  initial: RunState,
+  options: {
+    failing?: string[];
+    unclosable?: string[];
+    /** How long each step's probe stays unready, by step id. */
+    readyAfter?: Record<string, number>;
+  } = {},
+) {
   let state = initial;
   const trace: string[] = [];
   let now = 0;
@@ -75,6 +89,19 @@ function simulate(initial: RunState, options: { failing?: string[]; unclosable?:
         } else {
           feed({ kind: 'step_closed', stepId: action.stepId, at: now });
         }
+        break;
+      case 'probe': {
+        const readyAt = options.readyAfter?.[action.stepId] ?? 0;
+        const ready = now >= readyAt;
+        trace.push(`probe ${action.stepId} @${now} -> ${ready ? 'ready' : 'not yet'}`);
+        feed({ kind: 'probe_result', stepId: action.stepId, ready, at: now });
+        break;
+      }
+      case 'ready':
+        trace.push(`ready ${action.stepId} after ${action.waitedMs}`);
+        break;
+      case 'skip':
+        trace.push(`skip ${action.stepId}: ${action.reason}`);
         break;
       case 'finish':
         trace.push(`finish ${action.outcome} @${now}`);
@@ -412,5 +439,87 @@ describe('outcomeOf', () => {
     expect(outcomeOf({ a: 'failed' }, false)).toBe('failed');
     expect(outcomeOf({ a: 'ok', b: 'skipped' }, false)).toBe('completed');
     expect(outcomeOf({ a: 'ok' }, true)).toBe('stopped');
+  });
+});
+
+describe('a step that waits for another to be responding', () => {
+  it('starts as soon as the probe answers, and says how long it waited', () => {
+    const { state, trace } = simulate(plan([step('a'), step('b', {}, waits('a', 5000))], 'real'), {
+      readyAfter: { b: 500 },
+    });
+    expect(trace).toEqual([
+      'execute a @0',
+      'probe b @0 -> not yet',
+      `wait timer until ${PROBE_EVERY_MS}`,
+      `probe b @${PROBE_EVERY_MS} -> not yet`,
+      `wait timer until ${PROBE_EVERY_MS * 2}`,
+      `probe b @${PROBE_EVERY_MS * 2} -> ready`,
+      `ready b after ${PROBE_EVERY_MS * 2}`,
+      `execute b @${PROBE_EVERY_MS * 2}`,
+      `finish completed @${PROBE_EVERY_MS * 2}`,
+    ]);
+    expect(state.results).toEqual({ a: 'ok', b: 'ok' });
+  });
+
+  it('starts at once when what it waits for is already there', () => {
+    const { trace } = simulate(plan([step('a'), step('b', {}, waits('a'))], 'real'));
+    expect(trace).toEqual([
+      'execute a @0',
+      'probe b @0 -> ready',
+      'ready b after 0',
+      'execute b @0',
+      'finish completed @0',
+    ]);
+  });
+
+  it('gives up at the deadline, skips the step with the reason, and carries on', () => {
+    const { state, trace } = simulate(
+      plan([step('a'), step('b', {}, waits('a', 1000)), step('c')], 'real'),
+      { readyAfter: { b: Number.MAX_SAFE_INTEGER } },
+    );
+    expect(trace.at(-3)).toBe('skip b: what it waits for did not answer within 1 s');
+    expect(trace.at(-2)).toBe('execute c @1000');
+    expect(trace.at(-1)).toBe('finish completed @1000');
+    expect(state.results).toEqual({ a: 'ok', b: 'skipped', c: 'ok' });
+    // It gave up at the deadline, and did not spend one more probe past it:
+    // asked at 0, 250, 500 and 750; at 1000 the patience was over.
+    expect(trace.filter((line) => line.startsWith('probe b')).length).toBe(1000 / PROBE_EVERY_MS);
+  });
+
+  it('skips at once, without waiting, when the step it waits for did not start', () => {
+    const { state, trace } = simulate(
+      plan([step('a'), step('b', {}, waits('a', 60_000)), step('c')], 'real'),
+      { failing: ['a'] },
+    );
+    expect(trace).toEqual([
+      'execute a @0',
+      'skip b: the step it waits for did not start',
+      'execute c @0',
+      'finish completed_with_failures @0',
+    ]);
+    expect(state.results).toEqual({ a: 'failed', b: 'skipped', c: 'ok' });
+  });
+
+  it('a stop while waiting ends the run at once', () => {
+    const waiting = plan([step('a', {}, waits('z', 60_000))], 'real');
+    const begun = reduce(waiting, { kind: 'begun', at: 0 });
+    expect(begun.actions).toEqual([
+      { kind: 'probe', stepId: 'a', awaitedStepId: 'z', probe: { kind: 'window' }, first: true },
+    ]);
+    expect(begun.state.phases.a).toBe('waiting');
+    const stopped = reduce(begun.state, { kind: 'stop_requested', at: 10 });
+    expect(stopped.actions).toEqual([{ kind: 'finish', outcome: 'stopped' }]);
+    expect(stopped.state.results).toEqual({ a: 'skipped' });
+  });
+
+  it('ignores a probe answer for a step that is not waiting, or after the run ended', () => {
+    const planned = plan([step('a'), step('b', {}, waits('a'))], 'real');
+    const stray = reduce(planned, { kind: 'probe_result', stepId: 'b', ready: true, at: 1 });
+    expect(stray.state).toBe(planned);
+    expect(stray.actions).toEqual([]);
+
+    const begun = reduce(planned, { kind: 'begun', at: 0 }).state;
+    const notWaiting = reduce(begun, { kind: 'probe_result', stepId: 'a', ready: true, at: 1 });
+    expect(notWaiting.state).toBe(begun);
   });
 });

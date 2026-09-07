@@ -13,6 +13,7 @@
  * resolution.
  */
 
+import type { WaitFor } from './readiness';
 import type { Timing } from './timing';
 
 export const PROFILE_SCHEMA_VERSION = 1;
@@ -55,6 +56,8 @@ export interface Step {
   position: number;
   config: StepConfig;
   timing: Timing;
+  /** What must be responding before this step starts, or null to start at once. */
+  waitFor: WaitFor | null;
 }
 
 /** The shape of a profile as a file: no identifiers, only what it means. */

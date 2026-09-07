@@ -16,9 +16,16 @@
  * The machine does not know how a step was done — started, opened, or only
  * written down in a dry run — only that it was, or was not. That translation
  * happens once, at the boundary (`data/runs.ts`).
+ *
+ * Waiting for something to be ready (F4) is the same shape again: the machine
+ * asks the host to `probe`, the host answers `probe_result`, and the machine
+ * either starts the step or asks again a moment later — until the deadline it
+ * set when the wait began, after which the step is **skipped with the reason**
+ * and the profile carries on.
  */
 
-import type { Timing } from './timing';
+import { PROBE_EVERY_MS, type Probe, type WaitFor } from './readiness';
+import { describeDuration, type Timing } from './timing';
 
 export type Mode = 'real' | 'dry';
 
@@ -27,13 +34,23 @@ export type Outcome = 'completed' | 'completed_with_failures' | 'failed' | 'stop
 export interface PlannedStep {
   id: string;
   timing: Timing;
+  /** What must be responding before this step starts, or null to start at once. */
+  waitFor: WaitFor | null;
 }
 
 export type StepResult = 'ok' | 'failed' | 'skipped';
 
 /** Where one step is in its own life: opened, held, closed, reopening, over. */
 export type StepPhase =
-  'pending' | 'open' | 'closing' | 'closed' | 'reopening' | 'done' | 'failed' | 'skipped';
+  | 'pending'
+  | 'waiting'
+  | 'open'
+  | 'closing'
+  | 'closed'
+  | 'reopening'
+  | 'done'
+  | 'failed'
+  | 'skipped';
 
 export type RunEvent =
   | { kind: 'begun'; at: number }
@@ -41,21 +58,29 @@ export type RunEvent =
   | { kind: 'step_failed'; stepId: string; reason: string; at: number }
   | { kind: 'step_closed'; stepId: string; at: number }
   | { kind: 'step_not_closed'; stepId: string; reason: string; at: number }
+  | { kind: 'probe_result'; stepId: string; ready: boolean; at: number }
   | { kind: 'time'; at: number }
   | { kind: 'stop_requested'; at: number };
 
-export type WaitReason = { kind: 'pause'; stepId: string } | { kind: 'timer' };
+export type WaitReason =
+  { kind: 'pause'; stepId: string } | { kind: 'readiness'; stepId: string } | { kind: 'timer' };
 
 export type Action =
   | { kind: 'execute'; stepId: string }
   | { kind: 'close'; stepId: string; heldMs: number }
+  /** Ask the host whether what this step waits for is responding. */
+  | { kind: 'probe'; stepId: string; awaitedStepId: string; probe: Probe; first: boolean }
+  /** This step will not start; say so in the log and carry on. */
+  | { kind: 'skip'; stepId: string; reason: string }
+  /** What this step waited for is responding; say so in the log. */
+  | { kind: 'ready'; stepId: string; waitedMs: number }
   | { kind: 'wait_until'; at: number; reason: WaitReason }
   | { kind: 'finish'; outcome: Outcome };
 
 interface Timer {
   stepId: string;
   at: number;
-  what: 'close' | 'reopen';
+  what: 'close' | 'reopen' | 'probe';
 }
 
 export interface RunState {
@@ -71,6 +96,9 @@ export interface RunState {
   opened: Record<string, number>;
   /** When each step was last opened, so a hold is measured from the real instant. */
   openedAt: Record<string, number>;
+  /** When a waiting step started waiting, and when its patience runs out. */
+  waitingSince: Record<string, number>;
+  deadlines: Record<string, number>;
   results: Record<string, StepResult>;
   phase: 'planned' | 'running' | 'finished';
   startedAt: number | null;
@@ -91,6 +119,8 @@ export function plan(steps: PlannedStep[], mode: Mode): RunState {
     phases: Object.fromEntries(steps.map((s) => [s.id, 'pending' as StepPhase])),
     opened: {},
     openedAt: {},
+    waitingSince: {},
+    deadlines: {},
     results: {},
     phase: 'planned',
     startedAt: null,
@@ -205,6 +235,41 @@ export function reduce(state: RunState, event: RunEvent): Next {
       };
     }
 
+    case 'probe_result': {
+      if (state.phase !== 'running') return { state, actions: [] };
+      const step = stepOf(state, event.stepId);
+      if (step === null || step.waitFor === null) return { state, actions: [] };
+      if (state.phases[step.id] !== 'waiting') return { state, actions: [] };
+
+      if (event.ready) {
+        const since = state.waitingSince[step.id] ?? event.at;
+        const next: RunState = {
+          ...state,
+          phases: { ...state.phases, [step.id]: 'pending' },
+          timers: state.timers.filter((t) => !(t.stepId === step.id && t.what === 'probe')),
+        };
+        return {
+          state: next,
+          actions: [
+            { kind: 'ready', stepId: step.id, waitedMs: Math.max(0, event.at - since) },
+            { kind: 'execute', stepId: step.id },
+          ],
+        };
+      }
+
+      const deadline = state.deadlines[step.id];
+      if (deadline !== undefined && event.at >= deadline) {
+        return giveUpWaiting(state, step, event.at);
+      }
+      // Not yet: ask again in a moment.
+      const waiting = withTimer(state, {
+        stepId: step.id,
+        at: event.at + PROBE_EVERY_MS,
+        what: 'probe',
+      });
+      return settle(waiting, event.at, []);
+    }
+
     case 'time': {
       if (state.phase !== 'running') return { state, actions: [] };
       let next = state;
@@ -212,10 +277,29 @@ export function reduce(state: RunState, event: RunEvent): Next {
       // Everything due by now, in the order it was due.
       const due = next.timers.filter((t) => t.at <= event.at).sort((a, b) => a.at - b.at);
       next = { ...next, timers: next.timers.filter((t) => t.at > event.at) };
+      // Patience that ran out, before anything else: a step that is out of
+      // time does not get one more probe.
+      for (const step of next.steps) {
+        const deadline = next.deadlines[step.id];
+        if (next.phases[step.id] === 'waiting' && deadline !== undefined && deadline <= event.at) {
+          const given = giveUpWaiting(next, step, event.at);
+          return { state: given.state, actions: [...actions, ...given.actions] };
+        }
+      }
       for (const timer of due) {
         const step = stepOf(next, timer.stepId);
         if (step === null) continue;
-        if (timer.what === 'close' && next.phases[step.id] === 'open') {
+        if (timer.what === 'probe' && next.phases[step.id] === 'waiting') {
+          if (step.waitFor !== null) {
+            actions.push({
+              kind: 'probe',
+              stepId: step.id,
+              awaitedStepId: step.waitFor.stepId,
+              probe: step.waitFor.probe,
+              first: false,
+            });
+          }
+        } else if (timer.what === 'close' && next.phases[step.id] === 'open') {
           next = { ...next, phases: { ...next.phases, [step.id]: 'closing' } };
           actions.push({
             kind: 'close',
@@ -253,7 +337,70 @@ function withTimer(state: RunState, timer: Timer): RunState {
 function startNext(state: RunState, at: number): Next {
   const next = state.steps[state.index];
   if (next === undefined) return settle(state, at, []);
+  if (next.waitFor !== null) return beginWaiting(state, next, next.waitFor, at);
   return { state, actions: [{ kind: 'execute', stepId: next.id }] };
+}
+
+/**
+ * A step that waits: ask the host once, now, and set the deadline.
+ *
+ * A step whose awaited step never started is skipped at once rather than
+ * waiting out its timeout for something that cannot happen.
+ */
+function beginWaiting(state: RunState, step: PlannedStep, waitFor: WaitFor, at: number): Next {
+  const awaited = state.results[waitFor.stepId];
+  if (awaited === 'failed' || awaited === 'skipped') {
+    return skipStep(state, step, at, 'the step it waits for did not start');
+  }
+  const next: RunState = {
+    ...state,
+    phases: { ...state.phases, [step.id]: 'waiting' },
+    waitingSince: { ...state.waitingSince, [step.id]: at },
+    deadlines: { ...state.deadlines, [step.id]: at + waitFor.timeoutMs },
+  };
+  return {
+    state: next,
+    actions: [
+      {
+        kind: 'probe',
+        stepId: step.id,
+        awaitedStepId: waitFor.stepId,
+        probe: waitFor.probe,
+        first: true,
+      },
+    ],
+  };
+}
+
+/** The patience ran out: say so, skip the step, and carry on with the profile. */
+function giveUpWaiting(state: RunState, step: PlannedStep, at: number): Next {
+  const timeout = step.waitFor?.timeoutMs ?? 0;
+  return skipStep(
+    state,
+    step,
+    at,
+    `what it waits for did not answer within ${describeDuration(timeout)}`,
+  );
+}
+
+/**
+ * This step will not start. It is skipped with its reason, and the profile
+ * goes on to the next one — a setup that stalls on one thing is worse than
+ * one that says what it could not do.
+ */
+function skipStep(state: RunState, step: PlannedStep, at: number, reason: string): Next {
+  const cleared: RunState = {
+    ...state,
+    index: state.index + 1,
+    phases: { ...state.phases, [step.id]: 'skipped' },
+    results: { ...state.results, [step.id]: 'skipped' },
+    timers: state.timers.filter((t) => t.stepId !== step.id),
+  };
+  const started = startNext(cleared, at);
+  return {
+    state: started.state,
+    actions: [{ kind: 'skip', stepId: step.id, reason }, ...started.actions],
+  };
 }
 
 /** The wait for whatever comes first: a pause ending or a timer firing. */
@@ -269,6 +416,12 @@ function nextWait(state: RunState, at: number): Action[] {
       reason: step ? { kind: 'pause', stepId: step.id } : { kind: 'timer' },
     });
   }
+  for (const step of state.steps) {
+    const deadline = state.deadlines[step.id];
+    if (state.phases[step.id] === 'waiting' && deadline !== undefined) {
+      candidates.push({ at: deadline, reason: { kind: 'readiness', stepId: step.id } });
+    }
+  }
   if (candidates.length === 0) return [];
   const soonest = candidates.reduce((a, b) => (b.at < a.at ? b : a));
   return [{ kind: 'wait_until', at: Math.max(soonest.at, at), reason: soonest.reason }];
@@ -281,14 +434,16 @@ function nextWait(state: RunState, at: number): Action[] {
 function settle(state: RunState, at: number, actions: Action[]): Next {
   const sequenceOver = state.index >= state.steps.length && state.nextStepAt === null;
   const busy = Object.values(state.phases).some(
-    (p) => p === 'open' || p === 'closing' || p === 'closed' || p === 'reopening',
+    (p) =>
+      p === 'open' || p === 'closing' || p === 'closed' || p === 'reopening' || p === 'waiting',
   );
   if (sequenceOver && !busy && state.timers.length === 0) {
     const finished = finish(state, at, false);
     return { state: finished.state, actions: [...actions, ...finished.actions] };
   }
-  // A close or an execute is already in flight; the wait comes once it answers.
-  if (actions.some((a) => a.kind === 'execute' || a.kind === 'close')) {
+  // A close, an execute or a probe is already in flight; the wait comes once
+  // it answers.
+  if (actions.some((a) => a.kind === 'execute' || a.kind === 'close' || a.kind === 'probe')) {
     return { state, actions };
   }
   return { state, actions: [...actions, ...nextWait(state, at)] };
