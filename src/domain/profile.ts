@@ -1,11 +1,12 @@
 /**
  * A profile is data (ADR-010).
  *
- * This module is the only place that decides what a profile may contain. It
- * reads an untrusted document and either returns a typed profile or a list of
- * problems written for a person; it never throws, and nothing in a document is
- * interpreted — a path is expanded only through a closed allow-list of
- * environment names, and shown expanded.
+ * This module is the only place that decides what a step may contain. It reads
+ * an untrusted configuration and either returns a typed step or a list of
+ * problems written for a person; it never throws, and nothing is interpreted —
+ * a path is expanded only through a closed allow-list of environment names, and
+ * shown expanded. A whole profile as a file is read by `domain/portable`, which
+ * comes back here for every step.
  *
  * It is also the only place that turns a step into what the host is asked to
  * do (`resolveStep`): the same function feeds the dry run, the real run and
@@ -58,13 +59,11 @@ export interface Step {
   timing: Timing;
   /** What must be responding before this step starts, or null to start at once. */
   waitFor: WaitFor | null;
-}
-
-/** The shape of a profile as a file: no identifiers, only what it means. */
-export interface ProfileDocument {
-  schemaVersion: number;
-  name: string;
-  steps: StepConfig[];
+  /**
+   * Seen and accepted on this machine (ADR-013). A step written here is
+   * accepted the moment it is written; a step that arrived in a file is not.
+   */
+  reviewed: boolean;
 }
 
 export interface Problem {
@@ -74,16 +73,12 @@ export interface Problem {
   problem: string;
 }
 
-export type ReadResult =
-  { ok: true; document: ProfileDocument } | { ok: false; problems: Problem[] };
-
 const FIELDS: Record<StepKind, ReadonlySet<string>> = {
   app: new Set(['kind', 'program', 'args', 'workingDir']),
   folder: new Set(['kind', 'path']),
   file: new Set(['kind', 'path']),
   url: new Set(['kind', 'url']),
 };
-const ALLOWED_DOCUMENT_FIELDS = new Set(['schemaVersion', 'name', 'steps']);
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -195,64 +190,6 @@ export function parseStoredStep(
   }
   const result = readStepConfig({ kind, ...parsed });
   return Array.isArray(result) ? { ok: false, problems: result } : { ok: true, config: result };
-}
-
-/**
- * Read a profile document. Never throws: a document that is not JSON, not an
- * object, of another schema version, or with anything unexpected in it comes
- * back as a list of problems.
- */
-export function readProfile(input: unknown): ReadResult {
-  let value = input;
-  if (typeof input === 'string') {
-    try {
-      value = JSON.parse(input);
-    } catch {
-      return { ok: false, problems: [{ path: '', problem: 'the file is not valid JSON' }] };
-    }
-  }
-  if (!isRecord(value)) {
-    return { ok: false, problems: [{ path: '', problem: 'a profile must be an object' }] };
-  }
-
-  const problems: Problem[] = [];
-  for (const key of Object.keys(value)) {
-    if (!ALLOWED_DOCUMENT_FIELDS.has(key)) {
-      problems.push({ path: key, problem: 'this field is not part of a profile' });
-    }
-  }
-
-  if (value.schemaVersion !== PROFILE_SCHEMA_VERSION) {
-    problems.push({
-      path: 'schemaVersion',
-      problem: `expected schema version ${PROFILE_SCHEMA_VERSION}, found ${String(value.schemaVersion)}`,
-    });
-  }
-
-  if (typeof value.name !== 'string' || value.name.trim() === '') {
-    problems.push({ path: 'name', problem: 'a profile needs a name' });
-  }
-
-  const steps: StepConfig[] = [];
-  if (!Array.isArray(value.steps)) {
-    problems.push({ path: 'steps', problem: 'steps must be a list' });
-  } else {
-    value.steps.forEach((step, index) => {
-      const read = readStepConfig(step, `steps[${index}]`);
-      if (Array.isArray(read)) problems.push(...read);
-      else steps.push(read);
-    });
-  }
-
-  if (problems.length > 0) return { ok: false, problems };
-  return {
-    ok: true,
-    document: {
-      schemaVersion: PROFILE_SCHEMA_VERSION,
-      name: (value.name as string).trim(),
-      steps,
-    },
-  };
 }
 
 /** The environment names a path may use. Anything else is refused, not expanded. */
