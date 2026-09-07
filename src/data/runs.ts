@@ -9,6 +9,7 @@
 import { invoke } from '@tauri-apps/api/core';
 
 import type { Launch } from '@/domain/profile';
+import type { Probe } from '@/domain/readiness';
 import type { Mode, Outcome, RunEvent } from '@/domain/run';
 
 export interface Run {
@@ -138,6 +139,48 @@ export async function stepWait(runId: string, stepId: string, ms: number): Promi
 }
 
 /** Stop a run: the host closes what the run opened, and only that, one line each. */
+/**
+ * Ask the host whether what a step waits for is responding. Writes no line:
+ * it is asked four times a second, and a log with four lines a second is not
+ * a log.
+ */
+export async function stepProbe(
+  runId: string,
+  awaitedStepId: string,
+  probe: Probe,
+): Promise<boolean> {
+  return invoke<boolean>('step_probe', { runId, awaitedStepId, probe });
+}
+
+/** The line that opens a wait. */
+export async function stepWaitingFor(
+  runId: string,
+  stepId: string,
+  awaitedStepId: string,
+  probe: Probe,
+  timeoutMs: number,
+): Promise<LogLine> {
+  return toLogLine(
+    await invoke<RawEvent>('step_waiting_for', {
+      runId,
+      stepId,
+      awaitedStepId,
+      probe,
+      timeoutMs,
+    }),
+  );
+}
+
+/** The line that closes a wait: it answered, after this long. */
+export async function stepReady(runId: string, stepId: string, waitedMs: number): Promise<LogLine> {
+  return toLogLine(await invoke<RawEvent>('step_ready', { runId, stepId, waitedMs }));
+}
+
+/** The line for a step that will not start, and why. */
+export async function stepSkipped(runId: string, stepId: string, reason: string): Promise<LogLine> {
+  return toLogLine(await invoke<RawEvent>('step_skipped', { runId, stepId, reason }));
+}
+
 export async function runStop(runId: string, launches: Record<string, Launch>): Promise<LogLine[]> {
   const raw = await invoke<RawEvent[]>('run_stop', { runId, launches });
   return raw.map(toLogLine);
