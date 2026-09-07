@@ -124,6 +124,33 @@ export function describe(line: LogLine): { text: string; detail: string | null }
         text: `Would wait for ${String(p.probe ?? 'something')} — up to ${duration(p.timeoutMs)}`,
         detail: null,
       };
+    case 'placed': {
+      const note = typeof p.note === 'string' ? p.note : null;
+      return {
+        text: `Placed the window — ${String(p.detail ?? 'as asked')}`,
+        detail: note,
+      };
+    }
+    case 'not_placed':
+      return {
+        text: `Did not place the window: ${String(p.note ?? 'no reason recorded')}`,
+        detail: null,
+      };
+    case 'would_place': {
+      const parts: string[] = [];
+      if (p.state === 'maximized') parts.push('maximised');
+      if (p.state === 'minimized') parts.push('minimised');
+      const rect = p.rect;
+      if (typeof rect === 'object' && rect !== null) {
+        const r = rect as Record<string, unknown>;
+        parts.push(`${String(r.width)}×${String(r.height)} at ${String(r.x)}, ${String(r.y)}`);
+      }
+      if (typeof p.monitor === 'number') parts.push(`on screen ${p.monitor}`);
+      return {
+        text: `Would place the window — ${parts.length > 0 ? parts.join(' ') : 'as asked'}`,
+        detail: null,
+      };
+    }
     case 'ready':
       return { text: `Ready after ${duration(p.waitedMs)}`, detail: null };
     case 'skipped':

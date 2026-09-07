@@ -91,3 +91,23 @@ export async function fetchAccentRamp(): Promise<AccentRamp> {
     fromSystem: raw.from_system,
   };
 }
+
+/** One screen, as the host numbers them: 1 is the primary (F6). */
+export interface Monitor {
+  number: number;
+  name: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  primary: boolean;
+}
+
+/**
+ * The screens this machine has. The editor offers this list and a placement
+ * names a number from it, so what a person picks and what the run does mean
+ * the same thing.
+ */
+export async function fetchMonitors(): Promise<Monitor[]> {
+  return invoke<Monitor[]>('monitors');
+}

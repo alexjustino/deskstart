@@ -9,6 +9,7 @@
 import { invoke } from '@tauri-apps/api/core';
 
 import type { Launch } from '@/domain/profile';
+import type { Placement } from '@/domain/placement';
 import type { Probe } from '@/domain/readiness';
 import type { Mode, Outcome, RunEvent } from '@/domain/run';
 
@@ -179,6 +180,19 @@ export async function stepReady(runId: string, stepId: string, waitedMs: number)
 /** The line for a step that will not start, and why. */
 export async function stepSkipped(runId: string, stepId: string, reason: string): Promise<LogLine> {
   return toLogLine(await invoke<RawEvent>('step_skipped', { runId, stepId, reason }));
+}
+
+/**
+ * Put a step's window where the step says (F6). The host looks for the window
+ * of the process this run started, waits a moment for it, and writes one line:
+ * what it did, or what it could not do.
+ */
+export async function stepPlace(
+  runId: string,
+  stepId: string,
+  placement: Placement,
+): Promise<LogLine> {
+  return toLogLine(await invoke<RawEvent>('step_place', { runId, stepId, placement }));
 }
 
 export async function runStop(runId: string, launches: Record<string, Launch>): Promise<LogLine[]> {

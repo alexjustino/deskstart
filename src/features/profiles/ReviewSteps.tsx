@@ -5,6 +5,7 @@ import { describeError } from '@/data/errors';
 import { useAcceptProfile, useAcceptStep, useDeleteStep } from '@/data/hooks';
 import type { Profile, StoredStep } from '@/data/profiles';
 import { resolveStep, stepTitle, type Step } from '@/domain/profile';
+import { describePlacement } from '@/domain/placement';
 import { describeWaitFor } from '@/domain/readiness';
 import type { ReviewState } from '@/domain/review';
 import { describeTiming } from '@/domain/timing';
@@ -201,6 +202,7 @@ function ReviewDetail({
     awaited?.readable === true ? stepTitle(awaited.step.config) : null,
   );
   const timing = describeTiming(step.timing);
+  const placement = describePlacement(step.placement);
 
   return (
     <div className="flex flex-col gap-1">
@@ -256,6 +258,7 @@ function ReviewDetail({
       <p className="text-caption text-fg-secondary">{HOW_IT_OPENS[step.config.kind]}</p>
       {waits !== null && <p className="text-caption text-fg-secondary">{waits}</p>}
       {timing !== null && <p className="text-caption text-fg-secondary">{timing}</p>}
+      {placement !== null && <p className="text-caption text-fg-secondary">{placement}</p>}
     </div>
   );
 }

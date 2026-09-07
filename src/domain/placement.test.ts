@@ -9,6 +9,7 @@ import {
   serializePlacement,
   type Placement,
 } from './placement';
+import type { StepConfig } from './profile';
 import { DEFAULT_TIMING } from './timing';
 import { stepProblems } from './step';
 
@@ -114,8 +115,8 @@ describe('what a placement says', () => {
 });
 
 describe('what a run may do to a window it did not open', () => {
-  const app = { kind: 'app', program: 'C:\\a.exe', args: [], workingDir: null } as const;
-  const folder = { kind: 'folder', path: 'C:\\src' } as const;
+  const app: StepConfig = { kind: 'app', program: 'C:\\a.exe', args: [], workingDir: null };
+  const folder: StepConfig = { kind: 'folder', path: 'C:\\src' };
 
   it('nothing: a folder cannot be held, and cannot be placed', () => {
     expect(

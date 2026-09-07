@@ -16,6 +16,7 @@ import {
   type Step,
   type StepConfig,
 } from '@/domain/profile';
+import { parseStoredPlacement, serializePlacement, type Placement } from '@/domain/placement';
 import { parseStoredWaitFor, serializeWaitFor, type WaitFor } from '@/domain/readiness';
 import { parseStoredTiming, serializeTiming, type Timing } from '@/domain/timing';
 
@@ -57,6 +58,7 @@ interface RawStep {
   config_json: string;
   timing_json: string;
   wait_json: string;
+  place_json: string;
   reviewed: boolean;
   created_at: string;
   updated_at: string;
@@ -82,7 +84,8 @@ function toStoredStep(raw: RawStep): StoredStep {
   const parsed = parseStoredStep(raw.kind, raw.config_json);
   const timing = parseStoredTiming(raw.timing_json);
   const waitFor = parseStoredWaitFor(raw.wait_json ?? '{}');
-  if (!parsed.ok || Array.isArray(timing) || Array.isArray(waitFor)) {
+  const placement = parseStoredPlacement(raw.place_json ?? '{}');
+  if (!parsed.ok || Array.isArray(timing) || Array.isArray(waitFor) || Array.isArray(placement)) {
     return {
       readable: false,
       id: raw.id,
@@ -93,6 +96,7 @@ function toStoredStep(raw: RawStep): StoredStep {
         ...(parsed.ok ? [] : parsed.problems),
         ...(Array.isArray(timing) ? timing : []),
         ...(Array.isArray(waitFor) ? waitFor : []),
+        ...(Array.isArray(placement) ? placement : []),
       ],
     };
   }
@@ -105,6 +109,7 @@ function toStoredStep(raw: RawStep): StoredStep {
       config: parsed.config,
       timing,
       waitFor,
+      placement,
       reviewed: raw.reviewed,
     },
   };
@@ -137,6 +142,7 @@ export async function addStep(
   config: StepConfig,
   timing: Timing,
   waitFor: WaitFor | null,
+  placement: Placement,
 ): Promise<StoredStep> {
   const raw = await invoke<RawStep>('step_add', {
     profileId,
@@ -144,6 +150,7 @@ export async function addStep(
     configJson: serializeStepConfig(config),
     timingJson: serializeTiming(timing),
     waitJson: serializeWaitFor(waitFor),
+    placeJson: serializePlacement(placement),
   });
   return toStoredStep(raw);
 }
@@ -153,12 +160,14 @@ export async function updateStep(
   config: StepConfig,
   timing: Timing,
   waitFor: WaitFor | null,
+  placement: Placement,
 ): Promise<StoredStep> {
   const raw = await invoke<RawStep>('step_update', {
     id,
     configJson: serializeStepConfig(config),
     timingJson: serializeTiming(timing),
     waitJson: serializeWaitFor(waitFor),
+    placeJson: serializePlacement(placement),
   });
   return toStoredStep(raw);
 }

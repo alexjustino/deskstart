@@ -314,7 +314,7 @@ describe('where a window lands, in a file', () => {
       name: 'A',
       steps: [
         { kind: 'url', url: 'https://example.com/', placement: { state: 'maximized' } },
-        { kind: 'folder', path: 'C:\src', timing: { holdMs: 5000 } },
+        { kind: 'folder', path: 'C:\\src', timing: { holdMs: 5000 } },
       ],
     });
     expect(result.ok).toBe(false);
