@@ -1,11 +1,17 @@
 import { describe, expect, it } from 'vitest';
 
 import { outcomeOf, plan, reduce, type Action, type RunEvent, type RunState } from './run';
+import { DEFAULT_PLACEMENT, type Placement } from './placement';
 import { PROBE_EVERY_MS, type WaitFor } from './readiness';
 import { DEFAULT_TIMING, type Timing } from './timing';
 
-function step(id: string, timing: Partial<Timing> = {}, waitFor: WaitFor | null = null) {
-  return { id, timing: { ...DEFAULT_TIMING, ...timing }, waitFor };
+function step(
+  id: string,
+  timing: Partial<Timing> = {},
+  waitFor: WaitFor | null = null,
+  placement: Placement = DEFAULT_PLACEMENT,
+) {
+  return { id, timing: { ...DEFAULT_TIMING, ...timing }, waitFor, placement };
 }
 
 /** Wait for `stepId` to have a window, with the timeout given. */
@@ -97,6 +103,9 @@ function simulate(
         feed({ kind: 'probe_result', stepId: action.stepId, ready, at: now });
         break;
       }
+      case 'place':
+        trace.push(`place ${action.stepId} @${now}`);
+        break;
       case 'ready':
         trace.push(`ready ${action.stepId} after ${action.waitedMs}`);
         break;
@@ -521,5 +530,56 @@ describe('a step that waits for another to be responding', () => {
     const begun = reduce(planned, { kind: 'begun', at: 0 }).state;
     const notWaiting = reduce(begun, { kind: 'probe_result', stepId: 'a', ready: true, at: 1 });
     expect(notWaiting.state).toBe(begun);
+  });
+});
+
+describe('placing the window a step opened', () => {
+  const ON_TWO: Placement = { monitor: 2, rect: null, state: 'maximized' };
+
+  it('asks for a placement once the step is open, and not before', () => {
+    const state = plan([step('a', {}, null, ON_TWO), step('b')], 'real');
+    const begun = reduce(state, { kind: 'begun', at: 0 });
+    expect(begun.actions).toEqual([{ kind: 'execute', stepId: 'a' }]);
+
+    const opened = reduce(begun.state, { kind: 'step_done', stepId: 'a', at: 10 });
+    expect(opened.actions).toEqual([
+      { kind: 'place', stepId: 'a', placement: ON_TWO },
+      { kind: 'execute', stepId: 'b' },
+    ]);
+  });
+
+  it('asks for nothing when the step asks for nothing', () => {
+    const state = plan([step('a')], 'real');
+    const begun = reduce(state, { kind: 'begun', at: 0 });
+    const opened = reduce(begun.state, { kind: 'step_done', stepId: 'a', at: 10 });
+    expect(opened.actions.some((action) => action.kind === 'place')).toBe(false);
+  });
+
+  it('places every opening of a step that cycles, not only the first', () => {
+    const state = plan([step('a', { holdMs: 1000, repeat: 3 }, null, ON_TWO)], 'real');
+    const { trace } = simulate(state);
+    expect(trace.filter((line) => line.startsWith('place a')).length).toBe(3);
+    // And each placement follows its own opening, never precedes it.
+    const order = trace.filter((line) => /^(execute|place) a/.test(line));
+    expect(order.map((line) => line.split(' ')[0])).toEqual([
+      'execute',
+      'place',
+      'execute',
+      'place',
+      'execute',
+      'place',
+    ]);
+  });
+
+  it('does not place a step that failed to start', () => {
+    const state = plan([step('a', {}, null, ON_TWO)], 'real');
+    const begun = reduce(state, { kind: 'begun', at: 0 });
+    const failed = reduce(begun.state, {
+      kind: 'step_failed',
+      stepId: 'a',
+      reason: 'no such program',
+      at: 10,
+    });
+    expect(failed.actions.some((action) => action.kind === 'place')).toBe(false);
   });
 });

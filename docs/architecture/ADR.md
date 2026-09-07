@@ -26,6 +26,7 @@ part that matters most later — the cost we accepted.
 | [018](#adr-018) | Folders, files and web pages open by verb on a validated target                          | Accepted |
 | [019](#adr-019) | A profile file carries positions, never identifiers                                      | Accepted |
 | [020](#adr-020) | One file at a time, through the system's own dialog                                      | Accepted |
+| [021](#adr-021) | A window is placed only if the run opened it                                             | Accepted |
 
 ---
 
@@ -341,3 +342,28 @@ the one inch of this feature the end-to-end suite does not cover: the suite driv
 commands through the export box and the import box, and the file commands have their own tests
 in `os/files.rs`. Also, `tauri-plugin-dialog` depends on `tauri-plugin-fs` as a crate; it is
 never initialised and no `fs:` permission is granted, so none of its commands can be called.
+
+## ADR-021 — A window is placed only if the run opened it {#adr-021}
+
+**Context.** "Open the editor maximised on the left screen" is half of what a setup is. The
+other half of the wish — "and put my browser there too" — is about a window that belongs to a
+process this product did not start.
+
+**Decision.** Only an **application** step is placed, and only the window of the process the run
+itself started. The host finds it by process id: one visible top-level window the process owns,
+the same question `probe` asks when another step is waiting for it. A folder, a file or a web
+page is opened by Explorer or by the browser (ADR-018) and is not touched.
+
+**Why not match windows by title.** It is the only way to reach the other windows, and it is a
+rule that eventually moves the wrong one: titles change with the document, repeat across
+windows, and are written by whatever program owns them. If it arrives it arrives as its own
+feature, with its own screen, in 1.1 — not as a quiet fallback inside placement.
+
+**How it degrades** (ADR-016). A screen the profile names and this machine has not got lands the
+window on the primary and says so on the line — a profile written at a two-screen desk opens on
+a laptop. A program that never shows a window of its own within five seconds — a stub that hands
+off, risk R2 — is a line saying that, and the run carries on. Neither is silence.
+
+**Cost accepted.** A profile cannot arrange a browser window, which is the second thing people
+will ask for. Placement also happens after the step is open, so the sequence waits for it: at
+most those five seconds, once per opening, and only for a step that asked to be placed.

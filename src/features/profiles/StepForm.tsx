@@ -9,7 +9,14 @@ import {
   type StepConfig,
   type StepKind,
 } from '@/domain/profile';
+import {
+  describePlacement,
+  readPlacement,
+  type Placement,
+  type WindowState,
+} from '@/domain/placement';
 import { DEFAULT_TIMEOUT_MS, describeWaitFor, readWaitFor, type WaitFor } from '@/domain/readiness';
+import { stepProblems } from '@/domain/step';
 import { describeTiming, readTiming, type Timing } from '@/domain/timing';
 import { Button } from '@/ui/Button';
 import { Checkbox } from '@/ui/Checkbox';
@@ -51,12 +58,27 @@ interface Draft {
   waitProbe: 'window' | 'port';
   waitPort: string;
   waitTimeoutS: string;
+  /** The screen, as a number, or '' for wherever it opens. */
+  monitor: string;
+  x: string;
+  y: string;
+  width: string;
+  height: string;
+  windowState: WindowState;
 }
 
 /** An earlier step, as the "waits for" list offers it. */
 export interface EarlierStep {
   id: string;
   title: string;
+}
+
+/** A screen, as the "where" list offers it. */
+export interface Screen {
+  number: number;
+  width: number;
+  height: number;
+  primary: boolean;
 }
 
 const EMPTY: Draft = {
@@ -74,6 +96,12 @@ const EMPTY: Draft = {
   waitProbe: 'window',
   waitPort: '',
   waitTimeoutS: String(DEFAULT_TIMEOUT_MS / 1000),
+  monitor: '',
+  x: '',
+  y: '',
+  width: '',
+  height: '',
+  windowState: 'normal',
 };
 
 function seconds(ms: number): string {
@@ -81,10 +109,15 @@ function seconds(ms: number): string {
 }
 
 function draftOf(
-  initial: { config: StepConfig; timing: Timing; waitFor: WaitFor | null } | null,
+  initial: {
+    config: StepConfig;
+    timing: Timing;
+    waitFor: WaitFor | null;
+    placement: Placement;
+  } | null,
 ): Draft {
   if (initial === null) return EMPTY;
-  const { config, timing, waitFor } = initial;
+  const { config, timing, waitFor, placement } = initial;
   const time = {
     pauseAfterS: seconds(timing.pauseAfterMs),
     holdS: timing.holdMs === null ? '' : String(timing.holdMs / 1000),
@@ -94,6 +127,12 @@ function draftOf(
     waitProbe: waitFor?.probe.kind ?? ('window' as const),
     waitPort: waitFor?.probe.kind === 'port' ? String(waitFor.probe.port) : '',
     waitTimeoutS: String((waitFor?.timeoutMs ?? DEFAULT_TIMEOUT_MS) / 1000),
+    monitor: placement.monitor === null ? '' : String(placement.monitor),
+    x: placement.rect === null ? '' : String(placement.rect.x),
+    y: placement.rect === null ? '' : String(placement.rect.y),
+    width: placement.rect === null ? '' : String(placement.rect.width),
+    height: placement.rect === null ? '' : String(placement.rect.height),
+    windowState: placement.state,
   };
   switch (config.kind) {
     case 'app':
@@ -176,9 +215,49 @@ function timingOf(draft: Draft): Record<string, unknown> | Problem[] {
   };
 }
 
+/**
+ * The draft's placement as a document; `readPlacement` decides if it is one.
+ *
+ * A rectangle is all four fields or none: half a rectangle is not a smaller
+ * ask, it is an ambiguous one — and the form says which field is missing
+ * rather than quietly filling it in.
+ */
+function placementOf(draft: Draft): Record<string, unknown> | Problem[] {
+  const corners = [draft.x, draft.y, draft.width, draft.height].map((value) => value.trim());
+  const given = corners.filter((value) => value !== '').length;
+  if (given > 0 && given < 4) {
+    return [
+      {
+        path: 'placement.rect',
+        problem: 'a rectangle needs all four of x, y, width and height, or none of them',
+      },
+    ];
+  }
+  const numbers = corners.map((value) => Number(value));
+  if (given === 4 && numbers.some((value) => !Number.isFinite(value))) {
+    return [{ path: 'placement.rect', problem: 'a rectangle is written in whole pixels' }];
+  }
+  const monitor = draft.monitor.trim();
+  return {
+    ...(monitor === '' ? {} : { monitor: Number(monitor) }),
+    ...(given === 4
+      ? {
+          rect: {
+            x: Math.round(numbers[0] as number),
+            y: Math.round(numbers[1] as number),
+            width: Math.round(numbers[2] as number),
+            height: Math.round(numbers[3] as number),
+          },
+        }
+      : {}),
+    state: draft.windowState,
+  };
+}
+
 export function StepForm({
   initial,
   earlier,
+  screens,
   env,
   pending,
   hostError,
@@ -186,14 +265,26 @@ export function StepForm({
   onCancel,
 }: {
   /** The step being edited, or null to add one. */
-  initial: { config: StepConfig; timing: Timing; waitFor: WaitFor | null } | null;
+  initial: {
+    config: StepConfig;
+    timing: Timing;
+    waitFor: WaitFor | null;
+    placement: Placement;
+  } | null;
   /** The steps before this one: the only ones it may wait for. */
   earlier: readonly EarlierStep[];
+  /** The screens this machine has, as the host numbers them. */
+  screens: readonly Screen[];
   env: Readonly<Record<string, string>>;
   pending: boolean;
   /** What the host answered when the last submit was refused, if anything. */
   hostError: string | null;
-  onSubmit: (config: StepConfig, timing: Timing, waitFor: WaitFor | null) => void;
+  onSubmit: (
+    config: StepConfig,
+    timing: Timing,
+    waitFor: WaitFor | null,
+    placement: Placement,
+  ) => void;
   onCancel?: () => void;
 }) {
   const [draft, setDraft] = useState<Draft>(() => draftOf(initial));
@@ -213,6 +304,9 @@ export function StepForm({
   const waitFor = readWaitFor(waitDocument);
   const awaitedTitle = earlier.find((s) => s.id === draft.waitStepId)?.title ?? null;
   const waitSentence = Array.isArray(waitFor) ? null : describeWaitFor(waitFor, awaitedTitle);
+  const placeDocument = placementOf(draft);
+  const placement = Array.isArray(placeDocument) ? placeDocument : readPlacement(placeDocument);
+  const placeSentence = Array.isArray(placement) ? null : describePlacement(placement);
 
   const addArgument = () => {
     if (argument === '') return;
@@ -236,13 +330,15 @@ export function StepForm({
       setProblems(timing);
       return;
     }
-    if (config.kind !== 'app' && timing.holdMs !== null) {
-      setProblems([
-        {
-          path: 'timing.holdMs',
-          problem: `only an application can be held and closed; a ${KIND_LABELS[config.kind].toLowerCase()} is opened by Windows and is not ours to close`,
-        },
-      ]);
+    if (Array.isArray(placement)) {
+      setProblems(placement);
+      return;
+    }
+    // The rules that need two parts of a step at once, asked of the form
+    // exactly as the file reader asks them of a document.
+    const together = stepProblems(config, timing, placement);
+    if (together.length > 0) {
+      setProblems(together);
       return;
     }
     if (Array.isArray(waitFor)) {
@@ -250,7 +346,7 @@ export function StepForm({
       return;
     }
     setProblems([]);
-    onSubmit(config, timing, waitFor);
+    onSubmit(config, timing, waitFor, placement);
   };
 
   const target = (() => {
@@ -469,6 +565,88 @@ export function StepForm({
         </p>
       </fieldset>
 
+      {holdable && (
+        <fieldset className="flex flex-col gap-2 rounded-md border border-stroke-subtle p-3">
+          <legend className="px-1 text-caption font-semibold text-fg-tertiary uppercase">
+            Where
+          </legend>
+          <ChoiceGroup
+            label="Opens"
+            options={['normal', 'maximized', 'minimized'] as const}
+            value={draft.windowState}
+            onChange={(windowState) => set({ windowState })}
+            labels={{ normal: 'Normal', maximized: 'Maximised', minimized: 'Minimised' }}
+            disabled={pending}
+          />
+          <div className="grid grid-cols-[minmax(0,1fr)_12rem] items-center gap-2">
+            <label htmlFor="step-monitor" className="text-body text-fg-secondary">
+              Screen
+            </label>
+            <Select
+              id="step-monitor"
+              aria-label="Screen"
+              value={draft.monitor}
+              onChange={(e) => set({ monitor: e.target.value })}
+              disabled={pending}
+            >
+              <option value="">Wherever it opens</option>
+              {screens.map((screen) => (
+                <option key={screen.number} value={String(screen.number)}>
+                  {screen.number}
+                  {screen.primary ? ' — primary' : ''} ({screen.width}×{screen.height})
+                </option>
+              ))}
+            </Select>
+            <label htmlFor="step-x" className="text-body text-fg-secondary">
+              Position and size on that screen (pixels; all four, or none)
+            </label>
+            <div className="grid grid-cols-2 gap-2">
+              <Input
+                id="step-x"
+                aria-label="X"
+                inputMode="numeric"
+                placeholder="x"
+                value={draft.x}
+                onChange={(e) => set({ x: e.target.value })}
+                disabled={pending}
+              />
+              <Input
+                aria-label="Y"
+                inputMode="numeric"
+                placeholder="y"
+                value={draft.y}
+                onChange={(e) => set({ y: e.target.value })}
+                disabled={pending}
+              />
+              <Input
+                aria-label="Width"
+                inputMode="numeric"
+                placeholder="width"
+                value={draft.width}
+                onChange={(e) => set({ width: e.target.value })}
+                disabled={pending}
+              />
+              <Input
+                aria-label="Height"
+                inputMode="numeric"
+                placeholder="height"
+                value={draft.height}
+                onChange={(e) => set({ height: e.target.value })}
+                disabled={pending}
+              />
+            </div>
+          </div>
+          <p className="text-caption text-fg-secondary">
+            {placeSentence ?? 'Opens wherever the program would have opened it.'}
+          </p>
+          {screens.length === 0 && (
+            <p className="text-caption text-caution">
+              No screen was found to offer. A step can still ask to be maximised or minimised.
+            </p>
+          )}
+        </fieldset>
+      )}
+
       {earlier.length > 0 && (
         <fieldset className="flex flex-col gap-2 rounded-md border border-stroke-subtle p-3">
           <legend className="px-1 text-caption font-semibold text-fg-tertiary uppercase">
@@ -492,17 +670,20 @@ export function StepForm({
                 </option>
               ))}
             </Select>
+          </div>
+          {draft.waitStepId !== '' && (
+            <ChoiceGroup
+              label="Responding"
+              options={['window', 'port'] as const}
+              value={draft.waitProbe}
+              onChange={(waitProbe) => set({ waitProbe })}
+              labels={{ window: 'A window', port: 'A port' }}
+              disabled={pending}
+            />
+          )}
+          <div className="grid grid-cols-[minmax(0,1fr)_12rem] items-center gap-2">
             {draft.waitStepId !== '' && (
               <>
-                <span className="text-body text-fg-secondary">Responding means</span>
-                <ChoiceGroup
-                  label="Responding means"
-                  options={['window', 'port'] as const}
-                  value={draft.waitProbe}
-                  onChange={(waitProbe) => set({ waitProbe })}
-                  labels={{ window: 'A window', port: 'A port' }}
-                  disabled={pending}
-                />
                 {draft.waitProbe === 'port' && (
                   <>
                     <label htmlFor="step-wait-port" className="text-body text-fg-secondary">

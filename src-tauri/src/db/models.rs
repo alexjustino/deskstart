@@ -33,6 +33,8 @@ pub struct Step {
     pub timing_json: String,
     /// What the step waits for before it starts (F4); `{}` is "nothing".
     pub wait_json: String,
+    /// Where its window goes once it is open (F6); `{}` is "wherever it opens".
+    pub place_json: String,
     /// Seen and accepted on this machine (ADR-013). Only import writes false.
     pub reviewed: bool,
     pub created_at: String,
@@ -53,6 +55,7 @@ pub struct ImportStep {
     pub timing_json: String,
     pub wait_on: Option<i64>,
     pub wait_json: String,
+    pub place_json: String,
 }
 
 /// The step kinds the host knows how to act on. The schema's CHECK says the same.

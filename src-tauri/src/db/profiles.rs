@@ -8,7 +8,7 @@ use crate::error::{Error, Result};
 
 const PROFILE_COLUMNS: &str = "id, name, position, imported_unreviewed, created_at, updated_at";
 const STEP_COLUMNS: &str = "id, profile_id, position, kind, config_json, timing_json, \
-     wait_json, reviewed, created_at, updated_at";
+     wait_json, place_json, reviewed, created_at, updated_at";
 
 fn read_profile(row: &rusqlite::Row<'_>) -> rusqlite::Result<Profile> {
     Ok(Profile {
@@ -30,9 +30,10 @@ fn read_step(row: &rusqlite::Row<'_>) -> rusqlite::Result<Step> {
         config_json: row.get(4)?,
         timing_json: row.get(5)?,
         wait_json: row.get(6)?,
-        reviewed: row.get::<_, i64>(7)? != 0,
-        created_at: row.get(8)?,
-        updated_at: row.get(9)?,
+        place_json: row.get(7)?,
+        reviewed: row.get::<_, i64>(8)? != 0,
+        created_at: row.get(9)?,
+        updated_at: row.get(10)?,
     })
 }
 
@@ -129,6 +130,7 @@ pub fn add_step(
     config_json: &str,
     timing_json: &str,
     wait_json: &str,
+    place_json: &str,
 ) -> Result<Step> {
     get_profile(conn, profile_id)?;
     if !STEP_KINDS.contains(&kind) {
@@ -149,8 +151,8 @@ pub fn add_step(
     let stamp = now();
     conn.execute(
         "INSERT INTO step (id, profile_id, position, kind, config_json, timing_json, wait_json,
-                           reviewed, created_at, updated_at)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, 1, ?8, ?8)",
+                           place_json, reviewed, created_at, updated_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, 1, ?9, ?9)",
         params![
             id,
             profile_id,
@@ -159,6 +161,7 @@ pub fn add_step(
             config_json,
             timing_json,
             wait_json,
+            place_json,
             stamp
         ],
     )?;
@@ -172,6 +175,7 @@ pub fn update_step(
     config_json: &str,
     timing_json: &str,
     wait_json: &str,
+    place_json: &str,
 ) -> Result<Step> {
     if serde_json::from_str::<serde_json::Value>(config_json).is_err() {
         return Err(Error::InvalidInput("the step configuration is not valid"));
@@ -180,9 +184,10 @@ pub fn update_step(
         return Err(Error::InvalidInput("the step timing is not valid"));
     }
     let changed = conn.execute(
-        "UPDATE step SET config_json = ?2, timing_json = ?3, wait_json = ?4, updated_at = ?5
+        "UPDATE step SET config_json = ?2, timing_json = ?3, wait_json = ?4, place_json = ?5,
+                        updated_at = ?6
          WHERE id = ?1",
-        params![id, config_json, timing_json, wait_json, now()],
+        params![id, config_json, timing_json, wait_json, place_json, now()],
     )?;
     if changed == 0 {
         return Err(Error::NotFound);
@@ -218,7 +223,12 @@ pub fn import_profile(conn: &mut Connection, name: &str, steps: &[ImportStep]) -
         if !STEP_KINDS.contains(&step.kind.as_str()) {
             return Err(Error::InvalidInput("that kind of step does not exist"));
         }
-        for json in [&step.config_json, &step.timing_json, &step.wait_json] {
+        for json in [
+            &step.config_json,
+            &step.timing_json,
+            &step.wait_json,
+            &step.place_json,
+        ] {
             if serde_json::from_str::<serde_json::Value>(json).is_err() {
                 return Err(Error::InvalidInput("the step could not be read"));
             }
@@ -267,8 +277,8 @@ pub fn import_profile(conn: &mut Connection, name: &str, steps: &[ImportStep]) -
         };
         tx.execute(
             "INSERT INTO step (id, profile_id, position, kind, config_json, timing_json, wait_json,
-                               reviewed, created_at, updated_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, 0, ?8, ?8)",
+                               place_json, reviewed, created_at, updated_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, 0, ?9, ?9)",
             params![
                 ids[index],
                 profile_id,
@@ -277,6 +287,7 @@ pub fn import_profile(conn: &mut Connection, name: &str, steps: &[ImportStep]) -
                 step.config_json,
                 step.timing_json,
                 wait_json,
+                step.place_json,
                 stamp
             ],
         )?;
@@ -387,6 +398,7 @@ mod tests {
                 None => "{}".to_string(),
                 Some(_) => r#"{"probe":{"kind":"window"},"timeoutMs":9000}"#.to_string(),
             },
+            place_json: "{}".to_string(),
         }
     }
 
@@ -431,6 +443,7 @@ mod tests {
             r#"{"program":"a.exe","args":[]}"#,
             "{}",
             "{}",
+            "{}",
         )
         .unwrap();
         let b = add_step(
@@ -438,6 +451,7 @@ mod tests {
             &profile.id,
             "app",
             r#"{"program":"b.exe","args":[]}"#,
+            "{}",
             "{}",
             "{}",
         )
@@ -454,15 +468,15 @@ mod tests {
         let conn = memory();
         let profile = create_profile(&conn, "Morning").unwrap();
         assert!(matches!(
-            add_step(&conn, &profile.id, "app", "not json", "{}", "{}"),
+            add_step(&conn, &profile.id, "app", "not json", "{}", "{}", "{}"),
             Err(Error::InvalidInput(_))
         ));
         assert!(matches!(
-            add_step(&conn, &profile.id, "shortcut", "{}", "{}", "{}"),
+            add_step(&conn, &profile.id, "shortcut", "{}", "{}", "{}", "{}"),
             Err(Error::InvalidInput(_))
         ));
         assert!(matches!(
-            add_step(&conn, "missing", "app", "{}", "{}", "{}"),
+            add_step(&conn, "missing", "app", "{}", "{}", "{}", "{}"),
             Err(Error::NotFound)
         ));
     }
@@ -478,6 +492,7 @@ mod tests {
             r#"{"program":"a.exe"}"#,
             "{}",
             "{}",
+            "{}",
         )
         .unwrap();
         let b = add_step(
@@ -487,6 +502,7 @@ mod tests {
             r#"{"url":"https://b"}"#,
             "{}",
             "{}",
+            "{}",
         )
         .unwrap();
         let c = add_step(
@@ -494,6 +510,7 @@ mod tests {
             &profile.id,
             "folder",
             r#"{"path":"C:/c"}"#,
+            "{}",
             "{}",
             "{}",
         )
@@ -643,8 +660,42 @@ mod tests {
             r#"{"program":"a.exe","args":[]}"#,
             "{}",
             "{}",
+            "{}",
         )
         .unwrap();
         assert!(step.reviewed);
+    }
+
+    #[test]
+    fn a_step_keeps_where_its_window_goes() {
+        let conn = memory();
+        let profile = create_profile(&conn, "Morning").unwrap();
+        let place = r#"{"monitor":2,"state":"maximized"}"#;
+        let step = add_step(
+            &conn,
+            &profile.id,
+            "app",
+            r#"{"program":"a.exe","args":[]}"#,
+            "{}",
+            "{}",
+            place,
+        )
+        .unwrap();
+        assert_eq!(step.place_json, place);
+        assert_eq!(get_step(&conn, &step.id).unwrap().place_json, place);
+
+        // And an edit that says nothing about the window still says something:
+        // the column is written every time, so "back to wherever it opens" is
+        // a change the row can hold.
+        let cleared = update_step(
+            &conn,
+            &step.id,
+            r#"{"program":"a.exe","args":[]}"#,
+            "{}",
+            "{}",
+            "{}",
+        )
+        .unwrap();
+        assert_eq!(cleared.place_json, "{}");
     }
 }

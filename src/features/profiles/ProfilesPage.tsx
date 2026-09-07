@@ -26,6 +26,7 @@ import {
   useEnvironment,
   useEvents,
   useExecuteProfile,
+  useMonitors,
   useMoveStep,
   useProfiles,
   useRuns,
@@ -42,6 +43,7 @@ import {
   type StepKind,
 } from '@/domain/profile';
 import type { Mode } from '@/domain/run';
+import { describePlacement } from '@/domain/placement';
 import { describeWaitFor, waitForProblems } from '@/domain/readiness';
 import { reviewState } from '@/domain/review';
 import { describeTiming } from '@/domain/timing';
@@ -59,7 +61,7 @@ import { ExportProfile } from './ExportProfile';
 import { ImportProfile } from './ImportProfile';
 import { ReviewSteps } from './ReviewSteps';
 import { KIND_LABELS } from './kinds';
-import { StepForm, type EarlierStep } from './StepForm';
+import { StepForm, type EarlierStep, type Screen } from './StepForm';
 
 /**
  * Profiles: the list on the left, the selected profile on the right, and the
@@ -200,6 +202,7 @@ interface Judged {
 function ProfileDetail({ profile }: { profile: Profile }) {
   const steps = useSteps(profile.id);
   const environment = useEnvironment();
+  const screens = useMonitors();
   const runs = useRuns(profile.id);
   const execute = useExecuteProfile();
   const remove = useDeleteProfile();
@@ -367,8 +370,19 @@ function ProfileDetail({ profile }: { profile: Profile }) {
         <ReviewSteps profile={profile} steps={steps.data ?? []} env={env} review={review} />
       ) : (
         <Card title="Steps" description="What this profile opens, in this order.">
-          <StepList profileId={profile.id} judged={judged} env={env} busy={execute.isPending} />
-          <AddStep profileId={profile.id} env={env} earlier={titlesOf(judged, env)} />
+          <StepList
+            profileId={profile.id}
+            judged={judged}
+            env={env}
+            screens={screens.data ?? []}
+            busy={execute.isPending}
+          />
+          <AddStep
+            profileId={profile.id}
+            env={env}
+            earlier={titlesOf(judged, env)}
+            screens={screens.data ?? []}
+          />
         </Card>
       )}
 
@@ -479,11 +493,13 @@ function StepList({
   profileId,
   judged,
   env,
+  screens,
   busy,
 }: {
   profileId: string;
   judged: Judged[];
   env: Readonly<Record<string, string>>;
+  screens: readonly Screen[];
   busy: boolean;
 }) {
   const remove = useDeleteStep();
@@ -551,6 +567,11 @@ function StepList({
                       {describeTiming(step.timing)}
                     </span>
                   )}
+                  {describePlacement(step.placement) && (
+                    <span className="block text-caption text-fg-secondary">
+                      {describePlacement(step.placement)}
+                    </span>
+                  )}
                   {problems.length > 0 && (
                     <span className="block text-caption text-danger">
                       {problems.map((p) => p.problem).join('; ')}
@@ -594,15 +615,21 @@ function StepList({
               <div className="pb-2 pl-9">
                 <StepForm
                   key={id}
-                  initial={{ config: step.config, timing: step.timing, waitFor: step.waitFor }}
+                  initial={{
+                    config: step.config,
+                    timing: step.timing,
+                    waitFor: step.waitFor,
+                    placement: step.placement,
+                  }}
                   earlier={titlesOf(judged.slice(0, index), env)}
+                  screens={screens}
                   env={env}
                   pending={update.isPending}
                   hostError={update.isError ? describeError(update.error) : null}
                   onCancel={() => setEditingId(null)}
-                  onSubmit={(config, timing, waitFor) =>
+                  onSubmit={(config, timing, waitFor, placement) =>
                     update.mutate(
-                      { id, profileId, config, timing, waitFor },
+                      { id, profileId, config, timing, waitFor, placement },
                       {
                         onSuccess: () => {
                           setEditingId(null);
@@ -625,10 +652,12 @@ function AddStep({
   profileId,
   env,
   earlier,
+  screens,
 }: {
   profileId: string;
   env: Readonly<Record<string, string>>;
   earlier: readonly EarlierStep[];
+  screens: readonly Screen[];
 }) {
   const add = useAddStep();
   // A new key after every success gives the form a clean slate.
@@ -638,12 +667,13 @@ function AddStep({
       key={generation}
       initial={null}
       earlier={earlier}
+      screens={screens}
       env={env}
       pending={add.isPending}
       hostError={add.isError ? describeError(add.error) : null}
-      onSubmit={(config, timing, waitFor) =>
+      onSubmit={(config, timing, waitFor, placement) =>
         add.mutate(
-          { profileId, config, timing, waitFor },
+          { profileId, config, timing, waitFor, placement },
           {
             onSuccess: () => {
               setGeneration((g) => g + 1);

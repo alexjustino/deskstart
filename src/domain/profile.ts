@@ -14,6 +14,7 @@
  * resolution.
  */
 
+import type { Placement } from './placement';
 import type { WaitFor } from './readiness';
 import type { Timing } from './timing';
 
@@ -59,6 +60,8 @@ export interface Step {
   timing: Timing;
   /** What must be responding before this step starts, or null to start at once. */
   waitFor: WaitFor | null;
+  /** Where its window goes once it is open (F6); the default asks for nothing. */
+  placement: Placement;
   /**
    * Seen and accepted on this machine (ADR-013). A step written here is
    * accepted the moment it is written; a step that arrived in a file is not.

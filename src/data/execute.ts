@@ -29,6 +29,7 @@ import {
   runStop,
   stepClose,
   stepExecute,
+  stepPlace,
   stepProbe,
   stepReady,
   stepSkipped,
@@ -123,7 +124,12 @@ export async function executeProfile(
   };
 
   let state = plan(
-    steps.map((step) => ({ id: step.id, timing: step.timing, waitFor: step.waitFor })),
+    steps.map((step) => ({
+      id: step.id,
+      timing: step.timing,
+      waitFor: step.waitFor,
+      placement: step.placement,
+    })),
     mode,
   );
   // The dry run's clock; the real run reads the host's timestamps.
@@ -210,6 +216,11 @@ export async function executeProfile(
         feed({ kind: 'probe_result', stepId: step.id, ready, at: now() });
         break;
       }
+      case 'place':
+        // The host looks for the window and writes what it did; a dry run gets
+        // the same call and answers `would_place` without touching anything.
+        onLine(await stepPlace(run.id, action.stepId, action.placement));
+        break;
       case 'ready':
         if (!dry) onLine(await stepReady(run.id, action.stepId, action.waitedMs));
         break;

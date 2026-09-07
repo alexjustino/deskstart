@@ -30,7 +30,9 @@ import {
   type StepConfig,
   type StepKind,
 } from './profile';
+import { readPlacement, serializePlacement, type Placement } from './placement';
 import { DEFAULT_TIMEOUT_MS, readProbe, type Probe } from './readiness';
+import { stepProblems } from './step';
 import { readTiming, serializeTiming, type Timing } from './timing';
 
 /** What a step waits for, in a document: a position, not an identity. */
@@ -41,11 +43,12 @@ export interface PortableWait {
   timeoutMs: number;
 }
 
-/** A step in a document: what it opens, its time, and what it waits for. */
+/** A step in a document: what it opens, its time, what it waits for, where it lands. */
 export interface PortableStep {
   config: StepConfig;
   timing: Timing;
   waitFor: PortableWait | null;
+  placement: Placement;
 }
 
 /** A profile in a document: no identifiers, only what it means. */
@@ -124,7 +127,7 @@ function readPortableWait(
  */
 function readPortableStep(value: unknown, index: number, path: string): PortableStep | Problem[] {
   if (!isRecord(value)) return [{ path, problem: 'a step must be an object' }];
-  const { timing: timingValue, waitFor: waitValue, ...rest } = value;
+  const { timing: timingValue, waitFor: waitValue, placement: placeValue, ...rest } = value;
 
   const problems: Problem[] = [];
   const config = readStepConfig(rest, path);
@@ -136,14 +139,26 @@ function readPortableStep(value: unknown, index: number, path: string): Portable
   const waitFor = readPortableWait(waitValue, index, `${path}.waitFor`);
   if (Array.isArray(waitFor)) problems.push(...waitFor);
 
+  const placement = readPlacement(placeValue, `${path}.placement`);
+  if (Array.isArray(placement)) problems.push(...placement);
+
   if (
     problems.length > 0 ||
     Array.isArray(config) ||
     Array.isArray(timing) ||
-    Array.isArray(waitFor)
+    Array.isArray(waitFor) ||
+    Array.isArray(placement)
   )
     return problems;
-  return { config, timing, waitFor };
+  // The rules that need two parts of a step at once — a folder that would be
+  // held, a web page that would be placed — asked of the file exactly as the
+  // editor asks them of the form.
+  const together = stepProblems(config, timing, placement).map((problem) => ({
+    ...problem,
+    path: `${path}.${problem.path}`,
+  }));
+  if (together.length > 0) return together;
+  return { config, timing, waitFor, placement };
 }
 
 /**
@@ -205,7 +220,7 @@ export function readPortableProfile(input: unknown): ReadResult {
 }
 
 /** A stored profile as far as export is concerned. */
-export type Exportable = Pick<Step, 'id' | 'config' | 'timing' | 'waitFor'>;
+export type Exportable = Pick<Step, 'id' | 'config' | 'timing' | 'waitFor' | 'placement'>;
 
 /**
  * Write a profile as a document: identifiers dropped, positions in their
@@ -229,6 +244,8 @@ export function writePortableProfile(name: string, steps: readonly Exportable[])
       };
       const timing = JSON.parse(serializeTiming(step.timing)) as Record<string, unknown>;
       if (Object.keys(timing).length > 0) entry.timing = timing;
+      const placement = JSON.parse(serializePlacement(step.placement)) as Record<string, unknown>;
+      if (Object.keys(placement).length > 0) entry.placement = placement;
       const awaited = step.waitFor === null ? undefined : positions.get(step.waitFor.stepId);
       if (step.waitFor !== null && awaited !== undefined && awaited < at + 1) {
         entry.waitFor = {
@@ -269,6 +286,7 @@ export interface StepImport {
   waitOn: number | null;
   /** The wait without its step: the host adds the identity it just created. */
   waitJson: string;
+  placeJson: string;
 }
 
 /** Turn a read document into what the import command stores, in order. */
@@ -282,6 +300,7 @@ export function toImports(profile: PortableProfile): StepImport[] {
       step.waitFor === null
         ? '{}'
         : JSON.stringify({ probe: step.waitFor.probe, timeoutMs: step.waitFor.timeoutMs }),
+    placeJson: serializePlacement(step.placement),
   }));
 }
 

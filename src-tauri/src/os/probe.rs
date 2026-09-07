@@ -23,36 +23,9 @@ const CONNECT_TIMEOUT: Duration = Duration::from_millis(200);
 /// Does the process own a visible top-level window?
 #[cfg(windows)]
 pub fn has_window(pid: u32) -> bool {
-    use windows::Win32::Foundation::{BOOL, HWND, LPARAM};
-    use windows::Win32::UI::WindowsAndMessaging::{
-        EnumWindows, GetWindow, GetWindowThreadProcessId, IsWindowVisible, GW_OWNER,
-    };
-
-    struct Search {
-        pid: u32,
-        found: bool,
-    }
-
-    unsafe extern "system" fn visit(hwnd: HWND, lparam: LPARAM) -> BOOL {
-        // SAFETY: lparam is the pointer to `Search` passed below, alive for the call.
-        let search = &mut *(lparam.0 as *mut Search);
-        let mut owner_pid = 0u32;
-        GetWindowThreadProcessId(hwnd, Some(&mut owner_pid));
-        let top_level = GetWindow(hwnd, GW_OWNER)
-            .map(|h| h.0.is_null())
-            .unwrap_or(true);
-        if owner_pid == search.pid && IsWindowVisible(hwnd).as_bool() && top_level {
-            search.found = true;
-            return BOOL(0); // stop: one is enough
-        }
-        BOOL(1)
-    }
-
-    let mut search = Search { pid, found: false };
-    // SAFETY: the callback only reads window properties and writes into the
-    // `search` this stack owns, which outlives the enumeration.
-    let _ = unsafe { EnumWindows(Some(visit), LPARAM(&mut search as *mut Search as isize)) };
-    search.found
+    // The same window this machine would place (F6): one visible top-level
+    // window the process owns. One question, one answer, one implementation.
+    crate::os::window::main_window(pid).is_some()
 }
 
 #[cfg(not(windows))]

@@ -18,12 +18,13 @@ import type { StepImport } from '@/domain/portable';
 import type { Step, StepConfig } from '@/domain/profile';
 import type { Mode } from '@/domain/run';
 import type { WaitFor } from '@/domain/readiness';
+import type { Placement } from '@/domain/placement';
 import type { Timing } from '@/domain/timing';
 
 import { executeProfile, Stopper, type Runnable } from './execute';
 import * as profileApi from './profiles';
 import * as runApi from './runs';
-import { fetchEnvironment } from './system';
+import { fetchEnvironment, fetchMonitors } from './system';
 
 export const keys = {
   profiles: ['profiles'] as const,
@@ -31,6 +32,7 @@ export const keys = {
   runs: (profileId: string | null) => ['runs', profileId] as const,
   events: (runId: string) => ['events', runId] as const,
   environment: ['environment'] as const,
+  monitors: ['monitors'] as const,
 };
 
 export function useProfiles() {
@@ -40,6 +42,11 @@ export function useProfiles() {
 /** The allow-listed environment. Read once: it does not change while the window is open. */
 export function useEnvironment() {
   return useQuery({ queryKey: keys.environment, queryFn: fetchEnvironment });
+}
+
+/** The screens this machine has. Read once: the editor offers them by number. */
+export function useMonitors() {
+  return useQuery({ queryKey: keys.monitors, queryFn: fetchMonitors });
 }
 
 export function useCreateProfile() {
@@ -118,12 +125,14 @@ export function useAddStep() {
       config,
       timing,
       waitFor,
+      placement,
     }: {
       profileId: string;
       config: StepConfig;
       timing: Timing;
       waitFor: WaitFor | null;
-    }) => profileApi.addStep(profileId, config, timing, waitFor),
+      placement: Placement;
+    }) => profileApi.addStep(profileId, config, timing, waitFor, placement),
     onSuccess: (_step, { profileId }) =>
       client.invalidateQueries({ queryKey: keys.steps(profileId) }),
   });
@@ -137,13 +146,15 @@ export function useUpdateStep() {
       config,
       timing,
       waitFor,
+      placement,
     }: {
       id: string;
       profileId: string;
       config: StepConfig;
       timing: Timing;
       waitFor: WaitFor | null;
-    }) => profileApi.updateStep(id, config, timing, waitFor),
+      placement: Placement;
+    }) => profileApi.updateStep(id, config, timing, waitFor, placement),
     onSuccess: (_step, { profileId }) =>
       client.invalidateQueries({ queryKey: keys.steps(profileId) }),
   });
