@@ -56,8 +56,21 @@ suppresses a UAC prompt and never answers one.
 
 Nothing, until you have looked at it (ADR-013). An imported profile is stored flagged as
 unreviewed; in that state the host refuses to run it and no trigger can bind to it. The review
-screen shows every step with its resolved path and its arguments as a list, and you accept
-each one. Import is a later slice; the refusal is in the host from the first one.
+screen shows every step with its **resolved, absolute** path — what will run, not what it was
+written as — its arguments one per line, and the plain sentence for what actually starts it. You
+accept each step, or delete it; the flag clears only when nothing is left unaccepted, and it
+survives a restart because acceptance is on disk, not in the window.
+
+The gate is asked three times over: the Run button is disabled, the execution loop asks the
+domain before it opens a run, and the host refuses a profile that is still flagged.
+
+**How a file is read.** Deskstart has no filesystem plugin (ADR-020). The system's own dialog
+returns one path the person chose, and one host command reads exactly that path — nothing in
+the product can enumerate a directory or follow a path it was not handed. A file that is not a
+file, is larger than 1 MiB, or is not UTF-8 is refused with a sentence before a parser sees a
+byte. What is read is then judged by the same reader the editor uses: unknown fields are
+refused rather than ignored, so a newer document cannot smuggle behaviour into an older
+reader.
 
 Command-line triggers take a profile **id**, never a file path: a scheduled task or a shortcut
 can only run what is already in your workspace and already reviewed.
