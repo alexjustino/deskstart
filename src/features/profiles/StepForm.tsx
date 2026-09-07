@@ -570,6 +570,14 @@ export function StepForm({
           <legend className="px-1 text-caption font-semibold text-fg-tertiary uppercase">
             Where
           </legend>
+          <ChoiceGroup
+            label="Opens"
+            options={['normal', 'maximized', 'minimized'] as const}
+            value={draft.windowState}
+            onChange={(windowState) => set({ windowState })}
+            labels={{ normal: 'Normal', maximized: 'Maximised', minimized: 'Minimised' }}
+            disabled={pending}
+          />
           <div className="grid grid-cols-[minmax(0,1fr)_12rem] items-center gap-2">
             <label htmlFor="step-monitor" className="text-body text-fg-secondary">
               Screen
@@ -589,15 +597,6 @@ export function StepForm({
                 </option>
               ))}
             </Select>
-            <span className="text-body text-fg-secondary">Opens</span>
-            <ChoiceGroup
-              label="Window state"
-              options={['normal', 'maximized', 'minimized'] as const}
-              value={draft.windowState}
-              onChange={(windowState) => set({ windowState })}
-              labels={{ normal: 'Normal', maximized: 'Maximised', minimized: 'Minimised' }}
-              disabled={pending}
-            />
             <label htmlFor="step-x" className="text-body text-fg-secondary">
               Position and size on that screen (pixels; all four, or none)
             </label>
@@ -671,17 +670,20 @@ export function StepForm({
                 </option>
               ))}
             </Select>
+          </div>
+          {draft.waitStepId !== '' && (
+            <ChoiceGroup
+              label="Responding"
+              options={['window', 'port'] as const}
+              value={draft.waitProbe}
+              onChange={(waitProbe) => set({ waitProbe })}
+              labels={{ window: 'A window', port: 'A port' }}
+              disabled={pending}
+            />
+          )}
+          <div className="grid grid-cols-[minmax(0,1fr)_12rem] items-center gap-2">
             {draft.waitStepId !== '' && (
               <>
-                <span className="text-body text-fg-secondary">Responding means</span>
-                <ChoiceGroup
-                  label="Responding means"
-                  options={['window', 'port'] as const}
-                  value={draft.waitProbe}
-                  onChange={(waitProbe) => set({ waitProbe })}
-                  labels={{ window: 'A window', port: 'A port' }}
-                  disabled={pending}
-                />
                 {draft.waitProbe === 'port' && (
                   <>
                     <label htmlFor="step-wait-port" className="text-body text-fg-secondary">
