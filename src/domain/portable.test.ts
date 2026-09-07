@@ -8,6 +8,7 @@ import {
   writePortableProfile,
   type Exportable,
 } from './portable';
+import { DEFAULT_PLACEMENT } from './placement';
 import { DEFAULT_TIMEOUT_MS } from './readiness';
 import { DEFAULT_TIMING } from './timing';
 
@@ -20,6 +21,7 @@ function stored(id: string, over: Partial<Exportable> = {}): Exportable {
     config: { kind: 'app', program: NOTEPAD, args: [], workingDir: null },
     timing: { ...DEFAULT_TIMING },
     waitFor: null,
+    placement: { ...DEFAULT_PLACEMENT },
     ...over,
   };
 }
@@ -257,6 +259,7 @@ describe('writing a profile document', () => {
     expect(file).not.toContain('01927f7e');
     expect(file).not.toContain('timing');
     expect(file).not.toContain('waitFor');
+    expect(file).not.toContain('placement');
     expect(file.endsWith('\n')).toBe(true);
     // Readable by a person, and by `git diff`.
     expect(file.split('\n').length).toBeGreaterThan(3);
@@ -290,6 +293,39 @@ describe('writing a profile document', () => {
   });
 });
 
+describe('where a window lands, in a file', () => {
+  it('carries a placement out and back', () => {
+    const steps: Exportable[] = [
+      stored('a', { placement: { monitor: 2, rect: null, state: 'maximized' } }),
+    ];
+    const read = readPortableProfile(writePortableProfile('Dev', steps));
+    expect(read.ok).toBe(true);
+    if (read.ok)
+      expect(read.profile.steps[0]?.placement).toEqual({
+        monitor: 2,
+        rect: null,
+        state: 'maximized',
+      });
+  });
+
+  it('refuses a document that would place a window this product does not own', () => {
+    const result = readPortableProfile({
+      schemaVersion: 1,
+      name: 'A',
+      steps: [
+        { kind: 'url', url: 'https://example.com/', placement: { state: 'maximized' } },
+        { kind: 'folder', path: 'C:\src', timing: { holdMs: 5000 } },
+      ],
+    });
+    expect(result.ok).toBe(false);
+    if (!result.ok)
+      expect(result.problems.map((p) => p.path)).toEqual([
+        'steps[0].placement',
+        'steps[1].timing.holdMs',
+      ]);
+  });
+});
+
 describe('what the host is asked to store', () => {
   it('turns a document into steps in order, waits named by position', () => {
     const read = readPortableProfile({
@@ -313,6 +349,7 @@ describe('what the host is asked to store', () => {
         timingJson: JSON.stringify({ pauseAfterMs: 2000 }),
         waitOn: null,
         waitJson: '{}',
+        placeJson: '{}',
       },
       {
         kind: 'url',
@@ -320,6 +357,7 @@ describe('what the host is asked to store', () => {
         timingJson: '{}',
         waitOn: 1,
         waitJson: JSON.stringify({ probe: { kind: 'window' }, timeoutMs: 9000 }),
+        placeJson: '{}',
       },
     ]);
   });

@@ -24,6 +24,7 @@
  * and the profile carries on.
  */
 
+import { isPlaced, type Placement } from './placement';
 import { PROBE_EVERY_MS, type Probe, type WaitFor } from './readiness';
 import { describeDuration, type Timing } from './timing';
 
@@ -36,6 +37,8 @@ export interface PlannedStep {
   timing: Timing;
   /** What must be responding before this step starts, or null to start at once. */
   waitFor: WaitFor | null;
+  /** Where its window goes once it is open (F6); the default asks for nothing. */
+  placement: Placement;
 }
 
 export type StepResult = 'ok' | 'failed' | 'skipped';
@@ -74,6 +77,12 @@ export type Action =
   | { kind: 'skip'; stepId: string; reason: string }
   /** What this step waited for is responding; say so in the log. */
   | { kind: 'ready'; stepId: string; waitedMs: number }
+  /**
+   * Put this step's window where the step says. Asked once per opening, so a
+   * step that cycles is placed every time it comes back; the host waits a
+   * moment for the window and says what it could and could not do.
+   */
+  | { kind: 'place'; stepId: string; placement: Placement }
   | { kind: 'wait_until'; at: number; reason: WaitReason }
   | { kind: 'finish'; outcome: Outcome };
 
@@ -182,6 +191,11 @@ export function reduce(state: RunState, event: RunEvent): Next {
           openedAt: { ...next.openedAt, [step.id]: event.at },
           results: { ...next.results, [step.id]: next.results[step.id] ?? 'ok' },
         };
+        // The window exists now, or is about to: placing it is the next thing
+        // that happens to this step, before the sequence moves on.
+        if (isPlaced(step.placement)) {
+          actions.push({ kind: 'place', stepId: step.id, placement: step.placement });
+        }
         if (step.timing.holdMs !== null) {
           next = withTimer(next, {
             stepId: step.id,
