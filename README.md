@@ -17,7 +17,7 @@ No cloud. No account. No telemetry. No shell.
 
 > **Status: early.** Deskstart is being built in public, one vertical slice at a time. What
 > exists today is the foundation (F0), the profile editor (F1), time (F2), Stop (F3),
-> waiting (F4), the file (F5) and the window (F6):
+> waiting (F4), the file (F5), the window (F6) and the tools (F7):
 > profiles of applications, folders, files and web pages, with pauses, holds and cycles; a Run
 > button that really opens them and really closes them when their time is up; a Stop that
 > closes what the run opened and nothing else; and a log that really says what happened. Everything else on this page is marked as planned. Installers arrive with the
@@ -43,7 +43,8 @@ twenty minutes, then close it" and "open, close, reopen" are first-class, not a 
 
 - **Profiles** of steps, edited in one form: an **application** (program path, arguments as
   a list, working directory), a **folder** (opened in Explorer), a **file** (opened with what
-  Windows associates with it), a **web page** (`http`/`https`, in the default browser). Paths
+  Windows associates with it), a **web page** (`http`/`https`, in the default browser), a
+  **bookmark folder**, a **terminal** and an **editor** (F7, below). Paths
   may use `%USERPROFILE%` and five other allow-listed names; the row shows the path as written
   and what it became.
 - **Run.** Each step is started in order from an argument vector — never through a shell —
@@ -64,6 +65,10 @@ twenty minutes, then close it" and "open, close, reopen" are first-class, not a 
   dialog or pasted in. An imported profile **runs nothing** until every one of its steps has
   been read and accepted, each shown with its path resolved absolute and each argument on its
   own line.
+- **Steps that call a tool.** A **bookmark folder** — Chrome's or Edge's — opened as one
+  browser window; **Windows Terminal** on a named profile, in a directory; a folder opened in
+  **VS Code**. Each tool is found where Windows installs it, never on `PATH`, and a tool this
+  machine has not got is a reason you can read rather than a step that quietly does nothing.
 - **Where the window goes.** A step can open its program on a chosen screen, at a chosen
   rectangle, normal, maximised or minimised. A screen this machine has not got lands the window
   on the primary and says so; a program that shows no window of its own says that.
@@ -78,14 +83,13 @@ twenty minutes, then close it" and "open, close, reopen" are first-class, not a 
 
 ## What is planned
 
-| Slice | What                                                        |
-| ----- | ----------------------------------------------------------- |
-| F7    | Context steps: a bookmark folder, Windows Terminal, VS Code |
-| F8    | Virtual machines: Hyper-V, VirtualBox, VMware Workstation   |
-| F9    | Triggers: schedule via Task Scheduler, global shortcut      |
-| F10   | Settings, Diagnostics, About, backup                        |
-| F11   | Fluent polish and accessibility                             |
-| F12   | Release 1.0.0                                               |
+| Slice | What                                                      |
+| ----- | --------------------------------------------------------- |
+| F8    | Virtual machines: Hyper-V, VirtualBox, VMware Workstation |
+| F9    | Triggers: schedule via Task Scheduler, global shortcut    |
+| F10   | Settings, Diagnostics, About, backup                      |
+| F11   | Fluent polish and accessibility                           |
+| F12   | Release 1.0.0                                             |
 
 The specification, with a proof of done per slice, is [`docs/SPEC.md`](docs/SPEC.md).
 

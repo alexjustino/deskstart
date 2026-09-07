@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added — F7, the steps that call a tool
+
+- A **bookmark folder** step: every page directly in a Chrome or Edge folder, opened as one
+  browser window. The folder is named as a person would name it, and matched without regard to
+  case; a folder that is not there says which folders are.
+- A **terminal** step: Windows Terminal, on a named profile, in a directory.
+- An **editor** step: a folder or workspace opened in VS Code.
+- Tools are found where Windows installs them and never on `PATH`. A tool that is not installed
+  is said in the editor while the step is written, and again in the log when a run reaches it.
+- Migration **006** widens the kinds a step may be.
+
+### Fixed
+
+- The step editor's kind row pushed its last option off the card once there were seven kinds;
+  it is a list now. Found by looking at the capture.
+
 ### Added — F6, where the window goes
 
 - A step can say which **screen** its window opens on, **where** on that screen, and whether it
