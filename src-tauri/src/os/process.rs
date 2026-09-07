@@ -40,6 +40,9 @@ pub enum LaunchFailure {
     /// Windows refused because the program needs administrator rights
     /// (`ERROR_ELEVATION_REQUIRED`). Never retried silently.
     ElevationRequired,
+    /// A tool this product knows how to call is not installed here (F7).
+    /// Not a path: it was looked for in every place it is normally installed.
+    ToolMissing(&'static str),
     Os {
         code: Option<i32>,
         message: String,
@@ -65,6 +68,9 @@ impl LaunchFailure {
             LaunchFailure::ElevationRequired => {
                 "the program needs administrator rights; Deskstart does not elevate on its own"
                     .to_string()
+            }
+            LaunchFailure::ToolMissing(name) => {
+                format!("{name} is not installed where this product looks for it")
             }
             LaunchFailure::Os { code, message } => match code {
                 Some(code) => format!("Windows could not start it (error {code}): {message}"),

@@ -22,7 +22,7 @@ use tauri::State;
 use crate::db::models::{Event, Launch, Run};
 use crate::db::{profiles, runs, Db};
 use crate::error::{Error, Result};
-use crate::os::{close, job, open, probe, process, window};
+use crate::os::{close, job, open, probe, process, tools, window};
 
 /// What the host holds for one run that has not finished.
 #[derive(Default)]
@@ -166,6 +166,40 @@ pub fn step_execute(
             open::file(&PathBuf::from(path)).map(|opened| ("opened", opened.pid))
         }
         Launch::Url { url, .. } => open::url(url).map(|opened| ("opened", opened.pid)),
+        Launch::Tool { tool, args, .. } => match tools::find(tool) {
+            None => Err(process::LaunchFailure::ToolMissing(tools::name_of(tool))),
+            Some(program) => process::spawn(&process::Launch {
+                program,
+                args: args.clone(),
+                working_dir: None,
+            })
+            .map(|spawned| {
+                // Held and put in the run's job like any other program this
+                // product starts: what a Stop reaches is what the run opened,
+                // whatever it was opened with (ADR-015).
+                let mut held = held.0.lock().expect("the held lock was poisoned");
+                let hold = held.entry(run_id.clone()).or_default();
+                if let Some(job) = &hold.job {
+                    if let Err(failure) = job.assign(&spawned.child) {
+                        log::warn!(
+                            "pid {} not assigned to the run's job: {}",
+                            spawned.pid,
+                            failure.0
+                        );
+                        payload["inJob"] = serde_json::json!(false);
+                    }
+                }
+                hold.children.insert(step_id.clone(), spawned.child);
+                ("opened", Some(spawned.pid))
+            }),
+        },
+        // The loop resolves a bookmark folder into pages before it asks for
+        // anything to be opened; arriving here means it did not.
+        Launch::Bookmarks { .. } => {
+            return Err(Error::InvalidInput(
+                "a bookmark folder must be read before it can be opened",
+            ))
+        }
     };
 
     match outcome {
@@ -568,4 +602,30 @@ pub fn step_place(
         },
         &serde_json::json!({ "detail": report.detail, "note": report.note }),
     )
+}
+
+/// Write the line for a step that could not start, when the loop is what found
+/// out (F7).
+///
+/// The host writes every other failure itself, because it is what tried. A
+/// bookmark folder is different: the reading happens in the domain, between the
+/// file and the browser, so the loop is where "there is no folder called that"
+/// becomes known — and the log still gets it in the same shape, before the
+/// screen does.
+#[tauri::command]
+pub fn step_failed(
+    db: State<'_, Db>,
+    run_id: String,
+    step_id: String,
+    launch: Launch,
+    reason: String,
+) -> Result<Event> {
+    let mut conn = db.0.lock().expect("the database lock was poisoned");
+    let run = runs::get_run(&conn, &run_id)?;
+    if run.finished_at.is_some() {
+        return Err(Error::InvalidInput("this run has already finished"));
+    }
+    let mut payload = launch.describe();
+    payload["reason"] = serde_json::json!(reason);
+    runs::append_event(&mut conn, &run_id, Some(&step_id), "failed", &payload)
 }

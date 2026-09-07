@@ -7,7 +7,7 @@ use tauri::{AppHandle, State};
 
 use crate::db::{migrations, Db, DATA_DIR_ENV};
 use crate::error::Result;
-use crate::os::{accent, window};
+use crate::os::{accent, files, tools, window};
 
 /// What Diagnostics and About read. Never a hand-typed constant: the version
 /// comes from the running binary.
@@ -113,4 +113,27 @@ mod tests {
 #[tauri::command]
 pub fn monitors() -> Vec<window::Monitor> {
     window::monitors()
+}
+
+/// The tools this product can call, and where each one is (F7).
+///
+/// Found or not found, always both said: the editor shows a step that names a
+/// tool this machine has not got, and the run records the same sentence.
+#[tauri::command]
+pub fn tools_list() -> Vec<tools::Tool> {
+    tools::all()
+}
+
+/// One browser's bookmarks file, as text.
+///
+/// The host reads it because it is the side that may touch a disk; what a
+/// folder is, and which pages are in it, is the domain's business
+/// (`domain/bookmarks`). A bookmarks file is bigger than a profile — it holds
+/// everything a person ever kept — so it has a cap of its own.
+#[tauri::command]
+pub fn bookmarks_read(browser: String) -> Result<String> {
+    let path = tools::bookmarks_file(&browser).ok_or(crate::error::Error::File(
+        "that browser is not one this product reads",
+    ))?;
+    files::read_text_capped(&path, files::MAX_BOOKMARKS_BYTES)
 }

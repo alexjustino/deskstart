@@ -26,6 +26,9 @@
 //!   may run at all.
 //! - F6: the screens this machine has, and the window of a process the run
 //!   started put where the step says (migration 005).
+//! - F7: the tools it can call — Chrome, Edge, Windows Terminal, VS Code —
+//!   found in known places and never on PATH, and one browser's bookmarks file
+//!   read for the domain to make sense of.
 
 pub mod commands;
 pub mod db;
@@ -88,6 +91,8 @@ pub fn run() {
             commands::system::accent_ramp,
             commands::system::environment,
             commands::system::monitors,
+            commands::system::tools_list,
+            commands::system::bookmarks_read,
             commands::profiles::profiles_list,
             commands::profiles::profile_create,
             commands::profiles::profile_rename,
@@ -111,6 +116,7 @@ pub fn run() {
             commands::runs::step_waiting_for,
             commands::runs::step_ready,
             commands::runs::step_skipped,
+            commands::runs::step_failed,
             commands::runs::run_stop,
             commands::runs::run_finish,
             commands::runs::runs_list,
