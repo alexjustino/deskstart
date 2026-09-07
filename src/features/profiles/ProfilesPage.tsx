@@ -1,6 +1,7 @@
 import {
   Add20Regular,
   Apps20Regular,
+  ArrowImport20Regular,
   ArrowDown20Regular,
   ArrowUp20Regular,
   Delete20Regular,
@@ -11,6 +12,7 @@ import {
   Globe20Regular,
   Play20Regular,
   PlayCircle20Regular,
+  Share20Regular,
   Stop20Regular,
 } from '@fluentui/react-icons';
 import { useCallback, useMemo, useState, type FormEvent, type ReactNode } from 'react';
@@ -41,6 +43,7 @@ import {
 } from '@/domain/profile';
 import type { Mode } from '@/domain/run';
 import { describeWaitFor, waitForProblems } from '@/domain/readiness';
+import { reviewState } from '@/domain/review';
 import { describeTiming } from '@/domain/timing';
 import { Button } from '@/ui/Button';
 import { Card } from '@/ui/Card';
@@ -52,6 +55,9 @@ import { Input } from '@/ui/Input';
 import { announce } from '@/ui/announce';
 
 import { LogLines, RunHeading } from '../runs/LogLines';
+import { ExportProfile } from './ExportProfile';
+import { ImportProfile } from './ImportProfile';
+import { ReviewSteps } from './ReviewSteps';
 import { KIND_LABELS } from './kinds';
 import { StepForm, type EarlierStep } from './StepForm';
 
@@ -107,6 +113,7 @@ function ProfileList({
 }) {
   const create = useCreateProfile();
   const [name, setName] = useState('');
+  const [importing, setImporting] = useState(false);
 
   const submit = (event: FormEvent) => {
     event.preventDefault();
@@ -145,6 +152,20 @@ function ProfileList({
           </InfoBar>
         </div>
       )}
+      <div className="px-3 pb-3">
+        <Button
+          className="w-full"
+          icon={<ArrowImport20Regular />}
+          onClick={() => setImporting(true)}
+        >
+          Import a profile
+        </Button>
+      </div>
+      <ImportProfile
+        open={importing}
+        onClose={() => setImporting(false)}
+        onImported={(profile) => onSelect(profile.id)}
+      />
       <nav aria-label="Profiles" className="flex flex-col gap-0.5 px-2">
         {profiles.map((profile) => {
           const current = profile.id === selectedId;
@@ -183,6 +204,7 @@ function ProfileDetail({ profile }: { profile: Profile }) {
   const execute = useExecuteProfile();
   const remove = useDeleteProfile();
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const [activeRunId, setActiveRunId] = useState<string | null>(null);
 
   const env = useMemo(() => environment.data ?? {}, [environment.data]);
@@ -211,6 +233,22 @@ function ProfileDetail({ profile }: { profile: Profile }) {
   const runnable = judged.filter((j): j is Judged & { step: Step } => j.step !== null);
   const blocked = judged.filter((j) => j.problems.length > 0).length;
 
+  // Where this profile stands with review (ADR-013). While it is blocked the
+  // screen shows what the profile would do instead of how to edit it, and the
+  // loop refuses the run even if something reached it another way.
+  const review = useMemo(
+    () =>
+      reviewState(
+        profile,
+        (steps.data ?? []).map((entry) =>
+          entry.readable
+            ? { id: entry.step.id, reviewed: entry.step.reviewed }
+            : { id: entry.id, reviewed: entry.reviewed },
+        ),
+      ),
+    [profile, steps.data],
+  );
+
   // The log on screen is the run in progress, or else the newest one.
   const shownRunId = activeRunId ?? runs.data?.[0]?.id ?? null;
   const shownRun = runs.data?.find((r) => r.id === shownRunId) ?? null;
@@ -221,7 +259,7 @@ function ProfileDetail({ profile }: { profile: Profile }) {
       setActiveRunId(null);
       execute.mutate(
         {
-          profileId: profile.id,
+          profile,
           steps: runnable.map((j) => j.step),
           mode,
           env,
@@ -237,11 +275,15 @@ function ProfileDetail({ profile }: { profile: Profile }) {
         },
       );
     },
-    [execute, profile.id, runnable, env],
+    [execute, profile, runnable, env],
   );
 
   const canRun =
-    runnable.length > 0 && blocked === 0 && !execute.isPending && environment.data !== undefined;
+    runnable.length > 0 &&
+    blocked === 0 &&
+    !review.blocked &&
+    !execute.isPending &&
+    environment.data !== undefined;
 
   return (
     <div className="mx-auto flex w-full max-w-3xl flex-col gap-4 p-6">
@@ -281,6 +323,14 @@ function ProfileDetail({ profile }: { profile: Profile }) {
               Stop
             </Button>
           )}
+          <Button
+            icon={<Share20Regular />}
+            onClick={() => setExporting(true)}
+            disabled={execute.isPending}
+            title="Write this profile as a file"
+          >
+            Export
+          </Button>
           <IconButton
             label="Delete profile"
             icon={<Delete20Regular />}
@@ -300,6 +350,12 @@ function ProfileDetail({ profile }: { profile: Profile }) {
           {describeError(environment.error)} Paths with %NAMES% cannot be resolved until it can.
         </InfoBar>
       )}
+      {review.blocked && (
+        <InfoBar severity="caution" title="This profile has not been reviewed">
+          It came from a file, and {review.reason}. Read each step below and accept it; until then
+          nothing here starts.
+        </InfoBar>
+      )}
       {blocked > 0 && (
         <InfoBar severity="danger" title="A step cannot run on this machine">
           {blocked === 1 ? 'One step has' : `${blocked} steps have`} a problem shown below. Fix or
@@ -307,10 +363,14 @@ function ProfileDetail({ profile }: { profile: Profile }) {
         </InfoBar>
       )}
 
-      <Card title="Steps" description="What this profile opens, in this order.">
-        <StepList profileId={profile.id} judged={judged} env={env} busy={execute.isPending} />
-        <AddStep profileId={profile.id} env={env} earlier={titlesOf(judged, env)} />
-      </Card>
+      {review.blocked ? (
+        <ReviewSteps profile={profile} steps={steps.data ?? []} env={env} review={review} />
+      ) : (
+        <Card title="Steps" description="What this profile opens, in this order.">
+          <StepList profileId={profile.id} judged={judged} env={env} busy={execute.isPending} />
+          <AddStep profileId={profile.id} env={env} earlier={titlesOf(judged, env)} />
+        </Card>
+      )}
 
       <Card
         title={activeRunId !== null && execute.isPending ? 'Run in progress' : 'Latest run'}
@@ -325,6 +385,14 @@ function ProfileDetail({ profile }: { profile: Profile }) {
           <p className="text-body text-fg-tertiary">This profile has not run yet.</p>
         )}
       </Card>
+
+      <ExportProfile
+        open={exporting}
+        profile={profile}
+        steps={runnable.map((j) => j.step)}
+        omitted={judged.length - runnable.length}
+        onClose={() => setExporting(false)}
+      />
 
       <ConfirmDialog
         open={confirmDelete}

@@ -290,6 +290,44 @@ by hand that survives. The run finishes `stopped` with the rest skipped. The edi
 "again and again, until the run is stopped", which the domain had since F2 and the screen
 could not offer without Stop.
 
+### Delivered in F5
+
+A profile leaves as a file and comes back as one. The document is JSON with a declared schema
+version, no identifiers at all, and a wait that names the **position** of an earlier step
+(ADR-019) — so it means the same thing on the machine that opens it, and a cycle cannot be
+written down. Export shows the document before anything is written, says what it left out, and
+offers the clipboard or the system's save dialog. Import has two doors, the system's open dialog
+and pasted text, with one reader behind both.
+
+What arrives cannot run. The profile is stored **unreviewed** and every step with it; the screen
+replaces the editor with the review, which shows each step the way the run will read it: the
+path resolved and absolute — not as it was written — each argument on its own line, the plain
+sentence for what actually starts it, its time and its waiting. Acceptance is per step, survives
+a restart, and clears the profile's flag only when nothing is left unaccepted. Deleting a step
+counts as reviewing it. The gate is asked three times: the button is disabled, the run loop asks
+the domain before it opens a run, and the host refuses a profile that is still flagged.
+
+The file surface is the narrowest it could be (ADR-020): no filesystem plugin, one path at a
+time, and a file that is a directory, larger than 1 MiB, or not UTF-8 is refused with a sentence
+before a parser sees a byte.
+
+### Deferred out of F5, and why
+
+- **Editing an imported step before accepting it.** Under review the editor is not offered: a
+  step is accepted, or deleted and written again. Offering both at once makes "what you accepted"
+  a moving target, which is the one thing this screen exists to pin down. Accept, then edit.
+- **A profile that says where it came from.** The document could carry who wrote it and when,
+  and the review screen could show it. Every field of that is unverifiable — a line that says
+  "from a colleague" is exactly what a hostile file would also say — so it is not offered rather
+  than offered as if it meant something. Signing is the version of this that would mean
+  something, and it needs a key story the product does not have.
+- **Merging into an existing profile.** Import always makes a new profile. Merging asks what
+  happens to positions, to waits that point at steps from the other file, and to a half-accepted
+  result — a slice of its own, not a checkbox.
+- **A schema migration for the file.** Version 1 is the only version there has ever been, and
+  the reader refuses any other. The pure migration functions ADR-010 promises arrive with
+  version 2, together with the round-trip test that will prove them.
+
 ### Delivered in F4
 
 A step can wait for an **earlier** step to be responding before it starts: a window of its

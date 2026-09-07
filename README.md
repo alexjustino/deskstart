@@ -16,8 +16,8 @@ No cloud. No account. No telemetry. No shell.
 ---
 
 > **Status: early.** Deskstart is being built in public, one vertical slice at a time. What
-> exists today is the foundation (F0), the profile editor (F1), time (F2), Stop (F3) and
-> waiting (F4):
+> exists today is the foundation (F0), the profile editor (F1), time (F2), Stop (F3),
+> waiting (F4) and the file (F5):
 > profiles of applications, folders, files and web pages, with pauses, holds and cycles; a Run
 > button that really opens them and really closes them when their time is up; a Stop that
 > closes what the run opened and nothing else; and a log that really says what happened. Everything else on this page is marked as planned. Installers arrive with the
@@ -59,6 +59,11 @@ twenty minutes, then close it" and "open, close, reopen" are first-class, not a 
 - **Stop.** Closes what the run opened — asked first, terminated after a grace — and
   whatever those programs started, through the run's Job Object. A program the run did not
   start is never touched.
+- **The file.** A profile is exported as a versioned JSON document — what it opens, its time
+  and its waiting, and nothing about this machine — and imported back through the system's
+  dialog or pasted in. An imported profile **runs nothing** until every one of its steps has
+  been read and accepted, each shown with its path resolved absolute and each argument on its
+  own line.
 - **Dry run.** The same run on a virtual clock: the whole timeline written at once, nothing
   started, nothing waited for.
 - **The log.** Append-only in the database — triggers refuse any update or delete — read on
@@ -70,16 +75,15 @@ twenty minutes, then close it" and "open, close, reopen" are first-class, not a 
 
 ## What is planned
 
-| Slice | What                                                         |
-| ----- | ------------------------------------------------------------ |
-| F5    | Profile as a file: export, import, **review before running** |
-| F6    | Window control: position, size, monitor, state               |
-| F7    | Context steps: a bookmark folder, Windows Terminal, VS Code  |
-| F8    | Virtual machines: Hyper-V, VirtualBox, VMware Workstation    |
-| F9    | Triggers: schedule via Task Scheduler, global shortcut       |
-| F10   | Settings, Diagnostics, About, backup                         |
-| F11   | Fluent polish and accessibility                              |
-| F12   | Release 1.0.0                                                |
+| Slice | What                                                        |
+| ----- | ----------------------------------------------------------- |
+| F6    | Window control: position, size, monitor, state              |
+| F7    | Context steps: a bookmark folder, Windows Terminal, VS Code |
+| F8    | Virtual machines: Hyper-V, VirtualBox, VMware Workstation   |
+| F9    | Triggers: schedule via Task Scheduler, global shortcut      |
+| F10   | Settings, Diagnostics, About, backup                        |
+| F11   | Fluent polish and accessibility                             |
+| F12   | Release 1.0.0                                               |
 
 The specification, with a proof of done per slice, is [`docs/SPEC.md`](docs/SPEC.md).
 

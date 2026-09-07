@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added — F5, a profile as a file
+
+- **Export**: the profile written as a versioned JSON document — what it opens, its time and its
+  waiting — shown on screen before anything is written, then copied or saved through the
+  system's save dialog. The file carries no identifier of this machine: a wait names the
+  **position** of an earlier step.
+- **Import**: through the system's open dialog or pasted text, with one reader behind both. A
+  document with an unknown field, a field from another kind of step, another schema version, or
+  a wait that points forwards is refused with its reasons, and nothing is stored.
+- **Review**: an imported profile runs nothing until every step has been seen and accepted. Each
+  step is shown the way the run will read it — path resolved and absolute, each argument on its
+  own line, and the plain sentence for what starts it. Accepting is per step and survives a
+  restart; accepting everything at once says in words what it means. Deleting a step counts as
+  reviewing it.
+- Migration **004** adds `reviewed` to a step. Every step that already exists was written here,
+  so it is accepted; only import writes otherwise.
+
 ### Added — F4, waiting for what a step needs
 
 - A step can wait for an **earlier** step to be responding before it starts: a window of its

@@ -24,6 +24,8 @@ part that matters most later — the cost we accepted.
 | [016](#adr-016) | Third-party tools are adapters that degrade visibly                                      | Accepted |
 | [017](#adr-017) | Scheduling is delegated to the Windows Task Scheduler                                    | Accepted |
 | [018](#adr-018) | Folders, files and web pages open by verb on a validated target                          | Accepted |
+| [019](#adr-019) | A profile file carries positions, never identifiers                                      | Accepted |
+| [020](#adr-020) | One file at a time, through the system's own dialog                                      | Accepted |
 
 ---
 
@@ -300,3 +302,42 @@ that does more than the product allows is a surface the threat model has to expl
 **Cost accepted.** `file:` addresses never open, even ones a person typed on purpose — a file
 is a file step. And "opened" for a file means "Windows accepted the request": whether the
 associated application showed anything is readiness's question (F4).
+
+## ADR-019 — A profile file carries positions, never identifiers {#adr-019}
+
+**Context.** A stored step has an identity, and what it waits for names that identity. A file
+has to say the same thing on a machine where those identities do not exist and never will.
+
+**Decision.** The document has no identifiers at all. A wait names the **position** of an
+earlier step — `"waitFor": { "step": 1, … }` — and import turns positions into the identities it
+creates, in one transaction, after the steps exist. Export turns identities back into positions
+and leaves out a wait that does not point strictly backwards, saying so on screen before the
+file is written.
+
+**Why this and not an identifier the file makes up.** A file-local identifier would work, and
+would also be a second naming system to keep honest — one that can dangle, repeat itself or
+point forwards. A position cannot dangle: it is an index into the list it is written in. It also
+carries the rule that mattered most from F4 across the trip — a wait may only point backwards,
+so a **cycle cannot be written down**, and a document that points forwards is refused at the
+door by the domain and again by the host.
+
+**Cost accepted.** Reordering the steps of a document by hand renumbers its waits, which is
+exactly the kind of edit a text file invites. The reader refuses what does not point backwards,
+so a bad edit is a message, not a surprise — but it is a message, and someone will meet it.
+
+## ADR-020 — One file at a time, through the system's own dialog {#adr-020}
+
+**Context.** Import and export need the filesystem. The obvious route is `tauri-plugin-fs`
+with an allowed directory, which grants the window a general ability to read and write files.
+
+**Decision.** No filesystem plugin. `tauri-plugin-dialog` is granted `open` and `save` only —
+it returns a **path the person chose in the system's own dialog** — and two host commands of
+our own read or write exactly that one path. Nothing in the product can enumerate a directory,
+glob, or follow a path it was not handed. A file that arrives must be a file, must be under
+1 MiB, and must be UTF-8; anything else is refused with a sentence before a parser sees a byte.
+
+**Cost accepted.** A native modal dialog cannot be driven by WebDriver, so the picker itself is
+the one inch of this feature the end-to-end suite does not cover: the suite drives the same
+commands through the export box and the import box, and the file commands have their own tests
+in `os/files.rs`. Also, `tauri-plugin-dialog` depends on `tauri-plugin-fs` as a crate; it is
+never initialised and no `fs:` permission is granted, so none of its commands can be called.

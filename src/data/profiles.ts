@@ -8,6 +8,7 @@
 
 import { invoke } from '@tauri-apps/api/core';
 
+import type { StepImport } from '@/domain/portable';
 import {
   parseStoredStep,
   serializeStepConfig,
@@ -30,7 +31,14 @@ export interface Profile {
 /** A stored step, read back: either its configuration or why it could not be read. */
 export type StoredStep =
   | { readable: true; step: Step }
-  | { readable: false; id: string; profileId: string; position: number; problems: Problem[] };
+  | {
+      readable: false;
+      id: string;
+      profileId: string;
+      position: number;
+      reviewed: boolean;
+      problems: Problem[];
+    };
 
 interface RawProfile {
   id: string;
@@ -49,6 +57,7 @@ interface RawStep {
   config_json: string;
   timing_json: string;
   wait_json: string;
+  reviewed: boolean;
   created_at: string;
   updated_at: string;
 }
@@ -79,6 +88,7 @@ function toStoredStep(raw: RawStep): StoredStep {
       id: raw.id,
       profileId: raw.profile_id,
       position: raw.position,
+      reviewed: raw.reviewed,
       problems: [
         ...(parsed.ok ? [] : parsed.problems),
         ...(Array.isArray(timing) ? timing : []),
@@ -95,6 +105,7 @@ function toStoredStep(raw: RawStep): StoredStep {
       config: parsed.config,
       timing,
       waitFor,
+      reviewed: raw.reviewed,
     },
   };
 }
@@ -160,4 +171,32 @@ export async function deleteStep(id: string): Promise<void> {
 export async function moveStep(id: string, direction: -1 | 1): Promise<StoredStep[]> {
   const raw = await invoke<RawStep[]>('step_move', { id, direction });
   return raw.map(toStoredStep);
+}
+
+/**
+ * Store a profile that came from a file. It arrives unreviewed: the host
+ * refuses to run it until every step has been accepted (ADR-013).
+ */
+export async function importProfile(name: string, steps: StepImport[]): Promise<Profile> {
+  return toProfile(await invoke<RawProfile>('profile_import', { name, steps }));
+}
+
+/** Accept one step. The profile comes back, so the screen learns when the gate lifts. */
+export async function acceptStep(id: string): Promise<Profile> {
+  return toProfile(await invoke<RawProfile>('step_accept', { id }));
+}
+
+/** Accept every step of a profile at once. */
+export async function acceptProfile(id: string): Promise<Profile> {
+  return toProfile(await invoke<RawProfile>('profile_accept', { id }));
+}
+
+/** Read one file the person chose, as text. What it means is the domain's business. */
+export async function readProfileFile(path: string): Promise<string> {
+  return invoke<string>('profile_file_read', { path });
+}
+
+/** Write one file the person chose. */
+export async function writeProfileFile(path: string, contents: string): Promise<void> {
+  await invoke('profile_file_write', { path, contents });
 }

@@ -33,8 +33,26 @@ pub struct Step {
     pub timing_json: String,
     /// What the step waits for before it starts (F4); `{}` is "nothing".
     pub wait_json: String,
+    /// Seen and accepted on this machine (ADR-013). Only import writes false.
+    pub reviewed: bool,
     pub created_at: String,
     pub updated_at: String,
+}
+
+/// A step as it arrives in a file: read and judged by the domain, and not yet
+/// anything on this machine.
+///
+/// `wait_on` is the **position** of an earlier step in this same list, because
+/// a file carries no identifiers (F5). The host creates the identities and then
+/// puts them into `wait_json`, which arrives without one.
+#[derive(Debug, Clone, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ImportStep {
+    pub kind: String,
+    pub config_json: String,
+    pub timing_json: String,
+    pub wait_on: Option<i64>,
+    pub wait_json: String,
 }
 
 /// The step kinds the host knows how to act on. The schema's CHECK says the same.

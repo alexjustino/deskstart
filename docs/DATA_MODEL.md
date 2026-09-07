@@ -21,15 +21,16 @@ Migrations are forward-only and numbered (`VERSIONING.md`).
 
 ## `step`
 
-| Column        | Meaning                                                                                                                                         |
-| ------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
-| `id`          | UUID v7                                                                                                                                         |
-| `profile_id`  | cascades on delete                                                                                                                              |
-| `position`    | order within the profile; integer, dense                                                                                                        |
-| `kind`        | `app`, `folder`, `file` or `url` (`CHECK`, widened by migration 002)                                                                            |
-| `config_json` | the step's own shape, written and validated by the domain (ADR-010); e.g. `{"program": "C:\\...\\notepad.exe", "args": [], "workingDir": null}` |
-| `wait_json`   | what the step waits for before it starts (F4): `{ stepId, probe: { kind: "window" \| "port", port }, timeoutMs }`; `{}` is "nothing"            |
-| `timing_json` | `{ pauseAfterMs, holdMs, repeat, closedMs }`, each field only when not the default; `{}` is the default (F2)                                    |
+| Column        | Meaning                                                                                                                                                                                                                                |
+| ------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`          | UUID v7                                                                                                                                                                                                                                |
+| `profile_id`  | cascades on delete                                                                                                                                                                                                                     |
+| `position`    | order within the profile; integer, dense                                                                                                                                                                                               |
+| `kind`        | `app`, `folder`, `file` or `url` (`CHECK`, widened by migration 002)                                                                                                                                                                   |
+| `config_json` | the step's own shape, written and validated by the domain (ADR-010); e.g. `{"program": "C:\\...\\notepad.exe", "args": [], "workingDir": null}`                                                                                        |
+| `wait_json`   | what the step waits for before it starts (F4): `{ stepId, probe: { kind: "window" \| "port", port }, timeoutMs }`; `{}` is "nothing"                                                                                                   |
+| `reviewed`    | `1` when the step has been seen and accepted on this machine (F5, migration 004). A step written here is `1` from the moment it is written; only import writes `0`, and the profile's `imported_unreviewed` clears when no `0` is left |
+| `timing_json` | `{ pauseAfterMs, holdMs, repeat, closedMs }`, each field only when not the default; `{}` is the default (F2)                                                                                                                           |
 
 The host stores `config_json` verbatim and parses it only to act, refusing unknown fields.
 

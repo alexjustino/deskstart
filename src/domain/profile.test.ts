@@ -3,7 +3,6 @@ import { describe, expect, it } from 'vitest';
 import {
   lastSegment,
   parseStoredStep,
-  readProfile,
   readStepConfig,
   readUrl,
   resolvePath,
@@ -15,63 +14,7 @@ import {
 const NOTEPAD = 'C:\\Windows\\System32\\notepad.exe';
 const ENV = { USERPROFILE: 'C:\\Users\\Alex', SystemRoot: 'C:\\Windows', PATH: 'C:\\evil' };
 
-describe('readProfile', () => {
-  it('reads a well-formed document with every kind of step', () => {
-    const result = readProfile({
-      schemaVersion: 1,
-      name: ' Morning ',
-      steps: [
-        { kind: 'app', program: NOTEPAD },
-        { kind: 'folder', path: '%USERPROFILE%\\src' },
-        { kind: 'file', path: 'C:\\notes.txt' },
-        { kind: 'url', url: 'https://example.com/a' },
-      ],
-    });
-    expect(result).toEqual({
-      ok: true,
-      document: {
-        schemaVersion: 1,
-        name: 'Morning',
-        steps: [
-          { kind: 'app', program: NOTEPAD, args: [], workingDir: null },
-          { kind: 'folder', path: '%USERPROFILE%\\src' },
-          { kind: 'file', path: 'C:\\notes.txt' },
-          { kind: 'url', url: 'https://example.com/a' },
-        ],
-      },
-    });
-  });
-
-  it('reads a JSON string and never throws on garbage', () => {
-    expect(readProfile('{"schemaVersion":1,"name":"A","steps":[]}').ok).toBe(true);
-    expect(readProfile('{not json')).toEqual({
-      ok: false,
-      problems: [{ path: '', problem: 'the file is not valid JSON' }],
-    });
-    expect(readProfile(null).ok).toBe(false);
-    expect(readProfile([]).ok).toBe(false);
-    expect(readProfile(42).ok).toBe(false);
-  });
-
-  it('refuses another schema version', () => {
-    const result = readProfile({ schemaVersion: 2, name: 'A', steps: [] });
-    expect(result.ok).toBe(false);
-    if (!result.ok) expect(result.problems[0]?.path).toBe('schemaVersion');
-  });
-
-  it('refuses unknown fields rather than ignoring them', () => {
-    const result = readProfile({
-      schemaVersion: 1,
-      name: 'A',
-      steps: [{ kind: 'app', program: NOTEPAD, shell: 'cmd /c format c:' }],
-      onOpen: 'evil()',
-    });
-    expect(result.ok).toBe(false);
-    if (!result.ok) {
-      expect(result.problems.map((p) => p.path)).toEqual(['onOpen', 'steps[0].shell']);
-    }
-  });
-
+describe('a step configuration', () => {
   it('refuses a field that belongs to another kind', () => {
     const result = readStepConfig({ kind: 'folder', path: 'C:\\', args: ['x'] });
     expect(result).toEqual([
@@ -79,38 +22,6 @@ describe('readProfile', () => {
     ]);
   });
 
-  it('reports every problem, with its path, in one pass', () => {
-    const result = readProfile({
-      schemaVersion: 1,
-      name: '',
-      steps: [
-        { kind: 'shortcut', program: '' },
-        'not a step',
-        { kind: 'app', program: 'x', args: 'y' },
-        { kind: 'url', url: 'ftp://x' },
-      ],
-    });
-    expect(result.ok).toBe(false);
-    if (!result.ok) {
-      expect(result.problems.map((p) => p.path)).toEqual([
-        'name',
-        'steps[0].kind',
-        'steps[1]',
-        'steps[2].args',
-        'steps[3].url',
-      ]);
-    }
-  });
-
-  it('requires steps to be a list', () => {
-    const result = readProfile({ schemaVersion: 1, name: 'A', steps: {} });
-    expect(result.ok).toBe(false);
-    if (!result.ok)
-      expect(result.problems).toEqual([{ path: 'steps', problem: 'steps must be a list' }]);
-  });
-});
-
-describe('a step configuration', () => {
   it('round-trips through the stored form, kind kept apart', () => {
     const config = readStepConfig({
       kind: 'app',

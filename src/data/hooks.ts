@@ -14,12 +14,13 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useRef } from 'react';
 
+import type { StepImport } from '@/domain/portable';
 import type { Step, StepConfig } from '@/domain/profile';
 import type { Mode } from '@/domain/run';
 import type { WaitFor } from '@/domain/readiness';
 import type { Timing } from '@/domain/timing';
 
-import { executeProfile, Stopper } from './execute';
+import { executeProfile, Stopper, type Runnable } from './execute';
 import * as profileApi from './profiles';
 import * as runApi from './runs';
 import { fetchEnvironment } from './system';
@@ -54,6 +55,42 @@ export function useRenameProfile() {
   return useMutation({
     mutationFn: ({ id, name }: { id: string; name: string }) => profileApi.renameProfile(id, name),
     onSuccess: () => client.invalidateQueries({ queryKey: keys.profiles }),
+  });
+}
+
+/**
+ * Import a profile from a document that has already been read by the domain.
+ * What comes back is a profile that cannot run yet, by design.
+ */
+export function useImportProfile() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: ({ name, steps }: { name: string; steps: StepImport[] }) =>
+      profileApi.importProfile(name, steps),
+    onSuccess: () => client.invalidateQueries({ queryKey: keys.profiles }),
+  });
+}
+
+/** Accept one step of an imported profile, or all of them at once. */
+export function useAcceptStep() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id }: { id: string; profileId: string }) => profileApi.acceptStep(id),
+    onSuccess: (_profile, { profileId }) => {
+      void client.invalidateQueries({ queryKey: keys.profiles });
+      void client.invalidateQueries({ queryKey: keys.steps(profileId) });
+    },
+  });
+}
+
+export function useAcceptProfile() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => profileApi.acceptProfile(id),
+    onSuccess: (_profile, id) => {
+      void client.invalidateQueries({ queryKey: keys.profiles });
+      void client.invalidateQueries({ queryKey: keys.steps(id) });
+    },
   });
 }
 
@@ -158,14 +195,14 @@ export function useExecuteProfile() {
   const stop = useCallback(() => stopper.current?.stop(), []);
   const mutation = useMutation({
     mutationFn: ({
-      profileId,
+      profile,
       steps,
       mode,
       env,
       onLine,
       onBegin,
     }: {
-      profileId: string;
+      profile: Runnable;
       steps: Step[];
       mode: Mode;
       env: Readonly<Record<string, string>>;
@@ -174,7 +211,7 @@ export function useExecuteProfile() {
     }) => {
       stopper.current = new Stopper();
       return executeProfile(
-        profileId,
+        profile,
         steps,
         mode,
         env,

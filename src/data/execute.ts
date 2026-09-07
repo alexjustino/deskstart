@@ -20,6 +20,7 @@
  */
 
 import { resolveStep, type Launch, type Step } from '@/domain/profile';
+import { whyNotRunnable } from '@/domain/review';
 import { plan, reduce, type Action, type Mode, type RunEvent, type RunState } from '@/domain/run';
 
 import {
@@ -72,8 +73,14 @@ export class Stopper {
   }
 }
 
+/** The profile being run, as far as the loop needs to know it. */
+export interface Runnable {
+  id: string;
+  importedUnreviewed: boolean;
+}
+
 export async function executeProfile(
-  profileId: string,
+  profile: Runnable,
   steps: Step[],
   mode: Mode,
   env: Readonly<Record<string, string>>,
@@ -81,7 +88,13 @@ export async function executeProfile(
   onBegin: (run: Run) => void = () => undefined,
   stopper: Stopper = new Stopper(),
 ): Promise<Execution> {
-  const run = await runBegin(profileId, mode);
+  // The review gate, on the path every run takes rather than only on the
+  // button (ADR-013). The host asks the same question again when it is handed
+  // the profile id; this one is here so no run is even opened.
+  const refusal = whyNotRunnable(profile, steps);
+  if (refusal !== null) throw new Error(refusal);
+
+  const run = await runBegin(profile.id, mode);
   // The run exists in the file from this instant; the screen may show it now,
   // not when it is over. A run with an hour of holds is still a run.
   onBegin(run);

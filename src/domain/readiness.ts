@@ -45,6 +45,33 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
+/**
+ * Read a probe: what "responding" means for this wait. Shared by the stored
+ * form and by the file form (`domain/portable`), so a probe means the same
+ * thing wherever it is written down.
+ */
+export function readProbe(value: unknown, path = 'probe'): Probe | Problem[] {
+  if (!isRecord(value) || (value.kind !== 'window' && value.kind !== 'port')) {
+    return [{ path, problem: 'a step waits for a window to appear or for a port to answer' }];
+  }
+  const kind = value.kind;
+  const problems: Problem[] = [];
+  for (const key of Object.keys(value)) {
+    if (!PROBE_FIELDS[kind]?.has(key)) {
+      problems.push({
+        path: `${path}.${key}`,
+        problem: `this field is not part of a ${kind} probe`,
+      });
+    }
+  }
+  if (kind === 'window') return problems.length > 0 ? problems : { kind: 'window' };
+  const port = value.port;
+  if (typeof port !== 'number' || !Number.isInteger(port) || port < 1 || port > 65535) {
+    problems.push({ path: `${path}.port`, problem: 'a port is a whole number from 1 to 65535' });
+  }
+  return problems.length > 0 ? problems : { kind: 'port', port: port as number };
+}
+
 /** Read a stored or drafted `waitFor`. `{}` and null mean "waits for nothing". */
 export function readWaitFor(value: unknown, path = 'waitFor'): WaitFor | null | Problem[] {
   if (value === undefined || value === null) return null;
@@ -74,39 +101,10 @@ export function readWaitFor(value: unknown, path = 'waitFor'): WaitFor | null | 
     });
   }
 
-  let probe: Probe | null = null;
-  const raw = value.probe;
-  if (!isRecord(raw) || (raw.kind !== 'window' && raw.kind !== 'port')) {
-    problems.push({
-      path: `${path}.probe`,
-      problem: 'a step waits for a window to appear or for a port to answer',
-    });
-  } else {
-    const kind = raw.kind;
-    for (const key of Object.keys(raw)) {
-      if (!PROBE_FIELDS[kind]?.has(key)) {
-        problems.push({
-          path: `${path}.probe.${key}`,
-          problem: `this field is not part of a ${kind} probe`,
-        });
-      }
-    }
-    if (kind === 'window') {
-      probe = { kind: 'window' };
-    } else {
-      const port = raw.port;
-      if (typeof port !== 'number' || !Number.isInteger(port) || port < 1 || port > 65535) {
-        problems.push({
-          path: `${path}.probe.port`,
-          problem: 'a port is a whole number from 1 to 65535',
-        });
-      } else {
-        probe = { kind: 'port', port };
-      }
-    }
-  }
+  const probe = readProbe(value.probe, `${path}.probe`);
+  if (Array.isArray(probe)) problems.push(...probe);
 
-  if (problems.length > 0 || probe === null) return problems;
+  if (problems.length > 0 || Array.isArray(probe)) return problems;
   return { stepId, probe, timeoutMs: timeoutMs as number };
 }
 
