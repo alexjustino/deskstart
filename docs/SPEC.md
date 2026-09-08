@@ -194,7 +194,7 @@ loop is wrong, that shows on day one.
 | F8     | Virtual machines                                     | **done here as far as a machine without a hypervisor allows** — a missing hypervisor is a reason within a second, never a hang; two machines starting is the host proof, Alex's         |
 | F9     | Triggers: schedule, shortcut, autostart              | **done** — the task fires at the minute set and the run is in the log marked _Scheduled_; a key combination pressed by a hand outside the product starts it                             |
 | F10    | Settings, Diagnostics, About, backup                 | **done** — Diagnostics lists every adapter found / not found with its path; a backup is the whole workspace and a restore brings every profile and run back (round-trip proven in Rust) |
-| F11    | Fluent polish and accessibility                      | every screen opened for real, both themes, keyboard; axe green                                                                                                                          |
+| F11    | Fluent polish and accessibility                      | **done** — axe-core clean on every screen in both themes; the keyboard reaches the rail and Run, focus shows                                                                            |
 | F12    | Release 1.0.0                                        | the installer runs on a clean machine and F0's proof passes on it                                                                                                                       |
 
 ### Delivered in F0
@@ -289,6 +289,32 @@ one a person opened — is never touched, and the suite proves it with a Charact
 by hand that survives. The run finishes `stopped` with the rest skipped. The editor offers
 "again and again, until the run is stopped", which the domain had since F2 and the screen
 could not offer without Stop.
+
+### Delivered in F11
+
+Every screen was run through axe-core — the automated accessibility check: colour contrast,
+names on controls, roles, landmark structure — in the light theme and the dark one, and comes
+back clean. What that took, beyond names and roles the primitives already carried: the content
+surfaces became opaque (ADR-026), because readable text must not depend on Mica and axe cannot
+measure what Mica paints; the scrollable regions take the keyboard, so a window taller than the
+screen scrolls without a mouse; and the theme drives the accent through one path, so a selected
+control's text is never white on the wrong blue.
+
+The keyboard reaches the navigation and the primary action, and focus shows on every stop — the
+focus-visible ring was there since F0, and the sweep proves it lands. `prefers-reduced-motion` is
+honoured globally (F0), so nothing here animates against a person's setting.
+
+### Deferred out of F11, and why
+
+- **A screen reader read end to end.** axe checks the names and roles a reader needs, and the
+  keyboard sweep proves the order; hearing it read is a person's pass on a real machine with a
+  real reader, which no automated check replaces.
+- **High-contrast mode.** Windows' high-contrast themes override colours wholesale; honouring
+  them well is its own slice, and the opaque surfaces of ADR-026 are the groundwork.
+- **A contrast guarantee for every possible Windows accent.** The accent is the person's, and the
+  sweep tested the one this machine has. A very light accent could still push a selected control
+  under the threshold; the honest fix, when it is needed, is choosing the accent step by measured
+  contrast rather than by theme.
 
 ### Delivered in F10
 

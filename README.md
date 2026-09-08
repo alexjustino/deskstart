@@ -133,8 +133,10 @@ to open. Your data lives in a single SQLite file under your user profile.
 Deskstart is built to look like it belongs on Windows 11, not like a web page in a frame:
 Mica window material, the **system accent colour** read from Windows and followed live,
 rounded corners, a custom title bar, Segoe UI Variable, Fluent motion curves, and a single
-icon set (Fluent UI System Icons). Light and dark themes follow the system. Everything is
-reachable from the keyboard, and `prefers-reduced-motion` is honoured everywhere.
+icon set (Fluent UI System Icons). Light and dark themes follow the system, and content sits on opaque surfaces so text is
+readable with or without Mica behind the window. Every screen passes axe-core in both themes;
+everything is reachable from the keyboard with focus shown, and `prefers-reduced-motion` is
+honoured everywhere.
 
 One known gap, stated rather than hidden: Snap Layouts — hovering the maximise button to pick
 a window layout — needs native hit-testing that a custom title bar does not get for free.

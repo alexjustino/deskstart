@@ -31,6 +31,7 @@ part that matters most later — the cost we accepted.
 | [023](#adr-023) | A hypervisor is asked as a bounded command; a value never enters a command line          | Accepted |
 | [024](#adr-024) | A trigger binds to a profile id; the window closes to the tray                           | Accepted |
 | [025](#adr-025) | A backup is the workspace file; a restore is staged and applied at the next start        | Accepted |
+| [026](#adr-026) | Content surfaces are opaque; Mica is the window backdrop, not behind text                | Accepted |
 
 ---
 
@@ -494,3 +495,26 @@ because migrations run it forward on first open, the same as any old workspace.
 cannot survive it is the one asking for it. The staged file briefly doubles the workspace on disk.
 And a backup is a full copy every time — there is no incremental backup, which a page of profiles
 does not need.
+
+## ADR-026 — Content surfaces are opaque; Mica is the window backdrop, not behind text {#adr-026}
+
+**Context.** The shell is built on Mica (ADR-004): the window background is transparent so the
+material Windows paints shows through. Until F11 the content layers — the main region, the nav
+rail, flyouts — were translucent too, so Mica glowed behind everything, including text.
+
+**Decision.** The content surfaces (`layer`, `layer-alt`, `card`, `flyout`) are **opaque**. Mica
+stays the window's backdrop — `surface-backdrop` is still transparent — and shows in the title
+bar and the window's margin, the way Windows 11's own Settings shows it, but not behind readable
+text.
+
+**Why.** Readable text must not depend on a compositor effect. Mica is absent on Windows 10, over
+a remote desktop, and whenever the compositor is off; with translucent content the dark theme
+became light-grey bleed in exactly those places, unreadable and failing contrast. It is also the
+thing automated accessibility cannot measure — axe has no window behind the page — so "axe green"
+and "readable everywhere" are the same fix, not two.
+
+**Cost accepted.** Less Mica: the glow is a strip in the title bar and a hint at the margins, not
+a wash behind the whole window. On a Mica machine the change is small — the opaque values are
+tuned to how the translucent ones composited — and it is a pure token change, reversible by
+anyone who disagrees. It touches the product's signature look, so it wants a person's eye on a
+real desktop (host proof), not only a passing gate.
