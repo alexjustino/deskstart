@@ -52,7 +52,7 @@
     "sharp": "^0.35.4",
     "typescript": "~5.8.3",
     "typescript-eslint": "^8.69.0",
-    "vite": "^7.0.4",
+    "vite": "^8.2.2",
     "vitest": "^4.1.11"
   },
   "description": "Open your working day with one button: profiles of timed steps, run and logged",
