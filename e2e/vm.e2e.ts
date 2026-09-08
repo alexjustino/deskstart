@@ -179,5 +179,10 @@ describe('a virtual machine', () => {
     await addMachine(session, 'VMware', '%USERPROFILE%\\VMs\\dev');
     await driver.waitForText('VMware knows a machine by its .vmx file');
     expect((await driver.findAll('ol[aria-label="Steps"] li')).length).toBe(0);
+    // The section itself, on screen: the capture is a gate of its own.
+    await driver.execute(
+      "document.querySelector('input[aria-label=\"Machine\"]')?.scrollIntoView({ block: 'center' })",
+    );
+    await session.screenshot('vm-form');
   }, 120_000);
 });
