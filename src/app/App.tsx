@@ -62,7 +62,10 @@ export function App() {
       <TitleBar />
       <div className="flex min-h-0 flex-1">
         <Sidebar active={destination} onNavigate={go} />
-        <main className="min-w-0 flex-1 overflow-y-auto bg-layer">
+        <main
+          tabIndex={0}
+          className="min-w-0 flex-1 overflow-y-auto bg-layer focus-visible:outline-none"
+        >
           {destination === 'profiles' && <ProfilesPage request={request} />}
           {destination === 'runs' && <RunsPage />}
           {destination === 'diagnostics' && <DiagnosticsPage />}

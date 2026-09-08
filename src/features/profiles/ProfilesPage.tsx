@@ -113,7 +113,7 @@ export function ProfilesPage({
   return (
     <div className="flex h-full">
       <ProfileList profiles={list} selectedId={selected?.id ?? null} onSelect={setSelectedId} />
-      <section className="min-w-0 flex-1 overflow-y-auto">
+      <section tabIndex={0} className="min-w-0 flex-1 overflow-y-auto focus-visible:outline-none">
         {profiles.isError && (
           <div className="p-6">
             <InfoBar severity="danger" title="The profiles could not be read">
