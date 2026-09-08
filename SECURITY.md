@@ -56,11 +56,74 @@ suppresses a UAC prompt and never answers one.
 
 Nothing, until you have looked at it (ADR-013). An imported profile is stored flagged as
 unreviewed; in that state the host refuses to run it and no trigger can bind to it. The review
-screen shows every step with its resolved path and its arguments as a list, and you accept
-each one. Import is a later slice; the refusal is in the host from the first one.
+screen shows every step with its **resolved, absolute** path — what will run, not what it was
+written as — its arguments one per line, and the plain sentence for what actually starts it. You
+accept each step, or delete it; the flag clears only when nothing is left unaccepted, and it
+survives a restart because acceptance is on disk, not in the window.
+
+The gate is asked three times over: the Run button is disabled, the execution loop asks the
+domain before it opens a run, and the host refuses a profile that is still flagged.
+
+**How a file is read.** Deskstart has no filesystem plugin (ADR-020). The system's own dialog
+returns one path the person chose, and one host command reads exactly that path — nothing in
+the product can enumerate a directory or follow a path it was not handed. A file that is not a
+file, is larger than 1 MiB, or is not UTF-8 is refused with a sentence before a parser sees a
+byte. What is read is then judged by the same reader the editor uses: unknown fields are
+refused rather than ignored, so a newer document cannot smuggle behaviour into an older
+reader.
 
 Command-line triggers take a profile **id**, never a file path: a scheduled task or a shortcut
 can only run what is already in your workspace and already reviewed.
+
+### What a step that calls a tool can do
+
+Four tools, and only four: Chrome, Edge, Windows Terminal and VS Code (ADR-022). A profile never
+carries a program path for one — it carries an id from that closed list, and Deskstart finds the
+program itself, in the places Windows installs it. `PATH` is never searched, so nothing that puts
+a `chrome.exe` earlier on `PATH` can be started by a profile.
+
+The arguments are still a vector, still written by the product from the fields you filled in. A
+terminal step opens a terminal on a profile in a directory; it cannot carry a command to run,
+because a profile that carries a command line is a script, and a profile is data (ADR-010).
+
+A browser's bookmarks file is **read, never written**. What is opened from it are the `http` and
+`https` addresses in the one folder named — never its subfolders, never a `file:` or
+`javascript:` bookmark, and never more than fifty pages.
+
+### What a virtual-machine step can do
+
+Ask one hypervisor to start one machine, and open its console. The machine's name is one
+argument of a fixed vector for VirtualBox and VMware; for Hyper-V, which is driven by
+PowerShell, the command is a **constant** and the name travels in the child's environment
+(ADR-023) — a variable PowerShell reads as a string, never as code. A machine called
+`dev; Remove-Item …` is a machine with a strange name, not a script.
+
+The hypervisor's tool is waited for, up to a minute, and ended if it does not answer. Starting a
+machine may need rights this product does not have; when it does, the log says what the
+hypervisor said, and nothing is elevated on your behalf (ADR-014).
+
+### What a trigger can do
+
+Start one profile, by its id, through the same gate the button uses. A scheduled task is
+registered as this executable by absolute path with `--run <id> --trigger schedule`; the time of
+day and the days are validated into the scheduler's own words on the host, and nothing you typed
+reaches `schtasks`. `--run` takes an id and never a file, an id that is not this product's shape
+is ignored, and a profile still under review cannot be scheduled or given a key.
+
+The host never starts a run on its own. A trigger hands its request to the screen, which starts
+the run and brings the window forward — a run that starts by itself is seen starting, and its
+heading says what started it. Closing the window keeps Deskstart in the tray; nothing is written
+to the Windows Run key until you turn _Start with Windows_ on.
+
+### What a restore can do
+
+Replace your whole workspace with a backup file. Because it replaces everything, the file is
+opened **read-only** and checked to be a Deskstart workspace — the right tables, a schema version
+no newer than this build — before it is staged; a garbage file or one from a future version is
+refused with a sentence, not swapped in. The replacement happens at the next start, before the
+workspace is opened, so nothing half-reads the old file and the new one at once. A backup itself
+is a copy of the workspace and holds exactly what the workspace holds — no more, and readable by
+any SQLite tool, so it is yours to keep wherever you keep files.
 
 ### What the log promises
 

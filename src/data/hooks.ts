@@ -12,23 +12,64 @@
  */
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useCallback, useRef } from 'react';
 
-import type { StepConfig } from '@/domain/profile';
+import type { StepImport } from '@/domain/portable';
+import type { Step, StepConfig } from '@/domain/profile';
 import type { Mode } from '@/domain/run';
+import type { WaitFor } from '@/domain/readiness';
+import type { Placement } from '@/domain/placement';
+import type { Timing } from '@/domain/timing';
+import type { Schedule, Shortcut, Trigger } from '@/domain/triggers';
 
-import { executeProfile } from './execute';
+import { executeProfile, Stopper, type Runnable } from './execute';
 import * as profileApi from './profiles';
 import * as runApi from './runs';
+import { fetchEnvironment, fetchMonitors, fetchSettings, fetchTools, setSetting } from './system';
 
 export const keys = {
   profiles: ['profiles'] as const,
   steps: (profileId: string) => ['steps', profileId] as const,
   runs: (profileId: string | null) => ['runs', profileId] as const,
   events: (runId: string) => ['events', runId] as const,
+  environment: ['environment'] as const,
+  monitors: ['monitors'] as const,
+  tools: ['tools'] as const,
+  settings: ['settings'] as const,
+  scheduled: (profileId: string) => ['scheduled', profileId] as const,
 };
 
 export function useProfiles() {
   return useQuery({ queryKey: keys.profiles, queryFn: profileApi.listProfiles });
+}
+
+/** The allow-listed environment. Read once: it does not change while the window is open. */
+export function useEnvironment() {
+  return useQuery({ queryKey: keys.environment, queryFn: fetchEnvironment });
+}
+
+/** The screens this machine has. Read once: the editor offers them by number. */
+export function useMonitors() {
+  return useQuery({ queryKey: keys.monitors, queryFn: fetchMonitors });
+}
+
+/** The tools this machine has, and the ones it has not (F7). */
+export function useTools() {
+  return useQuery({ queryKey: keys.tools, queryFn: fetchTools });
+}
+
+/** The settings a person has chosen, read once at start (F10). */
+export function useSettings() {
+  return useQuery({ queryKey: keys.settings, queryFn: fetchSettings });
+}
+
+/** Store one setting, then refetch so what is shown is what is on disk. */
+export function useSetSetting() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: ({ key, value }: { key: string; value: string }) => setSetting(key, value),
+    onSuccess: () => client.invalidateQueries({ queryKey: keys.settings }),
+  });
 }
 
 export function useCreateProfile() {
@@ -43,6 +84,73 @@ export function useRenameProfile() {
   const client = useQueryClient();
   return useMutation({
     mutationFn: ({ id, name }: { id: string; name: string }) => profileApi.renameProfile(id, name),
+    onSuccess: () => client.invalidateQueries({ queryKey: keys.profiles }),
+  });
+}
+
+/**
+ * Import a profile from a document that has already been read by the domain.
+ * What comes back is a profile that cannot run yet, by design.
+ */
+export function useImportProfile() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: ({ name, steps }: { name: string; steps: StepImport[] }) =>
+      profileApi.importProfile(name, steps),
+    onSuccess: () => client.invalidateQueries({ queryKey: keys.profiles }),
+  });
+}
+
+/** Accept one step of an imported profile, or all of them at once. */
+export function useAcceptStep() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id }: { id: string; profileId: string }) => profileApi.acceptStep(id),
+    onSuccess: (_profile, { profileId }) => {
+      void client.invalidateQueries({ queryKey: keys.profiles });
+      void client.invalidateQueries({ queryKey: keys.steps(profileId) });
+    },
+  });
+}
+
+export function useAcceptProfile() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => profileApi.acceptProfile(id),
+    onSuccess: (_profile, id) => {
+      void client.invalidateQueries({ queryKey: keys.profiles });
+      void client.invalidateQueries({ queryKey: keys.steps(id) });
+    },
+  });
+}
+
+/** Hand a profile's schedule to Windows, or take it back. */
+export function useSetSchedule() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, schedule }: { id: string; schedule: Schedule | null }) =>
+      profileApi.setSchedule(id, schedule),
+    onSuccess: (_profile, { id }) => {
+      void client.invalidateQueries({ queryKey: keys.profiles });
+      void client.invalidateQueries({ queryKey: keys.scheduled(id) });
+    },
+  });
+}
+
+/** Is the task there, as Windows sees it — not as the row remembers it. */
+export function useScheduleRegistered(id: string) {
+  return useQuery({
+    queryKey: keys.scheduled(id),
+    queryFn: () => profileApi.scheduleRegistered(id),
+  });
+}
+
+/** Register a profile's key combination, or remove it. */
+export function useSetShortcut() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, shortcut }: { id: string; shortcut: Shortcut | null }) =>
+      profileApi.setShortcut(id, shortcut),
     onSuccess: () => client.invalidateQueries({ queryKey: keys.profiles }),
   });
 }
@@ -66,8 +174,41 @@ export function useSteps(profileId: string | null) {
 export function useAddStep() {
   const client = useQueryClient();
   return useMutation({
-    mutationFn: ({ profileId, config }: { profileId: string; config: StepConfig }) =>
-      profileApi.addStep(profileId, config),
+    mutationFn: ({
+      profileId,
+      config,
+      timing,
+      waitFor,
+      placement,
+    }: {
+      profileId: string;
+      config: StepConfig;
+      timing: Timing;
+      waitFor: WaitFor | null;
+      placement: Placement;
+    }) => profileApi.addStep(profileId, config, timing, waitFor, placement),
+    onSuccess: (_step, { profileId }) =>
+      client.invalidateQueries({ queryKey: keys.steps(profileId) }),
+  });
+}
+
+export function useUpdateStep() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: ({
+      id,
+      config,
+      timing,
+      waitFor,
+      placement,
+    }: {
+      id: string;
+      profileId: string;
+      config: StepConfig;
+      timing: Timing;
+      waitFor: WaitFor | null;
+      placement: Placement;
+    }) => profileApi.updateStep(id, config, timing, waitFor, placement),
     onSuccess: (_step, { profileId }) =>
       client.invalidateQueries({ queryKey: keys.steps(profileId) }),
   });
@@ -78,6 +219,16 @@ export function useDeleteStep() {
   return useMutation({
     mutationFn: ({ id }: { id: string; profileId: string }) => profileApi.deleteStep(id),
     onSuccess: (_void, { profileId }) =>
+      client.invalidateQueries({ queryKey: keys.steps(profileId) }),
+  });
+}
+
+export function useMoveStep() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, direction }: { id: string; profileId: string; direction: -1 | 1 }) =>
+      profileApi.moveStep(id, direction),
+    onSuccess: (_steps, { profileId }) =>
       client.invalidateQueries({ queryKey: keys.steps(profileId) }),
   });
 }
@@ -104,22 +255,60 @@ export function useEvents(runId: string | null) {
  */
 export function useExecuteProfile() {
   const client = useQueryClient();
-  return useMutation({
+  // One stopper per execution: Stop reaches the run in progress and nothing else.
+  const stopper = useRef<Stopper | null>(null);
+  const stop = useCallback(() => stopper.current?.stop(), []);
+  const mutation = useMutation({
     mutationFn: ({
-      profileId,
-      stepIds,
+      profile,
+      steps,
       mode,
+      env,
       onLine,
+      onBegin,
+      trigger,
     }: {
-      profileId: string;
-      stepIds: string[];
+      profile: Runnable;
+      steps: Step[];
       mode: Mode;
+      env: Readonly<Record<string, string>>;
       onLine?: (line: runApi.LogLine) => void;
-    }) =>
-      executeProfile(profileId, stepIds, mode, (line) => {
-        void client.invalidateQueries({ queryKey: keys.events(line.runId) });
-        onLine?.(line);
-      }),
-    onSettled: () => client.invalidateQueries({ queryKey: ['runs'] }),
+      onBegin?: (run: runApi.Run) => void;
+      /** Why the run starts; a person's button unless a trigger says otherwise. */
+      trigger?: Trigger;
+    }) => {
+      stopper.current = new Stopper();
+      return executeProfile(
+        profile,
+        steps,
+        mode,
+        env,
+        (line) => {
+          void client.invalidateQueries({ queryKey: keys.events(line.runId) });
+          onLine?.(line);
+        },
+        (run) => {
+          // The run list must know the run while it runs, or the screen shows
+          // "has not run yet" for the whole of a hold. Found by the end-to-end
+          // suite the first time a run lasted longer than a refetch.
+          void client.invalidateQueries({ queryKey: ['runs'] });
+          onBegin?.(run);
+        },
+        stopper.current,
+        trigger ?? 'button',
+      );
+    },
+    // The last line — `run_finished` — is written by the host without an
+    // `onLine`, and the refetch the previous line triggered may have read the
+    // file before it was there. Read every log again once the run is over, so
+    // the screen never stops one line short of the truth. Found by the
+    // end-to-end suite: "completed, with failures" reached the file and not
+    // the screen.
+    onSettled: () => {
+      void client.invalidateQueries({ queryKey: ['runs'] });
+      void client.invalidateQueries({ queryKey: ['events'] });
+      stopper.current = null;
+    },
   });
+  return { ...mutation, stop };
 }

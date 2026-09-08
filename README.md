@@ -15,10 +15,14 @@ No cloud. No account. No telemetry. No shell.
 
 ---
 
-> **Status: foundation.** Deskstart is being built in public, one vertical slice at a time.
-> What exists today is the foundation (F0): a profile with application steps, a Run button
-> that really starts them, and a log that really says what happened. Everything else on this
-> page is marked as planned. Installers arrive with the first release.
+> **Status: early.** Deskstart is being built in public, one vertical slice at a time. What
+> exists today is the foundation (F0), the profile editor (F1), time (F2), Stop (F3),
+> waiting (F4), the file (F5), the window (F6), the tools (F7), the machines (F8) and the
+> triggers (F9) and settings (F10):
+> profiles of applications, folders, files and web pages, with pauses, holds and cycles; a Run
+> button that really opens them and really closes them when their time is up; a Stop that
+> closes what the run opened and nothing else; and a log that really says what happened. Everything else on this page is marked as planned. Installers arrive with the
+> first release.
 
 ## Why
 
@@ -38,13 +42,52 @@ twenty minutes, then close it" and "open, close, reopen" are first-class, not a 
 
 ## What exists today
 
-- **Profiles** with application steps: an absolute program path and, optionally, a working
-  directory.
+- **Profiles** of steps, edited in one form: an **application** (program path, arguments as
+  a list, working directory), a **folder** (opened in Explorer), a **file** (opened with what
+  Windows associates with it), a **web page** (`http`/`https`, in the default browser), a
+  **bookmark folder**, a **terminal** and an **editor** (F7, below). Paths
+  may use `%USERPROFILE%` and five other allow-listed names; the row shows the path as written
+  and what it became.
 - **Run.** Each step is started in order from an argument vector — never through a shell —
   and the log gets a line per step before the screen does: _Started notepad.exe — PID 1234_,
   with the time the host wrote it. A program that cannot be started is a line with its
   reason, and the run goes on.
-- **Dry run.** The same run, writing what it would do and starting nothing.
+- **Time.** A pause after any step. For an application, a hold — keep it open this long,
+  then close it (its windows are asked first; terminated only after a grace) — and a cycle:
+  open it N times, closed for a while in between. Holds never block the next step.
+- **Waiting.** A step can wait for an earlier one to be responding — a window of its own, or
+  a port that answers — up to a timeout. When the timeout runs out the step is skipped with
+  the reason and the profile carries on.
+- **Stop.** Closes what the run opened — asked first, terminated after a grace — and
+  whatever those programs started, through the run's Job Object. A program the run did not
+  start is never touched.
+- **The file.** A profile is exported as a versioned JSON document — what it opens, its time
+  and its waiting, and nothing about this machine — and imported back through the system's
+  dialog or pasted in. An imported profile **runs nothing** until every one of its steps has
+  been read and accepted, each shown with its path resolved absolute and each argument on its
+  own line.
+- **Settings, and a backup that is everything.** A Settings screen keeps the theme, Start with
+  Windows, and About; a **backup** saves the whole workspace — every profile and every run — to
+  one file, and a **restore** brings it all back. Diagnostics lists every program a step can call,
+  found or not found with its path.
+- **Triggers.** A profile can start at a **time of day** — handed to the Windows Task Scheduler,
+  so Deskstart need not be open — or from a **key combination** pressed in any program, or from
+  `deskstart.exe --run <id>`. Closing the window keeps Deskstart in the tray; **Start with
+  Windows** is a checkbox, off until you turn it on. A run that started by itself says so on its
+  heading.
+- **Virtual machines.** A machine on Hyper-V, VirtualBox or VMware Workstation, started with
+  its console showing. The hypervisor is asked and waited for, up to a minute, and what it
+  answered — a machine that is not there, a permission that is missing — is in the log. A
+  hypervisor this machine has not got is a reason within a second, never a hang.
+- **Steps that call a tool.** A **bookmark folder** — Chrome's or Edge's — opened as one
+  browser window; **Windows Terminal** on a named profile, in a directory; a folder opened in
+  **VS Code**. Each tool is found where Windows installs it, never on `PATH`, and a tool this
+  machine has not got is a reason you can read rather than a step that quietly does nothing.
+- **Where the window goes.** A step can open its program on a chosen screen, at a chosen
+  rectangle, normal, maximised or minimised. A screen this machine has not got lands the window
+  on the primary and says so; a program that shows no window of its own says that.
+- **Dry run.** The same run on a virtual clock: the whole timeline written at once, nothing
+  started, nothing waited for.
 - **The log.** Append-only in the database — triggers refuse any update or delete — read on
   the profile screen and on the Runs screen, kept across restarts and after the profile is
   gone.
@@ -54,20 +97,11 @@ twenty minutes, then close it" and "open, close, reopen" are first-class, not a 
 
 ## What is planned
 
-| Slice | What                                                            |
-| ----- | --------------------------------------------------------------- |
-| F1    | Profile editor: arguments, folders, files, URLs; dry-run detail |
-| F2    | Time: pause between steps, hold then close, cycles              |
-| F3    | Stop, and the run history                                       |
-| F4    | Dependencies: "start X once Y is responding", with a timeout    |
-| F5    | Profile as a file: export, import, **review before running**    |
-| F6    | Window control: position, size, monitor, state                  |
-| F7    | Context steps: a bookmark folder, Windows Terminal, VS Code     |
-| F8    | Virtual machines: Hyper-V, VirtualBox, VMware Workstation       |
-| F9    | Triggers: schedule via Task Scheduler, global shortcut          |
-| F10   | Settings, Diagnostics, About, backup                            |
-| F11   | Fluent polish and accessibility                                 |
-| F12   | Release 1.0.0                                                   |
+| Slice | What                                 |
+| ----- | ------------------------------------ |
+| F10   | Settings, Diagnostics, About, backup |
+| F11   | Fluent polish and accessibility      |
+| F12   | Release 1.0.0                        |
 
 The specification, with a proof of done per slice, is [`docs/SPEC.md`](docs/SPEC.md).
 
@@ -99,8 +133,10 @@ to open. Your data lives in a single SQLite file under your user profile.
 Deskstart is built to look like it belongs on Windows 11, not like a web page in a frame:
 Mica window material, the **system accent colour** read from Windows and followed live,
 rounded corners, a custom title bar, Segoe UI Variable, Fluent motion curves, and a single
-icon set (Fluent UI System Icons). Light and dark themes follow the system. Everything is
-reachable from the keyboard, and `prefers-reduced-motion` is honoured everywhere.
+icon set (Fluent UI System Icons). Light and dark themes follow the system, and content sits on opaque surfaces so text is
+readable with or without Mica behind the window. Every screen passes axe-core in both themes;
+everything is reachable from the keyboard with focus shown, and `prefers-reduced-motion` is
+honoured everywhere.
 
 One known gap, stated rather than hidden: Snap Layouts — hovering the maximise button to pick
 a window layout — needs native hit-testing that a custom title bar does not get for free.

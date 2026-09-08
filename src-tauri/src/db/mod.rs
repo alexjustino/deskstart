@@ -4,10 +4,12 @@
 //! a run does next are pure TypeScript in `src/domain/`. Rust owns storage,
 //! transactions, migrations, the append-only run log and the operating system.
 
+pub mod backup;
 pub mod migrations;
 pub mod models;
 pub mod profiles;
 pub mod runs;
+pub mod settings;
 
 use std::path::PathBuf;
 use std::sync::Mutex;
@@ -43,7 +45,11 @@ pub fn database_path(app: &AppHandle) -> Result<PathBuf> {
 
 /// Open the workspace, apply pending migrations, and return the connection.
 pub fn open(app: &AppHandle) -> Result<Connection> {
-    open_at(&database_path(app)?)
+    let path = database_path(app)?;
+    // A restore staged in the last session becomes the workspace now, before it
+    // is opened — the one moment the file is not locked (F10, ADR-025).
+    backup::apply_pending(&path)?;
+    open_at(&path)
 }
 
 /// Open a workspace file the way start-up does.

@@ -1,6 +1,6 @@
 [package]
 name = "deskstart"
-version = "0.1.0"
+version = "1.0.0"
 description = "Open your working day with one button: profiles of timed steps, run and logged"
 authors = ["Alex Justino"]
 license = "Apache-2.0"
@@ -17,7 +17,8 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-tauri = { version = "2", features = [] }
+tauri = { version = "2", features = ["tray-icon"] }
+tauri-plugin-dialog = "2"
 tauri-plugin-log = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
@@ -29,9 +30,22 @@ chrono = { version = "0.4", default-features = false, features = ["clock", "std"
 
 [target.'cfg(not(any(target_os = "android", target_os = "ios")))'.dependencies]
 tauri-plugin-single-instance = "2"
+tauri-plugin-global-shortcut = "2"
+tauri-plugin-autostart = "2"
 
 [target.'cfg(windows)'.dependencies]
-windows = { version = "0.58", features = ["UI_ViewManagement", "Foundation"] }
+windows = { version = "0.58", features = [
+    "UI_ViewManagement",
+    "Foundation",
+    "Win32_Foundation",
+    "Win32_Graphics_Gdi",
+    "Win32_Security",
+    "Win32_System_JobObjects",
+    "Win32_System_Registry",
+    "Win32_System_Threading",
+    "Win32_UI_Shell",
+    "Win32_UI_WindowsAndMessaging",
+] }
 
 [profile.release]
 codegen-units = 1

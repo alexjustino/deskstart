@@ -1,11 +1,33 @@
 import {
   Add20Regular,
+  Apps20Regular,
+  ArrowImport20Regular,
+  ArrowDown20Regular,
+  ArrowUp20Regular,
+  Bookmark20Regular,
+  Code20Regular,
   Delete20Regular,
+  Document20Regular,
   DocumentSearch20Regular,
+  Edit20Regular,
+  Folder20Regular,
+  Globe20Regular,
   Play20Regular,
   PlayCircle20Regular,
+  Server20Regular,
+  Share20Regular,
+  Stop20Regular,
+  WindowConsole20Regular,
 } from '@fluentui/react-icons';
-import { useCallback, useMemo, useState, type FormEvent } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type FormEvent,
+  type ReactNode,
+} from 'react';
 
 import { describeError } from '@/data/errors';
 import {
@@ -13,15 +35,33 @@ import {
   useCreateProfile,
   useDeleteProfile,
   useDeleteStep,
+  useEnvironment,
   useEvents,
   useExecuteProfile,
+  useMonitors,
+  useMoveStep,
   useProfiles,
   useRuns,
   useSteps,
+  useTools,
+  useUpdateStep,
 } from '@/data/hooks';
 import type { Profile, StoredStep } from '@/data/profiles';
-import { resolvePath } from '@/domain/profile';
+import {
+  resolveStep,
+  stepTitle,
+  type Problem,
+  type Step,
+  type StepConfig,
+  type StepKind,
+} from '@/domain/profile';
 import type { Mode } from '@/domain/run';
+import { describePlacement } from '@/domain/placement';
+import { describeWaitFor, waitForProblems } from '@/domain/readiness';
+import { reviewState } from '@/domain/review';
+import { describeTiming } from '@/domain/timing';
+import { describeTrigger, type Trigger } from '@/domain/triggers';
+import type { RunRequest } from '@/data/system';
 import { Button } from '@/ui/Button';
 import { Card } from '@/ui/Card';
 import { ConfirmDialog } from '@/ui/ConfirmDialog';
@@ -31,19 +71,38 @@ import { InfoBar } from '@/ui/InfoBar';
 import { Input } from '@/ui/Input';
 import { announce } from '@/ui/announce';
 
-import { baseName } from '../runs/describe';
 import { LogLines, RunHeading } from '../runs/LogLines';
+import { ExportProfile } from './ExportProfile';
+import { ImportProfile } from './ImportProfile';
+import { ReviewSteps } from './ReviewSteps';
+import { TriggersCard } from './TriggersCard';
+import { HYPERVISOR_LABELS, KIND_LABELS } from './kinds';
+import { StepForm, type EarlierStep, type Screen, type ToolState } from './StepForm';
 
 /**
  * Profiles: the list on the left, the selected profile on the right, and the
  * button that runs it.
  *
  * The latest run's log sits under the steps because that is the product's
- * claim in one screen: press Run, watch the lines appear, read the PID.
+ * claim in one screen: press Run, watch the lines appear, read what happened.
  */
-export function ProfilesPage() {
+export function ProfilesPage({
+  request = null,
+}: {
+  /** A run a trigger asked for, to be selected and started once (F9). */
+  request?: RunRequestOnce | null;
+}) {
   const profiles = useProfiles();
   const [selectedId, setSelectedId] = useState<string | null>(null);
+
+  // A trigger's request selects its profile; the detail below starts it. The
+  // selection is adjusted during render, from the request that just arrived,
+  // rather than in an effect that would render once more to say the same.
+  const [seenRequest, setSeenRequest] = useState<RunRequestOnce | null>(null);
+  if (request !== seenRequest) {
+    setSeenRequest(request);
+    if (request !== null) setSelectedId(request.profileId);
+  }
 
   // The selection is derived, not synchronised: a profile chosen earlier
   // stays chosen while it exists, and the first one stands in otherwise.
@@ -54,7 +113,7 @@ export function ProfilesPage() {
   return (
     <div className="flex h-full">
       <ProfileList profiles={list} selectedId={selected?.id ?? null} onSelect={setSelectedId} />
-      <section className="min-w-0 flex-1 overflow-y-auto">
+      <section tabIndex={0} className="min-w-0 flex-1 overflow-y-auto focus-visible:outline-none">
         {profiles.isError && (
           <div className="p-6">
             <InfoBar severity="danger" title="The profiles could not be read">
@@ -66,10 +125,10 @@ export function ProfilesPage() {
           <EmptyState
             icon={<PlayCircle20Regular />}
             title="No profiles yet"
-            description="A profile is the set of things you open to start working. Name one on the left, then add the programs it should start."
+            description="A profile is the set of things you open to start working. Name one on the left, then add what it should open."
           />
         )}
-        {selected && <ProfileDetail key={selected.id} profile={selected} />}
+        {selected && <ProfileDetail key={selected.id} profile={selected} request={request} />}
       </section>
     </div>
   );
@@ -86,6 +145,7 @@ function ProfileList({
 }) {
   const create = useCreateProfile();
   const [name, setName] = useState('');
+  const [importing, setImporting] = useState(false);
 
   const submit = (event: FormEvent) => {
     event.preventDefault();
@@ -124,6 +184,20 @@ function ProfileList({
           </InfoBar>
         </div>
       )}
+      <div className="px-3 pb-3">
+        <Button
+          className="w-full"
+          icon={<ArrowImport20Regular />}
+          onClick={() => setImporting(true)}
+        >
+          Import a profile
+        </Button>
+      </div>
+      <ImportProfile
+        open={importing}
+        onClose={() => setImporting(false)}
+        onImported={(profile) => onSelect(profile.id)}
+      />
       <nav aria-label="Profiles" className="flex flex-col gap-0.5 px-2">
         {profiles.map((profile) => {
           const current = profile.id === selectedId;
@@ -148,19 +222,69 @@ function ProfileList({
   );
 }
 
-function ProfileDetail({ profile }: { profile: Profile }) {
+/** A trigger's request with a serial, so it is served once and not on every render. */
+export type RunRequestOnce = RunRequest & { serial: number };
+
+/** A stored step with what the domain makes of it against this machine's environment. */
+interface Judged {
+  stored: StoredStep;
+  step: Step | null;
+  problems: Problem[];
+}
+
+function ProfileDetail({ profile, request }: { profile: Profile; request: RunRequestOnce | null }) {
   const steps = useSteps(profile.id);
+  const environment = useEnvironment();
+  const screens = useMonitors();
+  const tools = useTools();
   const runs = useRuns(profile.id);
   const execute = useExecuteProfile();
   const remove = useDeleteProfile();
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const [activeRunId, setActiveRunId] = useState<string | null>(null);
 
-  const readable = useMemo(
-    () => (steps.data ?? []).filter((s): s is StoredStep & { readable: true } => s.readable),
-    [steps.data],
+  const env = useMemo(() => environment.data ?? {}, [environment.data]);
+
+  // Every step judged once: readable, and resolvable here. Both are shown on
+  // the row, and either blocks Run — a profile never runs with a step the
+  // person cannot see for what it is.
+  const judged: Judged[] = useMemo(() => {
+    const stored = steps.data ?? [];
+    // What every step waits for is judged against the profile as it is now: a
+    // step that waits for one that was deleted, or moved after it, says so.
+    const waiters = stored.map((s) => ({
+      id: s.readable ? s.step.id : s.id,
+      waitFor: s.readable ? s.step.waitFor : null,
+    }));
+    return stored.map((entry, index) => {
+      if (!entry.readable) return { stored: entry, step: null, problems: entry.problems };
+      const resolved = resolveStep(entry.step.config, env);
+      return {
+        stored: entry,
+        step: entry.step,
+        problems: [...(resolved.ok ? [] : resolved.problems), ...waitForProblems(waiters, index)],
+      };
+    });
+  }, [steps.data, env]);
+  const runnable = judged.filter((j): j is Judged & { step: Step } => j.step !== null);
+  const blocked = judged.filter((j) => j.problems.length > 0).length;
+
+  // Where this profile stands with review (ADR-013). While it is blocked the
+  // screen shows what the profile would do instead of how to edit it, and the
+  // loop refuses the run even if something reached it another way.
+  const review = useMemo(
+    () =>
+      reviewState(
+        profile,
+        (steps.data ?? []).map((entry) =>
+          entry.readable
+            ? { id: entry.step.id, reviewed: entry.step.reviewed }
+            : { id: entry.id, reviewed: entry.reviewed },
+        ),
+      ),
+    [profile, steps.data],
   );
-  const unreadable = (steps.data ?? []).length - readable.length;
 
   // The log on screen is the run in progress, or else the newest one.
   const shownRunId = activeRunId ?? runs.data?.[0]?.id ?? null;
@@ -168,14 +292,16 @@ function ProfileDetail({ profile }: { profile: Profile }) {
   const events = useEvents(shownRunId);
 
   const start = useCallback(
-    (mode: Mode) => {
+    (mode: Mode, trigger: Trigger = 'button') => {
       setActiveRunId(null);
       execute.mutate(
         {
-          profileId: profile.id,
-          stepIds: readable.map((s) => s.step.id),
+          profile,
+          steps: runnable.map((j) => j.step),
           mode,
-          onLine: (line) => setActiveRunId(line.runId),
+          env,
+          trigger,
+          onBegin: (run) => setActiveRunId(run.id),
         },
         {
           onSuccess: ({ run }) => {
@@ -187,10 +313,39 @@ function ProfileDetail({ profile }: { profile: Profile }) {
         },
       );
     },
-    [execute, profile.id, readable],
+    [execute, profile, runnable, env],
   );
 
-  const canRun = readable.length > 0 && unreadable === 0 && !execute.isPending;
+  const canRun =
+    runnable.length > 0 &&
+    blocked === 0 &&
+    !review.blocked &&
+    !execute.isPending &&
+    environment.data !== undefined;
+
+  // A trigger's request is run exactly once, when this profile is the one it
+  // names and everything a run needs has loaded. The gate is the same as the
+  // button's: a profile that cannot be run by hand cannot be run by a clock.
+  const served = useRef<number | null>(null);
+  useEffect(() => {
+    if (request === null || request.profileId !== profile.id) return;
+    if (served.current === request.serial) return;
+    if (steps.data === undefined || environment.data === undefined) return;
+    served.current = request.serial;
+    // After this render has committed: a run begun from inside an effect is a
+    // cascade of renders, and the log is in no hurry by a frame.
+    const trigger = request.trigger;
+    const runnableNow = canRun;
+    const timer = setTimeout(() => {
+      if (runnableNow) {
+        start('real', trigger);
+        announce(`${describeTrigger(trigger) ?? 'A trigger'} started ${profile.name}`);
+      } else {
+        announce(`${profile.name} was asked to run and cannot be run right now`);
+      }
+    }, 0);
+    return () => clearTimeout(timer);
+  }, [request, profile.id, profile.name, steps.data, environment.data, canRun, start]);
 
   return (
     <div className="mx-auto flex w-full max-w-3xl flex-col gap-4 p-6">
@@ -198,9 +353,9 @@ function ProfileDetail({ profile }: { profile: Profile }) {
         <div>
           <h1 className="text-title font-semibold text-fg">{profile.name}</h1>
           <p className="mt-1 text-body text-fg-secondary">
-            {readable.length === 0
+            {judged.length === 0
               ? 'No steps yet.'
-              : `${readable.length} ${readable.length === 1 ? 'step' : 'steps'}, started in order.`}
+              : `${judged.length} ${judged.length === 1 ? 'step' : 'steps'}, in this order.`}
           </p>
         </div>
         <div className="flex gap-2">
@@ -216,9 +371,27 @@ function ProfileDetail({ profile }: { profile: Profile }) {
             icon={<DocumentSearch20Regular />}
             onClick={() => start('dry')}
             disabled={!canRun}
-            title="Show what would happen without starting anything"
+            title="Write what would happen without starting anything"
           >
             Dry run
+          </Button>
+          {execute.isPending && (
+            <Button
+              icon={<Stop20Regular />}
+              onClick={() => execute.stop()}
+              className="bg-danger-subtle text-danger border-danger/30 hover:bg-danger-subtle"
+              title="Close what this run opened, and only that"
+            >
+              Stop
+            </Button>
+          )}
+          <Button
+            icon={<Share20Regular />}
+            onClick={() => setExporting(true)}
+            disabled={execute.isPending}
+            title="Write this profile as a file"
+          >
+            Export
           </Button>
           <IconButton
             label="Delete profile"
@@ -234,17 +407,47 @@ function ProfileDetail({ profile }: { profile: Profile }) {
           {describeError(execute.error)}
         </InfoBar>
       )}
-      {unreadable > 0 && (
-        <InfoBar severity="danger" title="A step cannot be read">
-          This profile has {unreadable} {unreadable === 1 ? 'step' : 'steps'} whose configuration
-          could not be read. Remove {unreadable === 1 ? 'it' : 'them'} before running.
+      {environment.isError && (
+        <InfoBar severity="danger" title="The environment could not be read">
+          {describeError(environment.error)} Paths with %NAMES% cannot be resolved until it can.
+        </InfoBar>
+      )}
+      {review.blocked && (
+        <InfoBar severity="caution" title="This profile has not been reviewed">
+          It came from a file, and {review.reason}. Read each step below and accept it; until then
+          nothing here starts.
+        </InfoBar>
+      )}
+      {blocked > 0 && (
+        <InfoBar severity="danger" title="A step cannot run on this machine">
+          {blocked === 1 ? 'One step has' : `${blocked} steps have`} a problem shown below. Fix or
+          remove {blocked === 1 ? 'it' : 'them'} before running.
         </InfoBar>
       )}
 
-      <Card title="Steps" description="What this profile opens, in this order.">
-        <StepList profileId={profile.id} steps={steps.data ?? []} busy={execute.isPending} />
-        <AddStepForm profileId={profile.id} />
-      </Card>
+      {review.blocked ? (
+        <ReviewSteps profile={profile} steps={steps.data ?? []} env={env} review={review} />
+      ) : (
+        <Card title="Steps" description="What this profile opens, in this order.">
+          <StepList
+            profileId={profile.id}
+            judged={judged}
+            env={env}
+            screens={screens.data ?? []}
+            tools={tools.data ?? []}
+            busy={execute.isPending}
+          />
+          <AddStep
+            profileId={profile.id}
+            env={env}
+            earlier={titlesOf(judged, env)}
+            screens={screens.data ?? []}
+            tools={tools.data ?? []}
+          />
+        </Card>
+      )}
+
+      {!review.blocked && <TriggersCard profile={profile} />}
 
       <Card
         title={activeRunId !== null && execute.isPending ? 'Run in progress' : 'Latest run'}
@@ -259,6 +462,14 @@ function ProfileDetail({ profile }: { profile: Profile }) {
           <p className="text-body text-fg-tertiary">This profile has not run yet.</p>
         )}
       </Card>
+
+      <ExportProfile
+        open={exporting}
+        profile={profile}
+        steps={runnable.map((j) => j.step)}
+        omitted={judged.length - runnable.length}
+        onClose={() => setExporting(false)}
+      />
 
       <ConfirmDialog
         open={confirmDelete}
@@ -282,134 +493,290 @@ function ProfileDetail({ profile }: { profile: Profile }) {
   );
 }
 
+const KIND_ICONS: Record<StepKind, ReactNode> = {
+  app: <Apps20Regular />,
+  folder: <Folder20Regular />,
+  file: <Document20Regular />,
+  url: <Globe20Regular />,
+  bookmarks: <Bookmark20Regular />,
+  terminal: <WindowConsole20Regular />,
+  editor: <Code20Regular />,
+  vm: <Server20Regular />,
+};
+
+/** What a person calls the step, judged after expansion: the folder's real name, not `%USERPROFILE%`. */
+function titleOf(config: StepConfig, env: Readonly<Record<string, string>>): string {
+  const resolved = resolveStep(config, env);
+  if (!resolved.ok) return stepTitle(config);
+  switch (resolved.launch.kind) {
+    case 'app':
+      return stepTitle({ ...config, kind: 'app', program: resolved.launch.program } as StepConfig);
+    case 'folder':
+    case 'file':
+      return stepTitle({ kind: resolved.launch.kind, path: resolved.launch.path });
+    case 'url':
+    case 'bookmarks':
+    case 'tool':
+      // A bookmark folder, a terminal and an editor are called what the person
+      // wrote, not what the tool's path happens to be.
+      return stepTitle(config);
+  }
+}
+
+/** What the row says under the title: the path as written, and what it became. */
+function summary(config: StepConfig, env: Readonly<Record<string, string>>): string {
+  const resolved = resolveStep(config, env);
+  const written = (() => {
+    switch (config.kind) {
+      case 'app':
+        return `${config.program}${config.args.length > 0 ? ` · ${config.args.length} ${config.args.length === 1 ? 'argument' : 'arguments'}` : ''}${config.workingDir ? ` · in ${config.workingDir}` : ''}`;
+      case 'folder':
+      case 'file':
+        return config.path;
+      case 'url':
+        return config.url;
+      case 'bookmarks':
+        return `${config.folder} — ${config.browser === 'chrome' ? 'Chrome' : 'Edge'}`;
+      case 'terminal':
+        return (
+          [config.profile, config.directory].filter((part) => part !== null).join(' · ') ||
+          'the default profile'
+        );
+      case 'editor':
+        return config.path;
+      case 'vm':
+        return `${config.machine} — ${HYPERVISOR_LABELS[config.hypervisor]}`;
+    }
+  })();
+  if (!resolved.ok) return written;
+  const target = (() => {
+    switch (resolved.launch.kind) {
+      case 'app':
+        return resolved.launch.program;
+      case 'folder':
+      case 'file':
+        return resolved.launch.path;
+      case 'url':
+        return resolved.launch.url;
+      case 'tool':
+        // What changed is the path the tool was given, if it was given one:
+        // "%USERPROFILE% → C:\Users\Alex" says more than the tool's name,
+        // which the row already carries as the title.
+        return resolved.launch.args.at(-1) ?? resolved.launch.what;
+      case 'bookmarks':
+        return resolved.launch.folder;
+    }
+  })();
+  const source = resolved.launch.source;
+  return source !== null ? `${written} → ${target}` : written;
+}
+
+/** What each readable step is called, in order: the "waits for" list. */
+function titlesOf(judged: Judged[], env: Readonly<Record<string, string>>): EarlierStep[] {
+  return judged
+    .filter((j): j is Judged & { step: Step } => j.step !== null)
+    .map((j) => ({ id: j.step.id, title: titleOf(j.step.config, env) }));
+}
+
 function StepList({
   profileId,
-  steps,
+  judged,
+  env,
+  screens,
+  tools,
   busy,
 }: {
   profileId: string;
-  steps: StoredStep[];
+  judged: Judged[];
+  env: Readonly<Record<string, string>>;
+  screens: readonly Screen[];
+  tools: readonly ToolState[];
   busy: boolean;
 }) {
   const remove = useDeleteStep();
-  if (steps.length === 0) {
-    return <p className="mb-3 text-body text-fg-tertiary">Add the first program below.</p>;
+  const move = useMoveStep();
+  const update = useUpdateStep();
+  const [editingId, setEditingId] = useState<string | null>(null);
+
+  if (judged.length === 0) {
+    return <p className="mb-3 text-body text-fg-tertiary">Add the first step below.</p>;
   }
+  const pending = busy || remove.isPending || move.isPending || update.isPending;
+
   return (
     <ol aria-label="Steps" className="mb-4 flex flex-col gap-1">
-      {steps.map((stored, index) => (
-        <li
-          key={stored.readable ? stored.step.id : stored.id}
-          className="flex items-center gap-3 rounded-md px-2 py-1 hover:bg-card-hover"
-        >
-          <span className="w-6 shrink-0 text-right font-mono text-caption text-fg-tertiary">
-            {index + 1}
-          </span>
-          {stored.readable ? (
-            <span className="min-w-0 flex-1">
-              <span className="block truncate text-body text-fg">
-                {baseName(stored.step.config.program)}
+      {judged.map(({ stored, step, problems }, index) => {
+        const id = stored.readable ? stored.step.id : stored.id;
+        const editing = step !== null && editingId === id;
+        return (
+          <li key={id} className="rounded-md px-2 py-1 hover:bg-card-hover">
+            <div className="flex items-center gap-3">
+              <span className="w-6 shrink-0 text-right font-mono text-caption text-fg-tertiary">
+                {index + 1}
               </span>
-              <span
-                data-selectable
-                className="block truncate font-mono text-caption text-fg-tertiary"
-              >
-                {stored.step.config.program}
-                {stored.step.config.workingDir ? ` — in ${stored.step.config.workingDir}` : ''}
+              <span aria-hidden="true" className="shrink-0 text-fg-tertiary">
+                {step ? KIND_ICONS[step.config.kind] : <Document20Regular />}
               </span>
-            </span>
-          ) : (
-            <span className="min-w-0 flex-1 text-body text-danger">
-              This step could not be read: {stored.problems.map((p) => p.problem).join('; ')}
-            </span>
-          )}
-          <IconButton
-            label={`Remove step ${index + 1}`}
-            icon={<Delete20Regular />}
-            disabled={busy || remove.isPending}
-            onClick={() =>
-              remove.mutate({ id: stored.readable ? stored.step.id : stored.id, profileId })
-            }
-          />
-        </li>
-      ))}
+              {step ? (
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-body text-fg">
+                    {titleOf(step.config, env)}
+                    <span className="ml-2 text-caption text-fg-tertiary">
+                      {KIND_LABELS[step.config.kind]}
+                    </span>
+                  </span>
+                  <span
+                    data-selectable
+                    title={summary(step.config, env)}
+                    className="block truncate font-mono text-caption text-fg-tertiary"
+                  >
+                    {summary(step.config, env)}
+                  </span>
+                  {describeWaitFor(
+                    step.waitFor,
+                    judged.find((j) => j.step?.id === step.waitFor?.stepId)?.step
+                      ? titleOf(
+                          judged.find((j) => j.step?.id === step.waitFor?.stepId)!.step!.config,
+                          env,
+                        )
+                      : null,
+                  ) && (
+                    <span className="block text-caption text-fg-secondary">
+                      {describeWaitFor(
+                        step.waitFor,
+                        judged.find((j) => j.step?.id === step.waitFor?.stepId)?.step
+                          ? titleOf(
+                              judged.find((j) => j.step?.id === step.waitFor?.stepId)!.step!.config,
+                              env,
+                            )
+                          : null,
+                      )}
+                    </span>
+                  )}
+                  {describeTiming(step.timing) && (
+                    <span className="block text-caption text-fg-secondary">
+                      {describeTiming(step.timing)}
+                    </span>
+                  )}
+                  {describePlacement(step.placement) && (
+                    <span className="block text-caption text-fg-secondary">
+                      {describePlacement(step.placement)}
+                    </span>
+                  )}
+                  {problems.length > 0 && (
+                    <span className="block text-caption text-danger">
+                      {problems.map((p) => p.problem).join('; ')}
+                    </span>
+                  )}
+                </span>
+              ) : (
+                <span className="min-w-0 flex-1 text-body text-danger">
+                  This step could not be read: {problems.map((p) => p.problem).join('; ')}
+                </span>
+              )}
+              <IconButton
+                label={`Move step ${index + 1} up`}
+                icon={<ArrowUp20Regular />}
+                disabled={pending || index === 0}
+                onClick={() => move.mutate({ id, profileId, direction: -1 })}
+              />
+              <IconButton
+                label={`Move step ${index + 1} down`}
+                icon={<ArrowDown20Regular />}
+                disabled={pending || index === judged.length - 1}
+                onClick={() => move.mutate({ id, profileId, direction: 1 })}
+              />
+              {step && (
+                <IconButton
+                  label={`Edit step ${index + 1}`}
+                  icon={<Edit20Regular />}
+                  selected={editing}
+                  disabled={pending}
+                  onClick={() => setEditingId(editing ? null : id)}
+                />
+              )}
+              <IconButton
+                label={`Remove step ${index + 1}`}
+                icon={<Delete20Regular />}
+                disabled={pending}
+                onClick={() => remove.mutate({ id, profileId })}
+              />
+            </div>
+            {editing && (
+              <div className="pb-2 pl-9">
+                <StepForm
+                  key={id}
+                  initial={{
+                    config: step.config,
+                    timing: step.timing,
+                    waitFor: step.waitFor,
+                    placement: step.placement,
+                  }}
+                  earlier={titlesOf(judged.slice(0, index), env)}
+                  screens={screens}
+                  tools={tools}
+                  env={env}
+                  pending={update.isPending}
+                  hostError={update.isError ? describeError(update.error) : null}
+                  onCancel={() => setEditingId(null)}
+                  onSubmit={(config, timing, waitFor, placement) =>
+                    update.mutate(
+                      { id, profileId, config, timing, waitFor, placement },
+                      {
+                        onSuccess: () => {
+                          setEditingId(null);
+                          announce(`Changed step ${index + 1}`);
+                        },
+                      },
+                    )
+                  }
+                />
+              </div>
+            )}
+          </li>
+        );
+      })}
     </ol>
   );
 }
 
-function AddStepForm({ profileId }: { profileId: string }) {
+function AddStep({
+  profileId,
+  env,
+  earlier,
+  screens,
+  tools,
+}: {
+  profileId: string;
+  env: Readonly<Record<string, string>>;
+  earlier: readonly EarlierStep[];
+  screens: readonly Screen[];
+  tools: readonly ToolState[];
+}) {
   const add = useAddStep();
-  const [program, setProgram] = useState('');
-  const [workingDir, setWorkingDir] = useState('');
-  const [problem, setProblem] = useState<string | null>(null);
-
-  const submit = (event: FormEvent) => {
-    event.preventDefault();
-    // F0 expands nothing: the host's environment is not read yet, so a path is
-    // taken as written and must already be absolute. F1 brings the allow-list.
-    const resolvedProgram = resolvePath(program, {});
-    if (!resolvedProgram.ok) {
-      setProblem(resolvedProgram.problem);
-      return;
-    }
-    let dir: string | null = null;
-    if (workingDir.trim() !== '') {
-      const resolvedDir = resolvePath(workingDir, {});
-      if (!resolvedDir.ok) {
-        setProblem(resolvedDir.problem);
-        return;
-      }
-      dir = resolvedDir.path;
-    }
-    setProblem(null);
-    add.mutate(
-      {
-        profileId,
-        config: { kind: 'app', program: resolvedProgram.path, args: [], workingDir: dir },
-      },
-      {
-        onSuccess: () => {
-          setProgram('');
-          setWorkingDir('');
-          announce(`Added ${baseName(resolvedProgram.path)}`);
-        },
-      },
-    );
-  };
-
+  // A new key after every success gives the form a clean slate.
+  const [generation, setGeneration] = useState(0);
   return (
-    <form onSubmit={submit} className="flex flex-col gap-2 border-t border-stroke-subtle pt-3">
-      <p className="text-caption font-semibold text-fg-tertiary uppercase">Add an application</p>
-      <Input
-        aria-label="Program path"
-        placeholder={'C:\\Windows\\System32\\notepad.exe'}
-        value={program}
-        onChange={(e) => setProgram(e.target.value)}
-        disabled={add.isPending}
-        spellCheck={false}
-      />
-      <Input
-        aria-label="Working directory (optional)"
-        placeholder="Working directory (optional)"
-        value={workingDir}
-        onChange={(e) => setWorkingDir(e.target.value)}
-        disabled={add.isPending}
-        spellCheck={false}
-      />
-      {(problem ?? (add.isError ? describeError(add.error) : null)) && (
-        <InfoBar severity="danger" title="The step was not added">
-          {problem ?? describeError(add.error)}
-        </InfoBar>
-      )}
-      <div>
-        <Button
-          type="submit"
-          icon={<Add20Regular />}
-          disabled={add.isPending || program.trim() === ''}
-        >
-          Add step
-        </Button>
-      </div>
-    </form>
+    <StepForm
+      key={generation}
+      initial={null}
+      earlier={earlier}
+      screens={screens}
+      tools={tools}
+      env={env}
+      pending={add.isPending}
+      hostError={add.isError ? describeError(add.error) : null}
+      onSubmit={(config, timing, waitFor, placement) =>
+        add.mutate(
+          { profileId, config, timing, waitFor, placement },
+          {
+            onSuccess: () => {
+              setGeneration((g) => g + 1);
+              announce(`Added ${stepTitle(config)}`);
+            },
+          },
+        )
+      }
+    />
   );
 }

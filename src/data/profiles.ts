@@ -8,6 +8,7 @@
 
 import { invoke } from '@tauri-apps/api/core';
 
+import type { StepImport } from '@/domain/portable';
 import {
   parseStoredStep,
   serializeStepConfig,
@@ -15,12 +16,27 @@ import {
   type Step,
   type StepConfig,
 } from '@/domain/profile';
+import { parseStoredPlacement, serializePlacement, type Placement } from '@/domain/placement';
+import { parseStoredWaitFor, serializeWaitFor, type WaitFor } from '@/domain/readiness';
+import { parseStoredTiming, serializeTiming, type Timing } from '@/domain/timing';
+import {
+  parseStoredSchedule,
+  parseStoredShortcut,
+  serializeSchedule,
+  serializeShortcut,
+  type Schedule,
+  type Shortcut,
+} from '@/domain/triggers';
 
 export interface Profile {
   id: string;
   name: string;
   position: number;
   importedUnreviewed: boolean;
+  /** When the Task Scheduler starts it, or null (F9). */
+  schedule: Schedule | null;
+  /** The key combination that starts it, or null (F9). */
+  shortcut: Shortcut | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -28,13 +44,22 @@ export interface Profile {
 /** A stored step, read back: either its configuration or why it could not be read. */
 export type StoredStep =
   | { readable: true; step: Step }
-  | { readable: false; id: string; profileId: string; position: number; problems: Problem[] };
+  | {
+      readable: false;
+      id: string;
+      profileId: string;
+      position: number;
+      reviewed: boolean;
+      problems: Problem[];
+    };
 
 interface RawProfile {
   id: string;
   name: string;
   position: number;
   imported_unreviewed: boolean;
+  schedule_json: string;
+  shortcut: string;
   created_at: string;
   updated_at: string;
 }
@@ -46,16 +71,26 @@ interface RawStep {
   kind: string;
   config_json: string;
   timing_json: string;
+  wait_json: string;
+  place_json: string;
+  reviewed: boolean;
   created_at: string;
   updated_at: string;
 }
 
 function toProfile(raw: RawProfile): Profile {
+  // A trigger the domain cannot read is shown as none: the host only ever
+  // stored what the domain wrote, so this is a row from a future the reader
+  // does not know, not a surprise to raise.
+  const schedule = parseStoredSchedule(raw.schedule_json ?? '{}');
+  const shortcut = parseStoredShortcut(raw.shortcut ?? '');
   return {
     id: raw.id,
     name: raw.name,
     position: raw.position,
     importedUnreviewed: raw.imported_unreviewed,
+    schedule: Array.isArray(schedule) ? null : schedule,
+    shortcut: Array.isArray(shortcut) ? null : shortcut,
     createdAt: raw.created_at,
     updatedAt: raw.updated_at,
   };
@@ -68,18 +103,36 @@ function toProfile(raw: RawProfile): Profile {
  */
 function toStoredStep(raw: RawStep): StoredStep {
   const parsed = parseStoredStep(raw.kind, raw.config_json);
-  if (!parsed.ok) {
+  const timing = parseStoredTiming(raw.timing_json);
+  const waitFor = parseStoredWaitFor(raw.wait_json ?? '{}');
+  const placement = parseStoredPlacement(raw.place_json ?? '{}');
+  if (!parsed.ok || Array.isArray(timing) || Array.isArray(waitFor) || Array.isArray(placement)) {
     return {
       readable: false,
       id: raw.id,
       profileId: raw.profile_id,
       position: raw.position,
-      problems: parsed.problems,
+      reviewed: raw.reviewed,
+      problems: [
+        ...(parsed.ok ? [] : parsed.problems),
+        ...(Array.isArray(timing) ? timing : []),
+        ...(Array.isArray(waitFor) ? waitFor : []),
+        ...(Array.isArray(placement) ? placement : []),
+      ],
     };
   }
   return {
     readable: true,
-    step: { id: raw.id, profileId: raw.profile_id, position: raw.position, config: parsed.config },
+    step: {
+      id: raw.id,
+      profileId: raw.profile_id,
+      position: raw.position,
+      config: parsed.config,
+      timing,
+      waitFor,
+      placement,
+      reviewed: raw.reviewed,
+    },
   };
 }
 
@@ -105,20 +158,100 @@ export async function listSteps(profileId: string): Promise<StoredStep[]> {
   return raw.map(toStoredStep);
 }
 
-export async function addStep(profileId: string, config: StepConfig): Promise<StoredStep> {
+export async function addStep(
+  profileId: string,
+  config: StepConfig,
+  timing: Timing,
+  waitFor: WaitFor | null,
+  placement: Placement,
+): Promise<StoredStep> {
   const raw = await invoke<RawStep>('step_add', {
     profileId,
     kind: config.kind,
     configJson: serializeStepConfig(config),
+    timingJson: serializeTiming(timing),
+    waitJson: serializeWaitFor(waitFor),
+    placeJson: serializePlacement(placement),
   });
   return toStoredStep(raw);
 }
 
-export async function updateStep(id: string, config: StepConfig): Promise<StoredStep> {
-  const raw = await invoke<RawStep>('step_update', { id, configJson: serializeStepConfig(config) });
+export async function updateStep(
+  id: string,
+  config: StepConfig,
+  timing: Timing,
+  waitFor: WaitFor | null,
+  placement: Placement,
+): Promise<StoredStep> {
+  const raw = await invoke<RawStep>('step_update', {
+    id,
+    configJson: serializeStepConfig(config),
+    timingJson: serializeTiming(timing),
+    waitJson: serializeWaitFor(waitFor),
+    placeJson: serializePlacement(placement),
+  });
   return toStoredStep(raw);
 }
 
 export async function deleteStep(id: string): Promise<void> {
   await invoke('step_delete', { id });
+}
+
+/** Move a step one place up (`-1`) or down (`1`); the whole list comes back. */
+export async function moveStep(id: string, direction: -1 | 1): Promise<StoredStep[]> {
+  const raw = await invoke<RawStep[]>('step_move', { id, direction });
+  return raw.map(toStoredStep);
+}
+
+/**
+ * Store a profile that came from a file. It arrives unreviewed: the host
+ * refuses to run it until every step has been accepted (ADR-013).
+ */
+export async function importProfile(name: string, steps: StepImport[]): Promise<Profile> {
+  return toProfile(await invoke<RawProfile>('profile_import', { name, steps }));
+}
+
+/** Accept one step. The profile comes back, so the screen learns when the gate lifts. */
+export async function acceptStep(id: string): Promise<Profile> {
+  return toProfile(await invoke<RawProfile>('step_accept', { id }));
+}
+
+/** Accept every step of a profile at once. */
+export async function acceptProfile(id: string): Promise<Profile> {
+  return toProfile(await invoke<RawProfile>('profile_accept', { id }));
+}
+
+/** Read one file the person chose, as text. What it means is the domain's business. */
+export async function readProfileFile(path: string): Promise<string> {
+  return invoke<string>('profile_file_read', { path });
+}
+
+/** Write one file the person chose. */
+export async function writeProfileFile(path: string, contents: string): Promise<void> {
+  await invoke('profile_file_write', { path, contents });
+}
+
+/** Hand a profile's schedule to the Task Scheduler, or take it back with null. */
+export async function setSchedule(id: string, schedule: Schedule | null): Promise<Profile> {
+  return toProfile(
+    await invoke<RawProfile>('profile_schedule_set', {
+      id,
+      scheduleJson: serializeSchedule(schedule),
+    }),
+  );
+}
+
+/** Is the profile's task registered with Windows right now? Asked of Windows. */
+export async function scheduleRegistered(id: string): Promise<boolean> {
+  return invoke<boolean>('schedule_registered', { id });
+}
+
+/** Register a profile's key combination with the system, or remove it with null. */
+export async function setShortcut(id: string, shortcut: Shortcut | null): Promise<Profile> {
+  return toProfile(
+    await invoke<RawProfile>('profile_shortcut_set', {
+      id,
+      shortcut: serializeShortcut(shortcut),
+    }),
+  );
 }

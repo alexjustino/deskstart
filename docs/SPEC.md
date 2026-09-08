@@ -181,21 +181,21 @@ Depth before breadth. F0 crosses Rust → SQLite → commands → domain → UI 
 a profile with one step really opens a program and the log really says so. If the execution
 loop is wrong, that shows on day one.
 
-| #      | Slice                                                | Proof of done                                                                                                                                                                  |
-| ------ | ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **F0** | Foundation, Fluent shell, one step, **Run**, the log | **a profile with one step opens Notepad and the log says when and with which PID** · gates green · e2e against the binary · MSI inside the budget · `SECURITY.md` written      |
-| F1     | Profile editor and dry-run                           | steps of every basic kind (app, folder, file, URL) with arguments and working directory; **dry-run lists resolved absolute paths and spawns nothing** (e2e asserts no process) |
-| F2     | Time: pause, hold, cycle                             | the negative-case battery is green; a 5 s hold closes at 5 s ± 250 ms on the real binary; a cycle of three runs three times and stops                                          |
-| F3     | Stop, and the run history                            | Stop closes only what the run opened — a Notepad opened by hand survives; every run is listed with its outcome and opens onto its events                                       |
-| F4     | Dependencies and readiness                           | X does not start until Y's window exists (or its port answers); Y timing out marks X skipped **with the reason**, and the profile continues                                    |
-| F5     | Profile as a file: export, import, review            | an exported profile round-trips; an imported one **cannot run until every step is accepted**; a tampered path is shown absolute                                                |
-| F6     | Window control                                       | Notepad lands on the chosen monitor at the chosen rectangle and state; a missing monitor is reported and the window lands on the primary                                       |
-| F7     | Context steps: bookmarks, terminal, editor           | a bookmark folder opens every page in one browser window; `wt` opens the named profile in the directory; a missing tool is a visible reason                                    |
-| F8     | Virtual machines                                     | two machines start and their consoles appear (**host proof by a person**); a missing hypervisor is a reason, not a hang                                                        |
-| F9     | Triggers: schedule, shortcut, autostart              | a task registered by the app fires at the minute set and the run appears in the log; the shortcut runs the profile over another program                                        |
-| F10    | Settings, Diagnostics, About, backup                 | Diagnostics shows every adapter as found / not found with the path; a restored backup restores every profile and run                                                           |
-| F11    | Fluent polish and accessibility                      | every screen opened for real, both themes, keyboard; axe green                                                                                                                 |
-| F12    | Release 1.0.0                                        | the installer runs on a clean machine and F0's proof passes on it                                                                                                              |
+| #      | Slice                                                | Proof of done                                                                                                                                                                           |
+| ------ | ---------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **F0** | Foundation, Fluent shell, one step, **Run**, the log | **a profile with one step opens Notepad and the log says when and with which PID** · gates green · e2e against the binary · MSI inside the budget · `SECURITY.md` written               |
+| F1     | Profile editor and dry-run                           | steps of every basic kind (app, folder, file, URL) with arguments and working directory; **dry-run lists resolved absolute paths and spawns nothing** (e2e asserts no process)          |
+| F2     | Time: pause, hold, cycle                             | the negative-case battery is green; a 5 s hold closes at 5 s ± 250 ms on the real binary; a cycle of three runs three times and stops                                                   |
+| F3     | Stop, and the run history                            | Stop closes only what the run opened — a Notepad opened by hand survives; every run is listed with its outcome and opens onto its events                                                |
+| F4     | Dependencies and readiness                           | X does not start until Y's window exists (or its port answers); Y timing out marks X skipped **with the reason**, and the profile continues                                             |
+| F5     | Profile as a file: export, import, review            | an exported profile round-trips; an imported one **cannot run until every step is accepted**; a tampered path is shown absolute                                                         |
+| F6     | Window control                                       | **done** — a window lands at the chosen rectangle and state, measured by Windows itself; a screen that is not there is reported and the primary is used                                 |
+| F7     | Context steps: bookmarks, terminal, editor           | **done** — a real bookmark folder is read and its pages named; Windows Terminal really opens in the directory; a folder that is not there names the ones that are                       |
+| F8     | Virtual machines                                     | **done here as far as a machine without a hypervisor allows** — a missing hypervisor is a reason within a second, never a hang; two machines starting is the host proof, Alex's         |
+| F9     | Triggers: schedule, shortcut, autostart              | **done** — the task fires at the minute set and the run is in the log marked _Scheduled_; a key combination pressed by a hand outside the product starts it                             |
+| F10    | Settings, Diagnostics, About, backup                 | **done** — Diagnostics lists every adapter found / not found with its path; a backup is the whole workspace and a restore brings every profile and run back (round-trip proven in Rust) |
+| F11    | Fluent polish and accessibility                      | **done** — axe-core clean on every screen in both themes; the keyboard reaches the rail and Run, focus shows                                                                            |
+| F12    | Release 1.0.0                                        | the installer runs on a clean machine and F0's proof passes on it                                                                                                                       |
 
 ### Delivered in F0
 
@@ -217,6 +217,362 @@ is a line with its reason and the run goes on. Runs survive a restart and outliv
   is closed by the person. Holding handles in a Job Object is F3's whole subject.
 - **Settings.** The theme choice lives on Diagnostics, in memory, until F10 persists it.
 
+### Delivered in F1
+
+A step is one of four kinds — an application, a folder, a file, a web page — added, edited and
+moved in one form. Arguments are a list, edited one at a time, never a text box split on
+spaces. A path may name one of the six allow-listed environment variables; the host provides
+their values and the domain expands them, and the row shows the path as written and what it
+became. The form previews the resolved launch with the same function the run uses. A dry run
+writes the resolved target of every step — and its source when expansion changed it — and
+starts nothing. Folders open in Explorer (a program with one argument); files and web pages
+open by the `open` verb on the validated target (ADR-018); `http` and `https` are the only
+schemes, refused by the domain and again by the host.
+
+### Deferred out of F1, and why
+
+- **Store apps and shortcuts.** A `.lnk` is resolved by reading the link, a Store app is
+  launched through its AUMID; both are the R2 territory (a PID that is not the window) and
+  belong with readiness (F4), where the answer to "did it open" is a window, not a PID.
+- **Saving a step that does not resolve here.** The editor refuses it, as F0 refused a
+  relative path. A profile that was written on another machine and resolves only there is
+  exactly what import (F5) will bring, and the review screen is where such a step is shown as
+  unresolvable rather than refused.
+- **Choosing a file or folder with a picker.** The path is typed. A native dialog is a
+  capability (`dialog:allow-open`) the window does not have yet; it arrives with import and
+  export (F5), which need it anyway.
+- **Window placement fields** (position, size, monitor, state). Stored nowhere yet; F6.
+
+### Delivered in F2
+
+A step has time: a pause after it before the next step starts; for an application, a hold —
+keep it open this long, then close it — and a cycle: open it N times in all, closed for a
+while between openings, or again and again until the run is stopped. The machine is a pure
+reducer with one more event, `time { at }`: everything due by that instant fires, nothing
+counts ticks, and a laptop that slept through a hold closes it late and says so by the
+timestamps. Holds do not block the sequence — the next step starts while the first is held.
+The host keeps the handle of every process it starts for the life of the run; a close asks
+the program's windows first (`WM_CLOSE`) and terminates only after a three-second grace, and
+the log says which. A process that had already exited — a stub that handed off — is
+`not_closed` with that reason, and nothing else is touched. A dry run runs the same machine
+on a virtual clock: an hour of holds is written down in a second, as `would_close` and
+`would_wait` lines. Measured on the real binary: a 5 s hold closed at 5 s ± 250 ms; a cycle
+of three ran three times and stopped.
+
+### Deferred out of F2, and why
+
+- **Stopping a cycle that repeats forever.** The domain has `repeat: 'forever'` and the
+  reducer ends it only on `stop_requested`; the screen offers no Stop yet, so the editor
+  offers no "forever". Both arrive together in F3, with the Job Object that makes Stop reach
+  everything a run opened.
+- **A hold on a folder, a file or a web page.** They are opened by Windows, not started by
+  us; there is no process to close (ADR-018). The editor refuses a hold on them and says why.
+  Closing a window by title is 1.1's subject.
+- **Surviving the window.** The loop that keeps time runs in the application; close the
+  window and a held program stays open, unclosed. The tray that keeps the process alive
+  arrives with the triggers (F9).
+- **Sleep and resume on hardware.** The reducer is tested with a clock that jumps an hour;
+  the machine was not put to sleep during a hold. That is a person's test, on the release
+  build, and it is on the release checklist.
+
+### Delivered in F3
+
+Stop. A run in progress shows a Stop button; pressing it starts nothing more, wakes the loop
+from any wait, and the host closes what the run opened — and only that (ADR-015). Every
+process the run started is in the run's Job Object from the moment it starts (a job created
+without `KILL_ON_JOB_CLOSE`, so a run that ends on its own leaves its programs open). On
+Stop each held process is asked to close and given the grace, one line each — `closed` or
+`not_closed` with the reason — and then the job is terminated, which reaches whatever those
+processes started in turn; a `stopped` line says how many closed, how many did not, and
+whether the sweep ran. A program the run did not start — one the shell opened on its behalf,
+one a person opened — is never touched, and the suite proves it with a Character Map opened
+by hand that survives. The run finishes `stopped` with the rest skipped. The editor offers
+"again and again, until the run is stopped", which the domain had since F2 and the screen
+could not offer without Stop.
+
+### Delivered in F11
+
+Every screen was run through axe-core — the automated accessibility check: colour contrast,
+names on controls, roles, landmark structure — in the light theme and the dark one, and comes
+back clean. What that took, beyond names and roles the primitives already carried: the content
+surfaces became opaque (ADR-026), because readable text must not depend on Mica and axe cannot
+measure what Mica paints; the scrollable regions take the keyboard, so a window taller than the
+screen scrolls without a mouse; and the theme drives the accent through one path, so a selected
+control's text is never white on the wrong blue.
+
+The keyboard reaches the navigation and the primary action, and focus shows on every stop — the
+focus-visible ring was there since F0, and the sweep proves it lands. `prefers-reduced-motion` is
+honoured globally (F0), so nothing here animates against a person's setting.
+
+### Deferred out of F11, and why
+
+- **A screen reader read end to end.** axe checks the names and roles a reader needs, and the
+  keyboard sweep proves the order; hearing it read is a person's pass on a real machine with a
+  real reader, which no automated check replaces.
+- **High-contrast mode.** Windows' high-contrast themes override colours wholesale; honouring
+  them well is its own slice, and the opaque surfaces of ADR-026 are the groundwork.
+- **A contrast guarantee for every possible Windows accent.** The accent is the person's, and the
+  sweep tested the one this machine has. A very light accent could still push a selected control
+  under the threshold; the honest fix, when it is needed, is choosing the accent step by measured
+  contrast rather than by theme.
+
+### Delivered in F10
+
+Settings, kept in the workspace. The theme — held only for the window until now — is a stored
+setting, applied when it is read and when it changes; it and **Start with Windows** moved from
+Diagnostics to a **Settings** screen, alongside **backup and restore** and **About**. Diagnostics
+keeps what it only shows, and gains **Adapters**: every program a step can call — Chrome, Edge,
+Windows Terminal, VS Code, and the three hypervisors — listed found or not found with its path,
+so what a step will and will not be able to do is checkable rather than asserted.
+
+A **backup** is the whole workspace in one file (`VACUUM INTO`): every profile, step, run, event
+and setting. A **restore** replaces the workspace with a backup — validated as a workspace no
+newer than this build, staged beside the live file, and applied at the next start, which a
+restart makes now (ADR-025). It is not an edit of the append-only log; it is one workspace file
+put in the place of another.
+
+### Deferred out of F10, and why
+
+- **Settings beyond the theme.** The store is a map and the reader defaults the unknown, so a
+  second setting is a key and a card, not a migration. None is needed yet.
+- **An incremental or scheduled backup.** A backup is a full copy, which a page of profiles does
+  not need, and it is a button, not a routine — a product that backs itself up on a timer is
+  keeping something it has not been asked to keep.
+- **An in-app editor for a backup, or a merge.** Restore replaces; it does not merge one
+  workspace into another, which would ask the same questions import (F5) deferred, at the scale
+  of the whole workspace.
+- **About as a screen of its own.** It is a card on Settings — a solo, offline product's About is
+  three honest paragraphs, not a page.
+
+### Delivered in F9
+
+A run can start without the button. A **schedule** — a time of day, every day or on weekdays — is
+handed to the Windows Task Scheduler, which fires it whether or not Deskstart is open: the task
+starts this executable with `--run <id> --trigger schedule`, a running instance is handed the
+request, and otherwise the launch is the instance. A **shortcut** — a key combination with Ctrl,
+Alt or Win — is registered with the system and reported whatever program is in front. A second
+**launch** with `--run <id>` is handed to the first. Each is a trigger of a profile **id** and
+nothing else, refused for a profile still under review, and each runs through the same gate as
+the button (ADR-024).
+
+The host never starts a run on its own; it hands the request to the screen, which starts it,
+brings the window forward, and writes the trigger on the run's heading — _Scheduled_, _Shortcut_,
+_Command line_ — so a run that started by itself says so. Closing the window keeps Deskstart in
+the tray, with _Open_ and _Quit_ in words; **Start with Windows** is a checkbox on Diagnostics,
+off until a person turns it on.
+
+### Deferred out of F9, and why
+
+- **Days of the week, one by one.** The schedule stores any set of days; the editor offers every
+  day or weekdays, which is what a working setup means. Seven checkboxes are a field to add when a
+  profile wants Tuesday.
+- **A trigger that runs a dry run**, or a trigger's own log. A trigger starts the run the button
+  would; what it did is in the same log, with its trigger on the heading.
+- **Arbitrating a shortcut another program holds.** Refused with that reason; choosing another
+  combination is the person's.
+- **Running while no one is signed in.** The task runs in the signed-in session, because a
+  profile opens windows and windows need a desktop. A machine that starts a setup before anyone
+  arrives is a different product.
+- **Which build a task starts.** The one that registered it, by absolute path; the Diagnostics
+  page of F10 will list the tasks and say which executable each one names.
+
+### Delivered in F8
+
+### Delivered in F8
+
+A step can be a **virtual machine**: on Hyper-V, VirtualBox or VMware Workstation, named the
+way its hypervisor names it — a machine name, or for VMware the path to its `.vmx` — started
+with its console showing. Each hypervisor is one fixed argument shape with the machine as one
+argument; Hyper-V, which has no tool of its own, is asked through a **constant** PowerShell
+command with the name in the child's environment (ADR-023). Nothing a person typed is ever part
+of a command line.
+
+A hypervisor's tool is a **command**, not a launcher: it is run to its end within a minute and
+what it said is the reason in the log — the machine that is not there, the permission that is
+missing. A tool that does not answer in time is ended, and the budget is the reason. A hypervisor
+that is not installed is the same sentence as any other missing tool, within a second.
+
+None of it may be held, cycled or placed: the console is the hypervisor's, and the process this
+product started only asked for it.
+
+### Deferred out of F8, and why
+
+- **Starting two machines and seeing their consoles** is the host proof the specification
+  assigns to a person: it needs a hypervisor with machines on it, and the machine this suite ran
+  on has none. What the suite proves is the other half — a hypervisor that is not here is a
+  reason within seconds and the run reaches its end — and the shape of the first: a dry run says
+  what it would ask of which hypervisor.
+- **Stopping a machine when the run stops.** Stop closes what the run opened (ADR-015), and a
+  machine's process is the hypervisor's, not ours; ending a machine is `Stop-VM`, `controlvm
+poweroff`, `vmrun stop` — each a decision about somebody's running system that a Stop button
+  should not make on its own. It belongs with 1.2's end-of-day teardown, where it can be asked
+  for by name.
+- **Waiting for a machine to be up.** F4's readiness waits for a window or a port; a machine's
+  readiness is its guest answering, which is a port probe away for a machine with a known
+  address and a whole subject for one without. Not offered until it can be offered honestly.
+- **Hyper-V without PowerShell** — WMI, or the management API directly. A second way of asking
+  the same thing, for a saving of about a second; when it arrives it arrives as a swap behind
+  the same step.
+- **A machine's snapshot, headless start, or a second hypervisor per machine.** Fields, each to
+  explain and each to be wrong about.
+
+### Delivered in F7
+
+Three steps that call something this product did not write. A **bookmark folder** — Chrome's or
+Edge's, by the folder's name or by a path when the name repeats — opens every page directly in it
+as one browser window. A **terminal**: Windows Terminal, on a named profile, in a directory. An
+**editor**: a folder or workspace opened in VS Code.
+
+Each tool is found where Windows installs it and never on `PATH` (ADR-022); a profile carries an
+id from a closed list, never a program path, and the arguments stay a vector. A tool that is not
+installed is said twice: in the editor while the step is written, and in the log as the reason
+the step did not start.
+
+The bookmarks file is read by the host and understood by the domain. A folder is what it
+contains and not what its subfolders contain; addresses go through the same `http`/`https` gate
+as everywhere else, so a bookmark to a `javascript:` address is left out and said; more than
+fifty pages opens the first fifty and says so. A folder that is not there names the folders that
+are, and the profile carries on past it.
+
+None of the three may be held, cycled or placed — and the reason is now written per kind. Windows
+owns a folder's window; these hand theirs to a browser, a terminal host or an editor that may
+have been running already (risk R2 again, in three new coats).
+
+### Deferred out of F7, and why
+
+- **A browser profile other than `Default`.** Both browsers keep one bookmarks file per profile,
+  and reading another is one path away. It is a field this slice did not add rather than a guess
+  it makes: "Work" in the wrong profile is not the folder you meant.
+- **Firefox.** Its bookmarks live in a SQLite database that the running browser holds open, not
+  in a JSON file. It is 1.1's line in the roadmap, and it needs its own reader.
+- **A terminal that runs a command.** `wt` can be told what to run, and this product will not
+  tell it: a profile that carries a command line is a profile that carries a script, which is the
+  one thing ADR-010 exists to prevent. A terminal step opens a terminal, on a profile, in a
+  directory.
+- **An editor that is not VS Code.** The kind is `editor` rather than `vscode` so a second one
+  can be added without a migration, but adding it now would be a list with one real entry and
+  three guesses in it.
+- **Everything a tool could be asked to do.** New window, private window, an editor's workspace
+  flags: each is a field, and each field is a thing to explain, to review, and to be wrong about.
+  They arrive when a profile needs them.
+
+### Delivered in F6
+
+A step says where its window goes: which screen — numbered the way a person numbers them, the
+primary first and then left to right — where on that screen, and normal, maximised or minimised.
+Each of the three may be left alone. A rectangle is read in the coordinates of the **screen it
+names**, so a profile written for the second monitor says `0, 0` and not `1920, 0`.
+
+Only an application is placed, and only the window of the process the run started (ADR-021). The
+reducer asks for the placement once per opening — after the step is open, before the sequence
+moves on — so a step that cycles is placed every time it comes back and a step that failed to
+start is not placed at all. What could not be done as asked is said: a screen this machine has
+not got lands the window on the primary **and the log says so**; a program that never shows a
+window of its own within five seconds is a line saying that, and the run carries on.
+
+The end-to-end suite measures the window through `GetWindowRect`, from outside the product: a
+test that read the placement back from Deskstart would only prove Deskstart remembers what it
+was told.
+
+The rules that need two parts of a step at once — a folder that would be held, a web page that
+would be placed — moved into the domain, where the editor and the **file reader** both ask them.
+Until F6 the hold rule lived in the form alone, so a document could carry what the form would
+have refused.
+
+### Deferred out of F6, and why
+
+- **Placing a window this product did not open** — the browser, an Explorer window, a program
+  that was already running. It needs matching windows by title or class, which is a rule that
+  eventually moves the wrong window; it is 1.1's subject, with a screen of its own (ADR-021).
+- **Capturing the current arrangement as a profile.** Reading back where every window is today
+  and writing it down is the natural twin of this slice, and it is 1.1 for the same reason: what
+  it captures is mostly windows nothing here opened.
+- **Always on top, a chosen z-order, a virtual desktop.** Each is another verb on somebody
+  else's window, and none of them is what "open my day" needs first.
+- **Waiting longer than five seconds for a window.** The wait is fixed and not a field: a step
+  that needs a longer wait already has one — F4's, which is about a step being _ready_, not
+  about where it sits.
+
+### Delivered in F5
+
+A profile leaves as a file and comes back as one. The document is JSON with a declared schema
+version, no identifiers at all, and a wait that names the **position** of an earlier step
+(ADR-019) — so it means the same thing on the machine that opens it, and a cycle cannot be
+written down. Export shows the document before anything is written, says what it left out, and
+offers the clipboard or the system's save dialog. Import has two doors, the system's open dialog
+and pasted text, with one reader behind both.
+
+What arrives cannot run. The profile is stored **unreviewed** and every step with it; the screen
+replaces the editor with the review, which shows each step the way the run will read it: the
+path resolved and absolute — not as it was written — each argument on its own line, the plain
+sentence for what actually starts it, its time and its waiting. Acceptance is per step, survives
+a restart, and clears the profile's flag only when nothing is left unaccepted. Deleting a step
+counts as reviewing it. The gate is asked three times: the button is disabled, the run loop asks
+the domain before it opens a run, and the host refuses a profile that is still flagged.
+
+The file surface is the narrowest it could be (ADR-020): no filesystem plugin, one path at a
+time, and a file that is a directory, larger than 1 MiB, or not UTF-8 is refused with a sentence
+before a parser sees a byte.
+
+### Deferred out of F5, and why
+
+- **Editing an imported step before accepting it.** Under review the editor is not offered: a
+  step is accepted, or deleted and written again. Offering both at once makes "what you accepted"
+  a moving target, which is the one thing this screen exists to pin down. Accept, then edit.
+- **A profile that says where it came from.** The document could carry who wrote it and when,
+  and the review screen could show it. Every field of that is unverifiable — a line that says
+  "from a colleague" is exactly what a hostile file would also say — so it is not offered rather
+  than offered as if it meant something. Signing is the version of this that would mean
+  something, and it needs a key story the product does not have.
+- **Merging into an existing profile.** Import always makes a new profile. Merging asks what
+  happens to positions, to waits that point at steps from the other file, and to a half-accepted
+  result — a slice of its own, not a checkbox.
+- **A schema migration for the file.** Version 1 is the only version there has ever been, and
+  the reader refuses any other. The pure migration functions ADR-010 promises arrive with
+  version 2, together with the round-trip test that will prove them.
+
+### Delivered in F4
+
+A step can wait for an **earlier** step to be responding before it starts: a window of its
+own, or a TCP port on this machine that answers. It waits up to a timeout of its own; when
+the timeout runs out the step is **skipped with the reason** and the profile carries on. A
+step whose awaited step never started is skipped at once rather than spending its whole
+timeout on something that cannot happen.
+
+Waiting only ever points backwards, and that is the whole cycle prevention: two steps cannot
+wait for each other because the shape does not allow it to be written. A step that waits for
+one that was deleted, or moved after it, is shown as a problem on its row and blocks Run —
+the same gate F1 built for a step whose path does not resolve.
+
+The host is asked four times a second while a step waits, and writes **no** line for a probe:
+what reaches the log is the beginning of the wait, its end, and nothing in between. A dry run
+performs no probe at all — it writes what it would wait for and carries on, so a profile with
+a minute of waiting is still written down in a second.
+
+### Deferred out of F4, and why
+
+- **Waiting for something no step started.** The port probe already asks the operating
+  system, not the awaited step, so "wait for the database that was already running" is one
+  field away. It is not offered because the sentence would then have no subject: a wait reads
+  "wait for step 1 — port 5432", and a wait for nothing in particular needs its own wording
+  and its own screen. It arrives when a profile has something to say about the machine rather
+  than about itself.
+- **Waiting for an HTTP response rather than a socket.** A port that accepts a connection is
+  not always a server that is ready to serve. Asking for a status code means a client, a
+  path, a method and a notion of "healthy" — a bigger feature that wants its own slice.
+- **A window with a particular title.** The probe asks whether the process has a visible
+  window, not which. Matching titles is the same machinery 1.1 needs for window rules, and
+  the same hazard: a rule that matches by name will one day match the wrong one.
+
+### Deferred out of F3, and why
+
+- **Stop from anywhere.** The button is on the profile screen, next to the run it stops. A
+  stop from the Runs screen, from the tray or from a shortcut needs the run to outlive the
+  screen — the same subject as the tray (F9).
+- **Closing what the run did not start.** The Store Notepad the stub handed off to is not in
+  the job and stays open, said so in the log. Closing a window by title is 1.1's subject, on
+  purpose: a rule that closes windows by name will one day close the wrong one.
+
 ## 8. Definition of done
 
 A slice is done when **all eight** are true.
@@ -234,12 +590,12 @@ A slice is done when **all eight** are true.
 
 ## 9. Risks
 
-| #   | Risk                                                                                                                                                        | Severity     | Mitigation                                                                                                       |
-| --- | ----------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------ | ---------------------------------------------------------------------------------------------------------------- |
-| R1  | **A profile runs something the person did not accept**                                                                                                      | **Critical** | review gate in domain and host; `--run` takes ids only; argument vector; threat model before F0 shipped          |
-| R2  | The PID we spawned is not the window we want (Chrome hands off to a running instance; Store apps launch through the shell; shortcuts resolve to a launcher) | High         | readiness by window, not only by PID; the log says "launched via shell, window not owned" rather than pretending |
-| R3  | Window placement is unreliable across DPI, monitors and apps that reposition themselves                                                                     | High         | gated in F6 with an honest "could not place" event; placement retries bounded                                    |
-| R4  | Stop cannot reach a process that broke away from the Job Object                                                                                             | High         | reported per process, never silent; graceful close then terminate; 1.1 may add title-based rules                 |
-| R5  | Hyper-V needs administrator or the Hyper-V Administrators group; VMware and VirtualBox tools live in unknown paths                                          | Medium       | adapters detected at start-up and listed in Diagnostics; elevation asked, never assumed                          |
-| R6  | Sleep/resume breaks holds and cycles                                                                                                                        | Medium       | injected-clock machine tested with a jumping clock; the event log records the jump                               |
-| R7  | Scope overruns — every launcher feature ever asked for                                                                                                      | High         | the release train; 1.0.0 is a closed list                                                                        |
+| #   | Risk                                                                                                                                                                                                                                                                                                                                        | Severity     | Mitigation                                                                                                            |
+| --- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------ | --------------------------------------------------------------------------------------------------------------------- |
+| R1  | **A profile runs something the person did not accept**                                                                                                                                                                                                                                                                                      | **Critical** | review gate in domain and host; `--run` takes ids only; argument vector; threat model before F0 shipped               |
+| R2  | The PID we spawned is not the window we want (Chrome hands off to a running instance; Store apps launch through the shell; shortcuts resolve to a launcher). **Seen in F0:** `System32\notepad.exe` on Windows 11 is a stub that hands off to the Store Notepad and exits within milliseconds — the PID in the log is true and already gone | High         | readiness by window, not only by PID (F4); the log says "launched via shell, window not owned" rather than pretending |
+| R3  | Window placement is unreliable across DPI, monitors and apps that reposition themselves                                                                                                                                                                                                                                                     | High         | gated in F6 with an honest "could not place" event; placement retries bounded                                         |
+| R4  | Stop cannot reach a process that broke away from the Job Object                                                                                                                                                                                                                                                                             | High         | reported per process, never silent; graceful close then terminate; 1.1 may add title-based rules                      |
+| R5  | Hyper-V needs administrator or the Hyper-V Administrators group; VMware and VirtualBox tools live in unknown paths                                                                                                                                                                                                                          | Medium       | adapters detected at start-up and listed in Diagnostics; elevation asked, never assumed                               |
+| R6  | Sleep/resume breaks holds and cycles                                                                                                                                                                                                                                                                                                        | Medium       | injected-clock machine tested with a jumping clock; the event log records the jump                                    |
+| R7  | Scope overruns — every launcher feature ever asked for                                                                                                                                                                                                                                                                                      | High         | the release train; 1.0.0 is a closed list                                                                             |

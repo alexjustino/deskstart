@@ -1,4 +1,9 @@
-import { History20Regular, PlayCircle20Regular, Wrench20Regular } from '@fluentui/react-icons';
+import {
+  History20Regular,
+  PlayCircle20Regular,
+  Settings20Regular,
+  Wrench20Regular,
+} from '@fluentui/react-icons';
 import type { ReactNode } from 'react';
 
 /**
@@ -8,7 +13,7 @@ import type { ReactNode } from 'react';
  * built is not listed — nothing on the rail pretends to work when it does not.
  */
 
-export type Destination = 'profiles' | 'runs' | 'diagnostics';
+export type Destination = 'profiles' | 'runs' | 'diagnostics' | 'settings';
 
 interface Entry {
   id: Destination;
@@ -20,6 +25,7 @@ const ENTRIES: Entry[] = [
   { id: 'profiles', label: 'Profiles', icon: <PlayCircle20Regular /> },
   { id: 'runs', label: 'Runs', icon: <History20Regular /> },
   { id: 'diagnostics', label: 'Diagnostics', icon: <Wrench20Regular /> },
+  { id: 'settings', label: 'Settings', icon: <Settings20Regular /> },
 ];
 
 export function Sidebar({

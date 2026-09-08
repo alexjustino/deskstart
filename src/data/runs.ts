@@ -8,7 +8,11 @@
 
 import { invoke } from '@tauri-apps/api/core';
 
+import type { Launch } from '@/domain/profile';
+import type { Placement } from '@/domain/placement';
+import type { Probe } from '@/domain/readiness';
 import type { Mode, Outcome, RunEvent } from '@/domain/run';
+import type { Trigger } from '@/domain/triggers';
 
 export interface Run {
   id: string;
@@ -59,6 +63,11 @@ const OUTCOMES: ReadonlySet<string> = new Set([
   'stopped',
 ]);
 
+/** The line kinds that mean the step was done, whatever "done" meant for its kind. */
+const DONE: ReadonlySet<string> = new Set(['spawned', 'opened', 'would_spawn', 'would_open']);
+/** The line kinds that mean the step's program is closed — for real, or on paper. */
+const CLOSED: ReadonlySet<string> = new Set(['closed', 'would_close']);
+
 function toRun(raw: RawRun): Run {
   return {
     id: raw.id,
@@ -93,32 +102,121 @@ function toLogLine(raw: RawEvent): LogLine {
   };
 }
 
-/** What a log line means to the state machine, or nothing when it is not a step event. */
-export function toRunEvent(line: LogLine): RunEvent | null {
-  const at = Date.parse(line.at);
+/**
+ * What a log line means to the state machine, or nothing when it is not a
+ * step event. `at` is the instant the machine should take for it: the host's
+ * timestamp, or the caller's virtual clock in a dry run.
+ */
+export function toRunEvent(line: LogLine, at = Date.parse(line.at)): RunEvent | null {
   if (line.stepId === null) return null;
-  switch (line.kind) {
-    case 'spawned': {
-      const pid = typeof line.payload.pid === 'number' ? line.payload.pid : 0;
-      return { kind: 'spawned', stepId: line.stepId, pid, at };
-    }
-    case 'would_spawn':
-      return { kind: 'would_spawn', stepId: line.stepId, at };
-    case 'failed': {
-      const reason = typeof line.payload.reason === 'string' ? line.payload.reason : 'unknown';
-      return { kind: 'failed', stepId: line.stepId, reason, at };
-    }
-    default:
-      return null;
+  const reason = typeof line.payload.reason === 'string' ? line.payload.reason : 'unknown';
+  if (DONE.has(line.kind)) return { kind: 'step_done', stepId: line.stepId, at };
+  if (line.kind === 'failed') return { kind: 'step_failed', stepId: line.stepId, reason, at };
+  if (CLOSED.has(line.kind)) return { kind: 'step_closed', stepId: line.stepId, at };
+  if (line.kind === 'not_closed') {
+    return { kind: 'step_not_closed', stepId: line.stepId, reason, at };
   }
+  return null;
 }
 
-export async function runBegin(profileId: string, mode: Mode): Promise<Run> {
-  return toRun(await invoke<RawRun>('run_begin', { profileId, mode, trigger: 'button' }));
+export async function runBegin(
+  profileId: string,
+  mode: Mode,
+  trigger: Trigger = 'button',
+): Promise<Run> {
+  return toRun(await invoke<RawRun>('run_begin', { profileId, mode, trigger }));
 }
 
-export async function stepExecute(runId: string, stepId: string): Promise<LogLine> {
-  return toLogLine(await invoke<RawEvent>('step_execute', { runId, stepId }));
+export async function stepExecute(runId: string, stepId: string, launch: Launch): Promise<LogLine> {
+  return toLogLine(await invoke<RawEvent>('step_execute', { runId, stepId, launch }));
+}
+
+export async function stepClose(
+  runId: string,
+  stepId: string,
+  launch: Launch,
+  heldMs: number,
+): Promise<LogLine> {
+  return toLogLine(await invoke<RawEvent>('step_close', { runId, stepId, launch, heldMs }));
+}
+
+export async function stepWait(runId: string, stepId: string, ms: number): Promise<LogLine> {
+  return toLogLine(await invoke<RawEvent>('step_wait', { runId, stepId, ms }));
+}
+
+/** Stop a run: the host closes what the run opened, and only that, one line each. */
+/**
+ * Ask the host whether what a step waits for is responding. Writes no line:
+ * it is asked four times a second, and a log with four lines a second is not
+ * a log.
+ */
+export async function stepProbe(
+  runId: string,
+  awaitedStepId: string,
+  probe: Probe,
+): Promise<boolean> {
+  return invoke<boolean>('step_probe', { runId, awaitedStepId, probe });
+}
+
+/** The line that opens a wait. */
+export async function stepWaitingFor(
+  runId: string,
+  stepId: string,
+  awaitedStepId: string,
+  probe: Probe,
+  timeoutMs: number,
+): Promise<LogLine> {
+  return toLogLine(
+    await invoke<RawEvent>('step_waiting_for', {
+      runId,
+      stepId,
+      awaitedStepId,
+      probe,
+      timeoutMs,
+    }),
+  );
+}
+
+/** The line that closes a wait: it answered, after this long. */
+export async function stepReady(runId: string, stepId: string, waitedMs: number): Promise<LogLine> {
+  return toLogLine(await invoke<RawEvent>('step_ready', { runId, stepId, waitedMs }));
+}
+
+/**
+ * The line for a step the loop could not start — a bookmark folder that is not
+ * there. Every other failure is the host's own; this one is found between the
+ * file and the browser, and is written in the same shape.
+ */
+export async function stepFailed(
+  runId: string,
+  stepId: string,
+  launch: Launch,
+  reason: string,
+): Promise<LogLine> {
+  return toLogLine(await invoke<RawEvent>('step_failed', { runId, stepId, launch, reason }));
+}
+
+/** The line for a step that will not start, and why. */
+export async function stepSkipped(runId: string, stepId: string, reason: string): Promise<LogLine> {
+  return toLogLine(await invoke<RawEvent>('step_skipped', { runId, stepId, reason }));
+}
+
+/**
+ * Put a step's window where the step says (F6). The host looks for the window
+ * of the process this run started, waits a moment for it, and writes one line:
+ * what it did, or what it could not do.
+ */
+export async function stepPlace(
+  runId: string,
+  stepId: string,
+  placement: Placement,
+): Promise<LogLine> {
+  return toLogLine(await invoke<RawEvent>('step_place', { runId, stepId, placement }));
+}
+
+export async function runStop(runId: string, launches: Record<string, Launch>): Promise<LogLine[]> {
+  const raw = await invoke<RawEvent[]>('run_stop', { runId, launches });
+  return raw.map(toLogLine);
 }
 
 export async function runFinish(runId: string, outcome: Outcome): Promise<Run> {

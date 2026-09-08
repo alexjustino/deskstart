@@ -2,53 +2,305 @@
  * The execution loop: the host's actions driven by the domain's decisions.
  *
  * One reducer (`domain/run`), one host command per action. The loop begins a
- * run, feeds the reducer `begun`, and then — for as long as the reducer asks
- * for a step — has the host execute it and feeds back the line the host wrote.
- * The log is written before the interface sees anything (ADR-011): every
- * `onLine` here is a line that is already on disk.
+ * run, feeds the reducer `begun`, and then — for as long as the reducer asks —
+ * executes, closes, or waits. The log is written before the interface sees
+ * anything (ADR-011): every `onLine` here is a line that is already on disk.
+ *
+ * Time is the host's clock and nothing else. A `wait_until` is remembered,
+ * never queued: when no action is pending the loop sleeps until the soonest
+ * instant asked for, then feeds one `time` event with the clock as it is —
+ * late after a sleep, and the machine copes. A dry run does not sleep: its
+ * clock is virtual and jumps to every instant asked for, so a profile with an
+ * hour of holds is written down in a second.
+ *
+ * A Stop (F3) is a flag the loop looks at before every action and that wakes
+ * it from any sleep. Nothing queued is started after it; the machine finishes
+ * `stopped`, the host closes what the run opened — and only that — and the
+ * run is finished with that outcome.
  */
 
-import { plan, reduce, type Action, type Mode, type RunState } from '@/domain/run';
+import { pagesToOpen, readBookmarkFolder } from '@/domain/bookmarks';
+import { resolveStep, type Launch, type Step } from '@/domain/profile';
+import { whyNotRunnable } from '@/domain/review';
+import { plan, reduce, type Action, type Mode, type RunEvent, type RunState } from '@/domain/run';
+import type { Trigger } from '@/domain/triggers';
 
-import { runBegin, runFinish, stepExecute, toRunEvent, type LogLine, type Run } from './runs';
+import { describeError } from './errors';
+import { readBookmarks } from './system';
+import {
+  runBegin,
+  runFinish,
+  runStop,
+  stepClose,
+  stepExecute,
+  stepFailed,
+  stepPlace,
+  stepProbe,
+  stepReady,
+  stepSkipped,
+  stepWait,
+  stepWaitingFor,
+  toRunEvent,
+  type LogLine,
+  type Run,
+} from './runs';
 
 export interface Execution {
   run: Run;
   state: RunState;
 }
 
+/**
+ * A bookmark folder, turned into the pages it holds (F7).
+ *
+ * The host hands over the browser's file, the domain finds the folder in it,
+ * and what comes back is a browser and a list of addresses — one window's
+ * worth. The host is never asked to understand a bookmark. A folder that is
+ * not there, or holds nothing this product would open, comes back as the
+ * sentence the log will carry.
+ */
+async function pagesOf(
+  launch: Launch & { kind: 'bookmarks' },
+): Promise<{ ok: true; launch: Launch } | { ok: false; reason: string }> {
+  let file: string;
+  try {
+    file = await readBookmarks(launch.browser);
+  } catch (cause) {
+    return { ok: false, reason: describeError(cause) };
+  }
+  const read = readBookmarkFolder(file, launch.folder);
+  if (!read.ok) {
+    const near = read.folders.slice(0, 3);
+    return {
+      ok: false,
+      reason: near.length === 0 ? read.problem : `${read.problem} — there is ${near.join(', ')}`,
+    };
+  }
+  const { urls, note } = pagesToOpen(read.folder);
+  if (urls.length === 0) {
+    return { ok: false, reason: `${read.folder.path} holds no page this product would open` };
+  }
+  const pages = `${urls.length} ${urls.length === 1 ? 'page' : 'pages'} from ${read.folder.name}`;
+  return {
+    ok: true,
+    launch: {
+      kind: 'tool',
+      tool: launch.browser,
+      // One window, every page in it: the browser takes the rest as tabs.
+      args: ['--new-window', ...urls],
+      what: note === null ? pages : `${pages} (${note})`,
+      source: null,
+    },
+  };
+}
+
+/** The one way to interrupt a run from outside the loop. */
+export class Stopper {
+  private requested = false;
+  private wakers: Array<() => void> = [];
+
+  get stopped(): boolean {
+    return this.requested;
+  }
+
+  stop(): void {
+    this.requested = true;
+    for (const wake of this.wakers.splice(0)) wake();
+  }
+
+  /** Sleep, unless a stop comes first. */
+  sleep(ms: number): Promise<void> {
+    if (this.requested) return Promise.resolve();
+    return new Promise((resolve) => {
+      const done = () => {
+        clearTimeout(timer);
+        this.wakers = this.wakers.filter((w) => w !== done);
+        resolve();
+      };
+      const timer = setTimeout(done, ms);
+      this.wakers.push(done);
+    });
+  }
+}
+
+/** The profile being run, as far as the loop needs to know it. */
+export interface Runnable {
+  id: string;
+  importedUnreviewed: boolean;
+}
+
 export async function executeProfile(
-  profileId: string,
-  stepIds: string[],
+  profile: Runnable,
+  steps: Step[],
   mode: Mode,
+  env: Readonly<Record<string, string>>,
   onLine: (line: LogLine) => void = () => undefined,
+  onBegin: (run: Run) => void = () => undefined,
+  stopper: Stopper = new Stopper(),
+  trigger: Trigger = 'button',
 ): Promise<Execution> {
-  const run = await runBegin(profileId, mode);
+  // The review gate, on the path every run takes rather than only on the
+  // button (ADR-013). The host asks the same question again when it is handed
+  // the profile id; this one is here so no run is even opened.
+  const refusal = whyNotRunnable(profile, steps);
+  if (refusal !== null) throw new Error(refusal);
+
+  const run = await runBegin(profile.id, mode, trigger);
+  // The run exists in the file from this instant; the screen may show it now,
+  // not when it is over. A run with an hour of holds is still a run.
+  onBegin(run);
+  const dry = mode === 'dry';
+
+  // Every launch resolved once, before anything runs: the editor refused to
+  // store an unresolvable step and Run is disabled while one exists, so a
+  // miss here is a bug worth a loud failure.
+  const launches = new Map<string, Launch>();
+  for (const step of steps) {
+    const resolved = resolveStep(step.config, env);
+    if (!resolved.ok) {
+      throw new Error(`a step could not be resolved: ${resolved.problems[0]?.problem ?? '?'}`);
+    }
+    launches.set(step.id, resolved.launch);
+  }
+  const launchOf = (stepId: string): Launch => {
+    const launch = launches.get(stepId);
+    if (launch === undefined) throw new Error('the run asked for a step the profile does not have');
+    return launch;
+  };
+  const stepOf = (stepId: string): Step => {
+    const step = steps.find((s) => s.id === stepId);
+    if (step === undefined) throw new Error('the run asked for a step the profile does not have');
+    return step;
+  };
+
   let state = plan(
-    stepIds.map((id) => ({ id })),
+    steps.map((step) => ({
+      id: step.id,
+      timing: step.timing,
+      waitFor: step.waitFor,
+      placement: step.placement,
+    })),
     mode,
   );
+  // The dry run's clock; the real run reads the host's timestamps.
+  let virtualNow = Date.parse(run.startedAt);
+  const now = () => (dry ? virtualNow : Date.now());
 
-  let { state: next, actions } = reduce(state, { kind: 'begun', at: Date.parse(run.startedAt) });
-  state = next;
+  type Wake = { at: number; reason: Action & { kind: 'wait_until' } };
+  const queue: Action[] = [];
+  // Written by `feed` (a closure), so it is read through `pending()` below —
+  // straight-line narrowing would otherwise decide it is always null.
+  let wake: Wake | null = null;
+  const pending = (): Wake | null => wake;
+  const feed = (event: RunEvent) => {
+    const next = reduce(state, event);
+    state = next.state;
+    for (const action of next.actions) {
+      if (action.kind === 'wait_until') {
+        if (wake === null || action.at < wake.at) wake = { at: action.at, reason: action };
+      } else {
+        queue.push(action);
+      }
+    }
+  };
+  const feedLine = (line: LogLine) => {
+    onLine(line);
+    const event = toRunEvent(line, dry ? virtualNow : Date.parse(line.at));
+    if (event !== null) feed(event);
+  };
 
-  const queue: Action[] = [...actions];
-  while (queue.length > 0) {
+  let stopFed = false;
+  const takeStop = () => {
+    if (!stopper.stopped || stopFed) return;
+    stopFed = true;
+    // Nothing queued before the stop is started after it.
+    queue.length = 0;
+    wake = null;
+    feed({ kind: 'stop_requested', at: now() });
+  };
+
+  feed({ kind: 'begun', at: now() });
+
+  for (;;) {
+    takeStop();
     const action = queue.shift();
-    if (action === undefined) break;
-
-    if (action.kind === 'finish') {
-      const finished = await runFinish(run.id, action.outcome);
-      return { run: finished, state };
+    if (action === undefined) {
+      if (state.phase === 'finished') break;
+      const next = pending();
+      if (next === null) throw new Error('the run has nothing to do and no reason to wait');
+      const { at, reason } = next;
+      wake = null;
+      if (dry) {
+        virtualNow = Math.max(virtualNow, at);
+      } else {
+        await stopper.sleep(Math.max(0, at - Date.now()));
+        if (stopper.stopped) continue;
+      }
+      if (reason.reason.kind === 'pause') {
+        const step = stepOf(reason.reason.stepId);
+        onLine(await stepWait(run.id, step.id, step.timing.pauseAfterMs));
+      }
+      feed({ kind: 'time', at: now() });
+      continue;
     }
 
-    const line = await stepExecute(run.id, action.stepId);
-    onLine(line);
-    const event = toRunEvent(line);
-    if (event === null) continue;
-    ({ state: next, actions } = reduce(state, event));
-    state = next;
-    queue.push(...actions);
+    switch (action.kind) {
+      case 'execute': {
+        const asked = launchOf(action.stepId);
+        // A bookmark folder is read here, between the file and the browser: it
+        // is the one failure the host is not the one to find.
+        if (asked.kind === 'bookmarks') {
+          const pages = await pagesOf(asked);
+          if (!pages.ok) {
+            feedLine(await stepFailed(run.id, action.stepId, asked, pages.reason));
+            break;
+          }
+          feedLine(await stepExecute(run.id, action.stepId, pages.launch));
+          break;
+        }
+        feedLine(await stepExecute(run.id, action.stepId, asked));
+        break;
+      }
+      case 'close':
+        feedLine(await stepClose(run.id, action.stepId, launchOf(action.stepId), action.heldMs));
+        break;
+      case 'probe': {
+        const step = stepOf(action.stepId);
+        const waitFor = step.waitFor;
+        if (waitFor === null) throw new Error('a step was probed that waits for nothing');
+        if (action.first) {
+          onLine(
+            await stepWaitingFor(run.id, step.id, waitFor.stepId, waitFor.probe, waitFor.timeoutMs),
+          );
+        }
+        // A dry run performs no probe: it says what it would wait for and
+        // carries on, so a profile that waits a minute is written down at once.
+        const ready = dry ? true : await stepProbe(run.id, waitFor.stepId, waitFor.probe);
+        feed({ kind: 'probe_result', stepId: step.id, ready, at: now() });
+        break;
+      }
+      case 'place':
+        // The host looks for the window and writes what it did; a dry run gets
+        // the same call and answers `would_place` without touching anything.
+        onLine(await stepPlace(run.id, action.stepId, action.placement));
+        break;
+      case 'ready':
+        if (!dry) onLine(await stepReady(run.id, action.stepId, action.waitedMs));
+        break;
+      case 'skip':
+        onLine(await stepSkipped(run.id, action.stepId, action.reason));
+        break;
+      case 'finish': {
+        if (action.outcome === 'stopped') {
+          for (const line of await runStop(run.id, Object.fromEntries(launches))) onLine(line);
+        }
+        const finished = await runFinish(run.id, action.outcome);
+        return { run: finished, state };
+      }
+      case 'wait_until':
+        // Never queued; handled above.
+        break;
+    }
   }
 
   // The reducer always ends with a finish; reaching here means it did not,

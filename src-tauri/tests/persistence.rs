@@ -57,6 +57,9 @@ fn what_you_wrote_and_what_ran_are_still_there_after_a_restart() {
             &profile.id,
             "app",
             r#"{"program":"C:\\Windows\\System32\\notepad.exe","args":[],"workingDir":null}"#,
+            r#"{"holdMs":5000}"#,
+            r#"{}"#,
+            r#"{}"#,
         )
         .unwrap();
         let run = runs::create_run(&mut conn, &profile, "real", "button", 1).unwrap();

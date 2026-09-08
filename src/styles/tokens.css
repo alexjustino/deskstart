@@ -115,17 +115,22 @@
  *   layer     the content region floating on Mica
  *   card      an opaque element inside the layer
  *   flyout    Acrylic popovers, menus, the tray panel
+ *
+ * Content surfaces (`layer`, `layer-alt`, `card`, `flyout`) are opaque: readable
+ * text must not depend on Mica, which is absent on Windows 10, over RDP, or when
+ * the compositor is off. Mica is the window's backdrop (`surface-backdrop` stays
+ * transparent) and shows in the title bar and the window's margin, not behind text.
  */
 :root {
   color-scheme: light;
 
   --surface-backdrop: transparent;
-  --surface-layer: rgb(255 255 255 / 0.7);
-  --surface-layer-alt: rgb(249 249 249 / 0.55);
+  --surface-layer: #fafafa;
+  --surface-layer-alt: #f3f3f3;
   --surface-card: #ffffff;
   --surface-card-hover: #f5f5f5;
   --surface-card-active: #ededed;
-  --surface-flyout: rgb(252 252 252 / 0.85);
+  --surface-flyout: #fbfbfb;
   --surface-overlay: rgb(0 0 0 / 0.3);
 
   --fg-primary: #1a1a1a;
@@ -160,12 +165,12 @@
     color-scheme: dark;
 
     --surface-backdrop: transparent;
-    --surface-layer: rgb(58 58 58 / 0.35);
-    --surface-layer-alt: rgb(48 48 48 / 0.45);
+    --surface-layer: #282828;
+    --surface-layer-alt: #202020;
     --surface-card: #2b2b2b;
     --surface-card-hover: #333333;
     --surface-card-active: #383838;
-    --surface-flyout: rgb(44 44 44 / 0.85);
+    --surface-flyout: #2c2c2c;
     --surface-overlay: rgb(0 0 0 / 0.5);
 
     --fg-primary: #ffffff;
@@ -199,12 +204,12 @@
   color-scheme: dark;
 
   --surface-backdrop: transparent;
-  --surface-layer: rgb(58 58 58 / 0.35);
-  --surface-layer-alt: rgb(48 48 48 / 0.45);
+  --surface-layer: #282828;
+  --surface-layer-alt: #202020;
   --surface-card: #2b2b2b;
   --surface-card-hover: #333333;
   --surface-card-active: #383838;
-  --surface-flyout: rgb(44 44 44 / 0.85);
+  --surface-flyout: #2c2c2c;
   --surface-overlay: rgb(0 0 0 / 0.5);
 
   --fg-primary: #ffffff;

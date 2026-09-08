@@ -1,7 +1,7 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "default",
-  "description": "The capabilities the main window is granted. Every entry is here because a feature needs it. Shell execution is deliberately absent: a step is started by the host's own typed command, from a program path and an argument vector, never by a shell plugin handed a string.",
+  "description": "The capabilities the main window is granted. Every entry is here because a feature needs it. Shell execution is deliberately absent: a step is started by the host's own typed command, from a program path and an argument vector, never by a shell plugin handed a string. The dialog plugin may only open and save — it returns a path the person chose, and the host's own command reads or writes that one file; there is no filesystem plugin, so nothing can walk a directory.",
   "windows": ["main"],
   "permissions": [
     "core:default",
@@ -13,6 +13,9 @@
     "core:window:allow-set-theme",
     "core:window:allow-theme",
     "core:event:default",
-    "log:default"
+    "log:default",
+    "dialog:allow-open",
+    "dialog:allow-save",
+    "autostart:default"
   ]
 }

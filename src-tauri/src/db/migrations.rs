@@ -12,7 +12,38 @@ use crate::error::Result;
 /// Every migration, in order. The index plus one is the schema version it
 /// produces, so a migration can never be reordered without the compiler and the
 /// round-trip test both objecting.
-const MIGRATIONS: &[(&str, &str)] = &[("001_init", include_str!("../../migrations/001_init.sql"))];
+const MIGRATIONS: &[(&str, &str)] = &[
+    ("001_init", include_str!("../../migrations/001_init.sql")),
+    (
+        "002_step_kinds",
+        include_str!("../../migrations/002_step_kinds.sql"),
+    ),
+    ("003_wait", include_str!("../../migrations/003_wait.sql")),
+    (
+        "004_review",
+        include_str!("../../migrations/004_review.sql"),
+    ),
+    (
+        "005_placement",
+        include_str!("../../migrations/005_placement.sql"),
+    ),
+    (
+        "006_tool_steps",
+        include_str!("../../migrations/006_tool_steps.sql"),
+    ),
+    (
+        "007_vm_steps",
+        include_str!("../../migrations/007_vm_steps.sql"),
+    ),
+    (
+        "008_triggers",
+        include_str!("../../migrations/008_triggers.sql"),
+    ),
+    (
+        "009_settings",
+        include_str!("../../migrations/009_settings.sql"),
+    ),
+];
 
 /// Every migration, name and SQL, in the order they apply.
 ///

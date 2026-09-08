@@ -8,41 +8,171 @@
  */
 
 import type { LogLine } from '@/data/runs';
+import { lastSegment } from '@/domain/profile';
+import { describeDuration } from '@/domain/timing';
 import type { Outcome } from '@/domain/run';
 import type { ChipTone } from '@/ui/chipTone';
 
 /** The last path segment: what a person calls the program. */
 export function baseName(path: unknown): string {
   if (typeof path !== 'string' || path === '') return 'the program';
-  return path.split(/[\\/]/).pop() || path;
+  return lastSegment(path);
+}
+
+/** The resolved target of a line: the program for an app, the target otherwise. */
+function targetOf(p: Record<string, unknown>): string | null {
+  if (typeof p.program === 'string') return p.program;
+  if (typeof p.target === 'string') return p.target;
+  return null;
+}
+
+/** What a person calls the target: a file name, a folder name, a host. */
+function nameOf(p: Record<string, unknown>): string {
+  const target = targetOf(p);
+  if (target === null) return 'the step';
+  if (p.kind === 'url') {
+    try {
+      return new URL(target).host;
+    } catch {
+      return target;
+    }
+  }
+  return lastSegment(target);
+}
+
+/** "folder src" / "notes.txt" / "github.com": the noun the sentence needs. */
+function noun(p: Record<string, unknown>): string {
+  if (p.kind === 'folder') return `folder ${nameOf(p)}`;
+  // A tool step's target is already the sentence: "Windows Terminal — dev",
+  // "3 pages from Work". Cutting it at a slash would spoil it.
+  if (p.tool !== undefined && typeof p.target === 'string') return p.target;
+  return nameOf(p);
+}
+
+/** The resolved target, and where it came from when expansion changed it. */
+function detailOf(p: Record<string, unknown>): string | null {
+  const target = targetOf(p);
+  if (target === null) return null;
+  return typeof p.source === 'string' && p.source !== '' ? `${target} — from ${p.source}` : target;
+}
+
+function duration(ms: unknown): string {
+  return typeof ms === 'number' ? describeDuration(ms) : 'a while';
+}
+
+function pidSuffix(p: Record<string, unknown>): string {
+  return typeof p.pid === 'number' ? ` — PID ${p.pid}` : '';
 }
 
 export function describe(line: LogLine): { text: string; detail: string | null } {
   const p = line.payload;
   switch (line.kind) {
     case 'run_started': {
-      const mode = p.mode === 'dry' ? 'dry run' : 'run';
       const steps = typeof p.steps === 'number' ? p.steps : 0;
       return {
-        text: `${mode === 'dry run' ? 'Dry run' : 'Run'} started — ${String(p.profileName ?? '')}, ${steps} ${steps === 1 ? 'step' : 'steps'}`,
+        text: `${p.mode === 'dry' ? 'Dry run' : 'Run'} started — ${String(p.profileName ?? '')}, ${steps} ${steps === 1 ? 'step' : 'steps'}`,
         detail: null,
       };
     }
     case 'spawned':
-      return {
-        text: `Started ${baseName(p.program)} — PID ${String(p.pid ?? '?')}`,
-        detail: typeof p.program === 'string' ? p.program : null,
-      };
+      return { text: `Started ${nameOf(p)}${pidSuffix(p)}`, detail: detailOf(p) };
+    case 'opened': {
+      // A hypervisor's tool ran to its end and may have said something on the
+      // way (F8); what it said is worth a line of its own under the sentence.
+      const said = typeof p.said === 'string' && p.said !== '' ? `it said: ${p.said}` : null;
+      return { text: `Opened ${noun(p)}${pidSuffix(p)}`, detail: said ?? detailOf(p) };
+    }
     case 'would_spawn':
+      return { text: `Would start ${nameOf(p)}`, detail: detailOf(p) };
+    case 'would_open':
+      return { text: `Would open ${noun(p)}`, detail: detailOf(p) };
+    case 'closed': {
+      const how = p.how === 'terminated' ? ' (terminated after the grace)' : '';
+      if (p.stop === true) {
+        return { text: `Stopped ${noun(p)}${pidSuffix(p)}${how}`, detail: detailOf(p) };
+      }
       return {
-        text: `Would start ${baseName(p.program)}`,
-        detail: typeof p.program === 'string' ? p.program : null,
+        text: `Closed ${noun(p)} after ${duration(p.heldMs)}${pidSuffix(p)}${how}`,
+        detail: detailOf(p),
       };
-    case 'failed':
+    }
+    case 'stopped': {
+      const closed = typeof p.closed === 'number' ? p.closed : 0;
+      const notClosed = typeof p.notClosed === 'number' ? p.notClosed : 0;
+      const parts = [`${closed} closed`];
+      if (notClosed > 0) parts.push(`${notClosed} not closed`);
       return {
-        text: `Could not start ${baseName(p.program)}: ${String(p.reason ?? 'no reason recorded')}`,
-        detail: typeof p.program === 'string' ? p.program : null,
+        text: `Stop — ${parts.join(', ')}${p.swept === true ? '; everything else the run started was ended' : ''}`,
+        detail: null,
       };
+    }
+    case 'no_job':
+      return {
+        text: `Windows gave this run no job object: a Stop reaches only the programs it holds directly`,
+        detail: typeof p.reason === 'string' ? p.reason : null,
+      };
+    case 'not_closed':
+      return {
+        text: `Could not close ${noun(p)}: ${String(p.reason ?? 'no reason recorded')}`,
+        detail: detailOf(p),
+      };
+    case 'would_close':
+      return { text: `Would close ${noun(p)} after ${duration(p.heldMs)}`, detail: detailOf(p) };
+    case 'waited':
+      return { text: `Waited ${duration(p.ms)}`, detail: null };
+    case 'would_wait':
+      return { text: `Would wait ${duration(p.ms)}`, detail: null };
+    case 'waiting_for':
+      return {
+        text: `Waiting for ${String(p.probe ?? 'something')} — up to ${duration(p.timeoutMs)}`,
+        detail: null,
+      };
+    case 'would_wait_for':
+      return {
+        text: `Would wait for ${String(p.probe ?? 'something')} — up to ${duration(p.timeoutMs)}`,
+        detail: null,
+      };
+    case 'placed': {
+      const note = typeof p.note === 'string' ? p.note : null;
+      return {
+        text: `Placed the window — ${String(p.detail ?? 'as asked')}`,
+        detail: note,
+      };
+    }
+    case 'not_placed':
+      return {
+        text: `Did not place the window: ${String(p.note ?? 'no reason recorded')}`,
+        detail: null,
+      };
+    case 'would_place': {
+      const parts: string[] = [];
+      if (p.state === 'maximized') parts.push('maximised');
+      if (p.state === 'minimized') parts.push('minimised');
+      const rect = p.rect;
+      if (typeof rect === 'object' && rect !== null) {
+        const r = rect as Record<string, unknown>;
+        parts.push(`${String(r.width)}×${String(r.height)} at ${String(r.x)}, ${String(r.y)}`);
+      }
+      if (typeof p.monitor === 'number') parts.push(`on screen ${p.monitor}`);
+      return {
+        text: `Would place the window — ${parts.length > 0 ? parts.join(' ') : 'as asked'}`,
+        detail: null,
+      };
+    }
+    case 'ready':
+      return { text: `Ready after ${duration(p.waitedMs)}`, detail: null };
+    case 'skipped':
+      return {
+        text: `Skipped — ${String(p.reason ?? 'no reason recorded')}`,
+        detail: null,
+      };
+    case 'failed': {
+      const verb = p.kind === 'app' || p.kind === undefined ? 'start' : 'open';
+      return {
+        text: `Could not ${verb} ${noun(p)}: ${String(p.reason ?? 'no reason recorded')}`,
+        detail: detailOf(p),
+      };
+    }
     case 'run_finished':
       return { text: `Run finished — ${outcomeLabel(p.outcome)}`, detail: null };
     default:

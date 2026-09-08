@@ -1,16 +1,36 @@
 /**
  * A profile is data (ADR-010).
  *
- * This module is the only place that decides what a profile may contain. It
- * reads an untrusted document and either returns a typed profile or a list of
- * problems written for a person; it never throws, and nothing in a document is
- * interpreted — a path is expanded only through a closed allow-list of
- * environment names, and shown expanded.
+ * This module is the only place that decides what a step may contain. It reads
+ * an untrusted configuration and either returns a typed step or a list of
+ * problems written for a person; it never throws, and nothing is interpreted —
+ * a path is expanded only through a closed allow-list of environment names, and
+ * shown expanded. A whole profile as a file is read by `domain/portable`, which
+ * comes back here for every step.
+ *
+ * It is also the only place that turns a step into what the host is asked to
+ * do (`resolveStep`): the same function feeds the dry run, the real run and
+ * the editor's preview, so what is shown is what runs — there is no second
+ * resolution.
  */
+
+import type { Placement } from './placement';
+import type { WaitFor } from './readiness';
+import type { Timing } from './timing';
 
 export const PROFILE_SCHEMA_VERSION = 1;
 
-export type StepKind = 'app';
+export const STEP_KINDS = [
+  'app',
+  'folder',
+  'file',
+  'url',
+  'bookmarks',
+  'terminal',
+  'editor',
+  'vm',
+] as const;
+export type StepKind = (typeof STEP_KINDS)[number];
 
 /** An application to start: a program, its arguments, where it runs. */
 export interface AppStep {
@@ -20,21 +40,85 @@ export interface AppStep {
   workingDir: string | null;
 }
 
-export type StepConfig = AppStep;
+/** A folder to open in Explorer. */
+export interface FolderStep {
+  kind: 'folder';
+  path: string;
+}
 
-/** A step as stored: its configuration plus the identity the host gave it. */
+/** A file to open in whatever Windows opens it with. */
+export interface FileStep {
+  kind: 'file';
+  path: string;
+}
+
+/** A web page to open in the default browser. */
+export interface UrlStep {
+  kind: 'url';
+  url: string;
+}
+
+/** The browsers whose bookmarks this product knows how to read. */
+export const BROWSERS = ['chrome', 'edge'] as const;
+export type Browser = (typeof BROWSERS)[number];
+
+/** A folder of bookmarks, opened as one browser window (F7). */
+export interface BookmarksStep {
+  kind: 'bookmarks';
+  browser: Browser;
+  /** The folder's name, or a path like `Bookmarks bar/Work` when it repeats. */
+  folder: string;
+}
+
+/** A Windows Terminal window, on a named profile, in a directory. */
+export interface TerminalStep {
+  kind: 'terminal';
+  /** The Windows Terminal profile, or null for its default. */
+  profile: string | null;
+  /** Where it opens, or null for wherever Windows Terminal would. */
+  directory: string | null;
+}
+
+/** A folder or workspace opened in VS Code. */
+export interface EditorStep {
+  kind: 'editor';
+  path: string;
+}
+
+/** The hypervisors this product knows how to ask for a machine (F8). */
+export const HYPERVISORS = ['hyperv', 'virtualbox', 'vmware'] as const;
+export type Hypervisor = (typeof HYPERVISORS)[number];
+
+/**
+ * A virtual machine, started with its console showing. `machine` is the
+ * machine's name for Hyper-V and VirtualBox, and the path to its `.vmx` for
+ * VMware Workstation, which knows machines by file.
+ */
+export interface VmStep {
+  kind: 'vm';
+  hypervisor: Hypervisor;
+  machine: string;
+}
+
+export type StepConfig =
+  AppStep | FolderStep | FileStep | UrlStep | BookmarksStep | TerminalStep | EditorStep | VmStep;
+
+/** A step as stored: its configuration, its timing, and the identity the host gave it. */
 export interface Step {
   id: string;
   profileId: string;
   position: number;
   config: StepConfig;
-}
-
-/** The shape of a profile as a file: no identifiers, only what it means. */
-export interface ProfileDocument {
-  schemaVersion: number;
-  name: string;
-  steps: StepConfig[];
+  timing: Timing;
+  /** What must be responding before this step starts, or null to start at once. */
+  waitFor: WaitFor | null;
+  /** Where its window goes once it is open (F6); the default asks for nothing. */
+  placement: Placement;
+  /**
+   * Seen and accepted on this machine (ADR-013). A step written here is
+   * accepted the moment it is written; a step that arrived in a file is not.
+   */
+  reviewed: boolean;
 }
 
 export interface Problem {
@@ -44,14 +128,27 @@ export interface Problem {
   problem: string;
 }
 
-export type ReadResult =
-  { ok: true; document: ProfileDocument } | { ok: false; problems: Problem[] };
-
-const ALLOWED_STEP_FIELDS = new Set(['kind', 'program', 'args', 'workingDir']);
-const ALLOWED_DOCUMENT_FIELDS = new Set(['schemaVersion', 'name', 'steps']);
+const FIELDS: Record<StepKind, ReadonlySet<string>> = {
+  app: new Set(['kind', 'program', 'args', 'workingDir']),
+  folder: new Set(['kind', 'path']),
+  file: new Set(['kind', 'path']),
+  url: new Set(['kind', 'url']),
+  bookmarks: new Set(['kind', 'browser', 'folder']),
+  terminal: new Set(['kind', 'profile', 'directory']),
+  editor: new Set(['kind', 'path']),
+  vm: new Set(['kind', 'hypervisor', 'machine']),
+};
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function isKind(value: unknown): value is StepKind {
+  return typeof value === 'string' && (STEP_KINDS as readonly string[]).includes(value);
+}
+
+function requiredText(value: unknown): string | null {
+  return typeof value === 'string' && value.trim() !== '' ? value.trim() : null;
 }
 
 /**
@@ -60,52 +157,140 @@ function isRecord(value: unknown): value is Record<string, unknown> {
  */
 export function readStepConfig(value: unknown, path = 'step'): StepConfig | Problem[] {
   if (!isRecord(value)) return [{ path, problem: 'a step must be an object' }];
+  if (!isKind(value.kind)) {
+    return [
+      {
+        path: `${path}.kind`,
+        problem: `a step is one of: ${STEP_KINDS.join(', ')}`,
+      },
+    ];
+  }
+  const kind = value.kind;
   const problems: Problem[] = [];
-
   for (const key of Object.keys(value)) {
-    if (!ALLOWED_STEP_FIELDS.has(key)) {
-      problems.push({ path: `${path}.${key}`, problem: 'this field is not part of a step' });
+    if (!FIELDS[kind].has(key)) {
+      problems.push({
+        path: `${path}.${key}`,
+        problem: `this field is not part of a ${kind} step`,
+      });
     }
   }
 
-  if (value.kind !== 'app') {
-    problems.push({ path: `${path}.kind`, problem: 'the only step kind known today is "app"' });
+  switch (kind) {
+    case 'app': {
+      const program = requiredText(value.program);
+      if (program === null) {
+        problems.push({ path: `${path}.program`, problem: 'a program path is required' });
+      }
+      const args = value.args ?? [];
+      if (!Array.isArray(args) || args.some((a) => typeof a !== 'string')) {
+        problems.push({ path: `${path}.args`, problem: 'arguments must be a list of strings' });
+      }
+      const workingDir = value.workingDir ?? null;
+      if (workingDir !== null && requiredText(workingDir) === null) {
+        problems.push({
+          path: `${path}.workingDir`,
+          problem: 'the working directory must be a path or left empty',
+        });
+      }
+      if (problems.length > 0) return problems;
+      return {
+        kind,
+        program: program as string,
+        args: args as string[],
+        workingDir: workingDir === null ? null : (workingDir as string).trim(),
+      };
+    }
+    case 'folder':
+    case 'file': {
+      const target = requiredText(value.path);
+      if (target === null) {
+        problems.push({ path: `${path}.path`, problem: `a ${kind} path is required` });
+      }
+      if (problems.length > 0) return problems;
+      return { kind, path: target as string };
+    }
+    case 'url': {
+      const url = requiredText(value.url);
+      if (url === null) {
+        problems.push({ path: `${path}.url`, problem: 'a web address is required' });
+      } else {
+        const read = readUrl(url);
+        if (!read.ok) problems.push({ path: `${path}.url`, problem: read.problem });
+      }
+      if (problems.length > 0) return problems;
+      return { kind, url: url as string };
+    }
+    case 'bookmarks': {
+      const browser = value.browser ?? 'chrome';
+      if (!(BROWSERS as readonly unknown[]).includes(browser)) {
+        problems.push({
+          path: `${path}.browser`,
+          problem: `bookmarks are read from ${BROWSERS.join(' or ')}`,
+        });
+      }
+      const folder = requiredText(value.folder);
+      if (folder === null) {
+        problems.push({ path: `${path}.folder`, problem: 'name the bookmark folder to open' });
+      }
+      if (problems.length > 0) return problems;
+      return { kind, browser: browser as Browser, folder: folder as string };
+    }
+    case 'terminal': {
+      const profile = value.profile ?? null;
+      if (profile !== null && requiredText(profile) === null) {
+        problems.push({
+          path: `${path}.profile`,
+          problem: 'the terminal profile is a name, or left empty for the default',
+        });
+      }
+      const directory = value.directory ?? null;
+      if (directory !== null && requiredText(directory) === null) {
+        problems.push({
+          path: `${path}.directory`,
+          problem: 'the directory is a path, or left empty',
+        });
+      }
+      if (problems.length > 0) return problems;
+      return {
+        kind,
+        profile: profile === null ? null : (profile as string).trim(),
+        directory: directory === null ? null : (directory as string).trim(),
+      };
+    }
+    case 'editor': {
+      const target = requiredText(value.path);
+      if (target === null) {
+        problems.push({ path: `${path}.path`, problem: 'a folder or workspace path is required' });
+      }
+      if (problems.length > 0) return problems;
+      return { kind, path: target as string };
+    }
+    case 'vm': {
+      const hypervisor = value.hypervisor;
+      if (!(HYPERVISORS as readonly unknown[]).includes(hypervisor)) {
+        problems.push({
+          path: `${path}.hypervisor`,
+          problem: `a machine is started by one of: ${HYPERVISORS.join(', ')}`,
+        });
+      }
+      const machine = requiredText(value.machine);
+      if (machine === null) {
+        problems.push({
+          path: `${path}.machine`,
+          problem: 'name the machine — or, for VMware, the path to its .vmx',
+        });
+      }
+      if (problems.length > 0) return problems;
+      return { kind, hypervisor: hypervisor as Hypervisor, machine: machine as string };
+    }
   }
-
-  const program = value.program;
-  if (typeof program !== 'string' || program.trim() === '') {
-    problems.push({ path: `${path}.program`, problem: 'a program path is required' });
-  }
-
-  const args = value.args ?? [];
-  if (!Array.isArray(args) || args.some((a) => typeof a !== 'string')) {
-    problems.push({ path: `${path}.args`, problem: 'arguments must be a list of strings' });
-  }
-
-  const workingDir = value.workingDir ?? null;
-  if (workingDir !== null && (typeof workingDir !== 'string' || workingDir.trim() === '')) {
-    problems.push({
-      path: `${path}.workingDir`,
-      problem: 'the working directory must be a path or left empty',
-    });
-  }
-
-  if (problems.length > 0) return problems;
-  return {
-    kind: 'app',
-    program: (program as string).trim(),
-    args: args as string[],
-    workingDir: workingDir === null ? null : (workingDir as string).trim(),
-  };
 }
 
-/** The configuration as the host stores it: the step's own shape, verbatim. */
+/** The configuration as the host stores it: the step's own shape, without the kind. */
 export function serializeStepConfig(config: StepConfig): string {
-  return JSON.stringify({
-    program: config.program,
-    args: config.args,
-    workingDir: config.workingDir,
-  });
+  const { kind: _kind, ...rest } = config;
+  return JSON.stringify(rest);
 }
 
 /** Read a stored configuration back. A row that cannot be read is a problem, not a crash. */
@@ -127,64 +312,6 @@ export function parseStoredStep(
   }
   const result = readStepConfig({ kind, ...parsed });
   return Array.isArray(result) ? { ok: false, problems: result } : { ok: true, config: result };
-}
-
-/**
- * Read a profile document. Never throws: a document that is not JSON, not an
- * object, of another schema version, or with anything unexpected in it comes
- * back as a list of problems.
- */
-export function readProfile(input: unknown): ReadResult {
-  let value = input;
-  if (typeof input === 'string') {
-    try {
-      value = JSON.parse(input);
-    } catch {
-      return { ok: false, problems: [{ path: '', problem: 'the file is not valid JSON' }] };
-    }
-  }
-  if (!isRecord(value)) {
-    return { ok: false, problems: [{ path: '', problem: 'a profile must be an object' }] };
-  }
-
-  const problems: Problem[] = [];
-  for (const key of Object.keys(value)) {
-    if (!ALLOWED_DOCUMENT_FIELDS.has(key)) {
-      problems.push({ path: key, problem: 'this field is not part of a profile' });
-    }
-  }
-
-  if (value.schemaVersion !== PROFILE_SCHEMA_VERSION) {
-    problems.push({
-      path: 'schemaVersion',
-      problem: `expected schema version ${PROFILE_SCHEMA_VERSION}, found ${String(value.schemaVersion)}`,
-    });
-  }
-
-  if (typeof value.name !== 'string' || value.name.trim() === '') {
-    problems.push({ path: 'name', problem: 'a profile needs a name' });
-  }
-
-  const steps: StepConfig[] = [];
-  if (!Array.isArray(value.steps)) {
-    problems.push({ path: 'steps', problem: 'steps must be a list' });
-  } else {
-    value.steps.forEach((step, index) => {
-      const read = readStepConfig(step, `steps[${index}]`);
-      if (Array.isArray(read)) problems.push(...read);
-      else steps.push(read);
-    });
-  }
-
-  if (problems.length > 0) return { ok: false, problems };
-  return {
-    ok: true,
-    document: {
-      schemaVersion: PROFILE_SCHEMA_VERSION,
-      name: (value.name as string).trim(),
-      steps,
-    },
-  };
 }
 
 /** The environment names a path may use. Anything else is refused, not expanded. */
@@ -235,4 +362,269 @@ export function resolvePath(raw: string, env: Readonly<Record<string, string>>):
     return { ok: false, problem: `the path is not absolute: ${normalised}` };
   }
   return { ok: true, path: normalised };
+}
+
+export type UrlResult = { ok: true; url: string } | { ok: false; problem: string };
+
+/**
+ * A web address the product will hand to the default browser: `http` or
+ * `https`, nothing else. `file:` would open the file the profile did not
+ * declare; `javascript:` and friends are not addresses at all.
+ */
+export function readUrl(raw: string): UrlResult {
+  const trimmed = raw.trim();
+  if (trimmed === '') return { ok: false, problem: 'the address is empty' };
+  let parsed: URL;
+  try {
+    parsed = new URL(trimmed);
+  } catch {
+    return { ok: false, problem: `not a web address: ${trimmed}` };
+  }
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+    return {
+      ok: false,
+      problem: `only http and https addresses are opened, not ${parsed.protocol}`,
+    };
+  }
+  if (parsed.hostname === '') return { ok: false, problem: `the address has no host: ${trimmed}` };
+  return { ok: true, url: parsed.toString() };
+}
+
+/**
+ * What the host is asked to do for a step, with every path resolved. `source`
+ * is the path as written when expansion changed it, so the log and the screen
+ * can show both.
+ */
+/**
+ * A tool this product knows how to call (F7, ADR-022). The host holds the
+ * paths — it is the only side that may look at a disk — and the domain decides
+ * the arguments, always as a vector, always the user's values as whole
+ * arguments (ADR-014).
+ */
+export const TOOLS = [
+  'chrome',
+  'edge',
+  'terminal',
+  'editor',
+  'hyperv',
+  'virtualbox',
+  'vmware',
+] as const;
+export type ToolId = (typeof TOOLS)[number];
+
+export type Launch =
+  | {
+      kind: 'app';
+      program: string;
+      args: string[];
+      workingDir: string | null;
+      source: string | null;
+    }
+  | { kind: 'folder'; path: string; source: string | null }
+  | { kind: 'file'; path: string; source: string | null }
+  | { kind: 'url'; url: string; source: null }
+  /** A tool, started by the host from the path it found for it. */
+  | {
+      kind: 'tool';
+      tool: ToolId;
+      args: string[];
+      /** What this is, in the log: "Windows Terminal", "3 pages from Work". */
+      what: string;
+      source: string | null;
+    }
+  /**
+   * A bookmark folder, not yet read. The host never receives this: the loop
+   * asks it for the file, the domain reads the folder out of it, and what the
+   * host is finally handed is a browser and a list of addresses.
+   */
+  | { kind: 'bookmarks'; browser: Browser; folder: string; source: null };
+
+export type ResolveResult = { ok: true; launch: Launch } | { ok: false; problems: Problem[] };
+
+function sourceOf(raw: string, resolved: string): string | null {
+  return raw.trim() === resolved ? null : raw.trim();
+}
+
+/** Turn a step into its launch, or say what stops it. Pure: the host checks the disk. */
+export function resolveStep(
+  config: StepConfig,
+  env: Readonly<Record<string, string>>,
+): ResolveResult {
+  switch (config.kind) {
+    case 'app': {
+      const problems: Problem[] = [];
+      const program = resolvePath(config.program, env);
+      if (!program.ok) problems.push({ path: 'program', problem: program.problem });
+      let workingDir: string | null = null;
+      if (config.workingDir !== null) {
+        const dir = resolvePath(config.workingDir, env);
+        if (!dir.ok) problems.push({ path: 'workingDir', problem: dir.problem });
+        else workingDir = dir.path;
+      }
+      if (!program.ok || problems.length > 0) return { ok: false, problems };
+      return {
+        ok: true,
+        launch: {
+          kind: 'app',
+          program: program.path,
+          args: config.args,
+          workingDir,
+          source: sourceOf(config.program, program.path),
+        },
+      };
+    }
+    case 'folder':
+    case 'file': {
+      const target = resolvePath(config.path, env);
+      if (!target.ok) return { ok: false, problems: [{ path: 'path', problem: target.problem }] };
+      return {
+        ok: true,
+        launch: {
+          kind: config.kind,
+          path: target.path,
+          source: sourceOf(config.path, target.path),
+        },
+      };
+    }
+    case 'url': {
+      const url = readUrl(config.url);
+      if (!url.ok) return { ok: false, problems: [{ path: 'url', problem: url.problem }] };
+      return { ok: true, launch: { kind: 'url', url: url.url, source: null } };
+    }
+    case 'bookmarks': {
+      return {
+        ok: true,
+        launch: {
+          kind: 'bookmarks',
+          browser: config.browser,
+          folder: config.folder,
+          source: null,
+        },
+      };
+    }
+    case 'terminal': {
+      const args: string[] = [];
+      let source: string | null = null;
+      if (config.profile !== null) args.push('-p', config.profile);
+      if (config.directory !== null) {
+        const directory = resolvePath(config.directory, env);
+        if (!directory.ok) {
+          return { ok: false, problems: [{ path: 'directory', problem: directory.problem }] };
+        }
+        args.push('-d', directory.path);
+        source = sourceOf(config.directory, directory.path);
+      }
+      return {
+        ok: true,
+        launch: {
+          kind: 'tool',
+          tool: 'terminal',
+          args,
+          what:
+            config.profile === null ? 'Windows Terminal' : `Windows Terminal — ${config.profile}`,
+          source,
+        },
+      };
+    }
+    case 'editor': {
+      const target = resolvePath(config.path, env);
+      if (!target.ok) return { ok: false, problems: [{ path: 'path', problem: target.problem }] };
+      return {
+        ok: true,
+        launch: {
+          kind: 'tool',
+          tool: 'editor',
+          args: [target.path],
+          what: `VS Code — ${lastSegment(target.path)}`,
+          source: sourceOf(config.path, target.path),
+        },
+      };
+    }
+    case 'vm': {
+      // Each hypervisor has one fixed shape, and the machine is one argument of
+      // it (ADR-014). Hyper-V's is the odd one: the host puts the name in the
+      // environment of a constant PowerShell command rather than in the
+      // command itself, so the shape here is just the name (ADR-023).
+      switch (config.hypervisor) {
+        case 'hyperv':
+          return {
+            ok: true,
+            launch: {
+              kind: 'tool',
+              tool: 'hyperv',
+              args: [config.machine],
+              what: `Hyper-V — ${config.machine}`,
+              source: null,
+            },
+          };
+        case 'virtualbox':
+          return {
+            ok: true,
+            launch: {
+              kind: 'tool',
+              tool: 'virtualbox',
+              args: ['startvm', config.machine, '--type', 'gui'],
+              what: `VirtualBox — ${config.machine}`,
+              source: null,
+            },
+          };
+        case 'vmware': {
+          const vmx = resolvePath(config.machine, env);
+          if (!vmx.ok) return { ok: false, problems: [{ path: 'machine', problem: vmx.problem }] };
+          if (!vmx.path.toLowerCase().endsWith('.vmx')) {
+            return {
+              ok: false,
+              problems: [{ path: 'machine', problem: 'VMware knows a machine by its .vmx file' }],
+            };
+          }
+          return {
+            ok: true,
+            launch: {
+              kind: 'tool',
+              tool: 'vmware',
+              args: ['-T', 'ws', 'start', vmx.path, 'gui'],
+              what: `VMware — ${lastSegment(vmx.path).replace(/\.vmx$/i, '')}`,
+              source: sourceOf(config.machine, vmx.path),
+            },
+          };
+        }
+      }
+    }
+  }
+}
+
+/** What a person calls the step: the file name, the folder name, the host. */
+export function stepTitle(config: StepConfig): string {
+  switch (config.kind) {
+    case 'app':
+      return lastSegment(config.program);
+    case 'folder':
+    case 'file':
+      return lastSegment(config.path);
+    case 'url': {
+      const read = readUrl(config.url);
+      if (!read.ok) return config.url;
+      try {
+        return new URL(read.url).host;
+      } catch {
+        return config.url;
+      }
+    }
+    case 'bookmarks':
+      return lastSegment(config.folder);
+    case 'terminal':
+      return config.profile ?? 'Windows Terminal';
+    case 'editor':
+      return lastSegment(config.path);
+    case 'vm':
+      return config.hypervisor === 'vmware'
+        ? lastSegment(config.machine).replace(/\.vmx$/i, '')
+        : config.machine;
+  }
+}
+
+/** The last path segment, or the path itself when there is none. */
+export function lastSegment(path: string): string {
+  const trimmed = path.replace(/[\\/]+$/, '');
+  return trimmed.split(/[\\/]/).pop() || path;
 }
