@@ -1,6 +1,6 @@
 [package]
 name = "deskstart"
-version = "0.1.0"
+version = "1.0.0"
 description = "Open your working day with one button: profiles of timed steps, run and logged"
 authors = ["Alex Justino"]
 license = "Apache-2.0"
