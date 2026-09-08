@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added — F8, virtual machines
+
+- A **virtual machine** step: Hyper-V, VirtualBox or VMware Workstation, named the way its
+  hypervisor names it (a name, or for VMware its `.vmx`), started with its console showing.
+- A hypervisor's tool is run to its end, within a minute, and what it said is in the log — a
+  machine that is not there, a permission that is missing. A tool that does not answer in time
+  is ended, and that is the reason. A hypervisor that is not installed is a reason within a
+  second, never a hang.
+- Hyper-V is asked through a constant PowerShell command with the machine's name in the
+  environment, so nothing typed into a step ever becomes part of a command line.
+- Migration **007** widens the kinds a step may be.
+
 ### Added — F7, the steps that call a tool
 
 - A **bookmark folder** step: every page directly in a Chrome or Edge folder, opened as one

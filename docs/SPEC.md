@@ -181,21 +181,21 @@ Depth before breadth. F0 crosses Rust → SQLite → commands → domain → UI 
 a profile with one step really opens a program and the log really says so. If the execution
 loop is wrong, that shows on day one.
 
-| #      | Slice                                                | Proof of done                                                                                                                                                                  |
-| ------ | ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **F0** | Foundation, Fluent shell, one step, **Run**, the log | **a profile with one step opens Notepad and the log says when and with which PID** · gates green · e2e against the binary · MSI inside the budget · `SECURITY.md` written      |
-| F1     | Profile editor and dry-run                           | steps of every basic kind (app, folder, file, URL) with arguments and working directory; **dry-run lists resolved absolute paths and spawns nothing** (e2e asserts no process) |
-| F2     | Time: pause, hold, cycle                             | the negative-case battery is green; a 5 s hold closes at 5 s ± 250 ms on the real binary; a cycle of three runs three times and stops                                          |
-| F3     | Stop, and the run history                            | Stop closes only what the run opened — a Notepad opened by hand survives; every run is listed with its outcome and opens onto its events                                       |
-| F4     | Dependencies and readiness                           | X does not start until Y's window exists (or its port answers); Y timing out marks X skipped **with the reason**, and the profile continues                                    |
-| F5     | Profile as a file: export, import, review            | an exported profile round-trips; an imported one **cannot run until every step is accepted**; a tampered path is shown absolute                                                |
-| F6     | Window control                                       | **done** — a window lands at the chosen rectangle and state, measured by Windows itself; a screen that is not there is reported and the primary is used                        |
-| F7     | Context steps: bookmarks, terminal, editor           | **done** — a real bookmark folder is read and its pages named; Windows Terminal really opens in the directory; a folder that is not there names the ones that are              |
-| F8     | Virtual machines                                     | two machines start and their consoles appear (**host proof by a person**); a missing hypervisor is a reason, not a hang                                                        |
-| F9     | Triggers: schedule, shortcut, autostart              | a task registered by the app fires at the minute set and the run appears in the log; the shortcut runs the profile over another program                                        |
-| F10    | Settings, Diagnostics, About, backup                 | Diagnostics shows every adapter as found / not found with the path; a restored backup restores every profile and run                                                           |
-| F11    | Fluent polish and accessibility                      | every screen opened for real, both themes, keyboard; axe green                                                                                                                 |
-| F12    | Release 1.0.0                                        | the installer runs on a clean machine and F0's proof passes on it                                                                                                              |
+| #      | Slice                                                | Proof of done                                                                                                                                                                   |
+| ------ | ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **F0** | Foundation, Fluent shell, one step, **Run**, the log | **a profile with one step opens Notepad and the log says when and with which PID** · gates green · e2e against the binary · MSI inside the budget · `SECURITY.md` written       |
+| F1     | Profile editor and dry-run                           | steps of every basic kind (app, folder, file, URL) with arguments and working directory; **dry-run lists resolved absolute paths and spawns nothing** (e2e asserts no process)  |
+| F2     | Time: pause, hold, cycle                             | the negative-case battery is green; a 5 s hold closes at 5 s ± 250 ms on the real binary; a cycle of three runs three times and stops                                           |
+| F3     | Stop, and the run history                            | Stop closes only what the run opened — a Notepad opened by hand survives; every run is listed with its outcome and opens onto its events                                        |
+| F4     | Dependencies and readiness                           | X does not start until Y's window exists (or its port answers); Y timing out marks X skipped **with the reason**, and the profile continues                                     |
+| F5     | Profile as a file: export, import, review            | an exported profile round-trips; an imported one **cannot run until every step is accepted**; a tampered path is shown absolute                                                 |
+| F6     | Window control                                       | **done** — a window lands at the chosen rectangle and state, measured by Windows itself; a screen that is not there is reported and the primary is used                         |
+| F7     | Context steps: bookmarks, terminal, editor           | **done** — a real bookmark folder is read and its pages named; Windows Terminal really opens in the directory; a folder that is not there names the ones that are               |
+| F8     | Virtual machines                                     | **done here as far as a machine without a hypervisor allows** — a missing hypervisor is a reason within a second, never a hang; two machines starting is the host proof, Alex's |
+| F9     | Triggers: schedule, shortcut, autostart              | a task registered by the app fires at the minute set and the run appears in the log; the shortcut runs the profile over another program                                         |
+| F10    | Settings, Diagnostics, About, backup                 | Diagnostics shows every adapter as found / not found with the path; a restored backup restores every profile and run                                                            |
+| F11    | Fluent polish and accessibility                      | every screen opened for real, both themes, keyboard; axe green                                                                                                                  |
+| F12    | Release 1.0.0                                        | the installer runs on a clean machine and F0's proof passes on it                                                                                                               |
 
 ### Delivered in F0
 
@@ -289,6 +289,44 @@ one a person opened — is never touched, and the suite proves it with a Charact
 by hand that survives. The run finishes `stopped` with the rest skipped. The editor offers
 "again and again, until the run is stopped", which the domain had since F2 and the screen
 could not offer without Stop.
+
+### Delivered in F8
+
+A step can be a **virtual machine**: on Hyper-V, VirtualBox or VMware Workstation, named the
+way its hypervisor names it — a machine name, or for VMware the path to its `.vmx` — started
+with its console showing. Each hypervisor is one fixed argument shape with the machine as one
+argument; Hyper-V, which has no tool of its own, is asked through a **constant** PowerShell
+command with the name in the child's environment (ADR-023). Nothing a person typed is ever part
+of a command line.
+
+A hypervisor's tool is a **command**, not a launcher: it is run to its end within a minute and
+what it said is the reason in the log — the machine that is not there, the permission that is
+missing. A tool that does not answer in time is ended, and the budget is the reason. A hypervisor
+that is not installed is the same sentence as any other missing tool, within a second.
+
+None of it may be held, cycled or placed: the console is the hypervisor's, and the process this
+product started only asked for it.
+
+### Deferred out of F8, and why
+
+- **Starting two machines and seeing their consoles** is the host proof the specification
+  assigns to a person: it needs a hypervisor with machines on it, and the machine this suite ran
+  on has none. What the suite proves is the other half — a hypervisor that is not here is a
+  reason within seconds and the run reaches its end — and the shape of the first: a dry run says
+  what it would ask of which hypervisor.
+- **Stopping a machine when the run stops.** Stop closes what the run opened (ADR-015), and a
+  machine's process is the hypervisor's, not ours; ending a machine is `Stop-VM`, `controlvm
+poweroff`, `vmrun stop` — each a decision about somebody's running system that a Stop button
+  should not make on its own. It belongs with 1.2's end-of-day teardown, where it can be asked
+  for by name.
+- **Waiting for a machine to be up.** F4's readiness waits for a window or a port; a machine's
+  readiness is its guest answering, which is a port probe away for a machine with a known
+  address and a whole subject for one without. Not offered until it can be offered honestly.
+- **Hyper-V without PowerShell** — WMI, or the management API directly. A second way of asking
+  the same thing, for a saving of about a second; when it arrives it arrives as a swap behind
+  the same step.
+- **A machine's snapshot, headless start, or a second hypervisor per machine.** Fields, each to
+  explain and each to be wrong about.
 
 ### Delivered in F7
 

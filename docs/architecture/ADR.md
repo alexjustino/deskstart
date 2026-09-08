@@ -28,6 +28,7 @@ part that matters most later — the cost we accepted.
 | [020](#adr-020) | One file at a time, through the system's own dialog                                      | Accepted |
 | [021](#adr-021) | A window is placed only if the run opened it                                             | Accepted |
 | [022](#adr-022) | A tool is found where it is installed, never on PATH                                     | Accepted |
+| [023](#adr-023) | A hypervisor is asked as a bounded command; a value never enters a command line          | Accepted |
 
 ---
 
@@ -397,3 +398,34 @@ and scoop-style installs are the ones this will meet first.
 file (the `Default` profile) and hands over the text; **what a folder is** — which pages are in
 it, what a name matches, which addresses are openable — is `domain/bookmarks`, and the host never
 learns. What it is finally asked to do is start a browser with a list of `http` addresses.
+
+## ADR-023 — A hypervisor is asked as a bounded command; a value never enters a command line {#adr-023}
+
+**Context.** F8 starts virtual machines. VirtualBox and VMware have command-line tools
+(`VBoxManage`, `vmrun`) that take the machine as an argument and exit. Hyper-V has none: it is
+driven by PowerShell cmdlets, and ADR-014's draft shape for it — `powershell -Command Start-VM
+-Name <name>` — would put the machine's name inside text PowerShell parses. A machine called
+`dev; Remove-Item …` is then a script, which is the one thing this product exists not to run.
+
+**Decision, first half.** The user's value never enters a command line that is interpreted.
+For VirtualBox and VMware the value is one argument of a fixed vector, as ADR-014 says. For
+Hyper-V the command PowerShell is given is a **constant** — the same text every time, with no
+placeholder in it — and the machine's name travels in the child's **environment**
+(`DESKSTART_VM`), where PowerShell reads it as a string and never as code. A test holds the
+command to that: it contains `$env:DESKSTART_VM` and no placeholder.
+
+**Decision, second half.** A hypervisor's tool does one thing, says whether it could, and
+exits, so it is not a program to hand a desktop to and walk away from (the way Windows Terminal
+is). It is **run to its end within a budget** — sixty seconds — and what it wrote to stderr is
+the reason a person reads: `it answered (exit 1): a machine named "dev" was not found`. When the
+budget is spent the tool is ended and the budget is the reason. The read of what it said has a
+deadline of its own, because a console the tool opened inherits its pipe and outlives it — that
+was a hang, found by the unit test before any machine was asked.
+
+**How Hyper-V is "installed".** By its console: `vmconnect.exe` arrives with the management
+tools and with nothing else. PowerShell is on every Windows and is not what is looked for.
+
+**Cost accepted.** A machine that takes longer than a minute to be _asked_ — not to boot; the
+tool returns once the start is under way — is ended and reported. Hyper-V through PowerShell
+is slower than a native call would be, by about a second, and needs the person to be allowed
+to manage Hyper-V, which the product does not arrange (ADR-014: elevation is never silent).
