@@ -27,6 +27,10 @@ pub enum Error {
     #[error("{0}")]
     File(&'static str),
 
+    /// What the Task Scheduler, or the system's shortcut registration, said.
+    #[error("{0}")]
+    Scheduler(String),
+
     #[error("{0}")]
     InvalidInput(&'static str),
 }
@@ -52,6 +56,7 @@ impl Serialize for Error {
             Error::NotFound => "not_found",
             Error::Unreviewed => "unreviewed",
             Error::File(_) => "file",
+            Error::Scheduler(_) => "scheduler",
             Error::InvalidInput(_) => "invalid_input",
         };
         // The detail goes to the log; the frontend gets the sentence.

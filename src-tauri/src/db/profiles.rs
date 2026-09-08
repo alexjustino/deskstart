@@ -6,7 +6,8 @@ use crate::db::models::{ImportStep, Profile, Step, STEP_KINDS};
 use crate::db::{new_id, now};
 use crate::error::{Error, Result};
 
-const PROFILE_COLUMNS: &str = "id, name, position, imported_unreviewed, created_at, updated_at";
+const PROFILE_COLUMNS: &str =
+    "id, name, position, imported_unreviewed, schedule_json, shortcut, created_at, updated_at";
 const STEP_COLUMNS: &str = "id, profile_id, position, kind, config_json, timing_json, \
      wait_json, place_json, reviewed, created_at, updated_at";
 
@@ -16,8 +17,10 @@ fn read_profile(row: &rusqlite::Row<'_>) -> rusqlite::Result<Profile> {
         name: row.get(1)?,
         position: row.get(2)?,
         imported_unreviewed: row.get::<_, i64>(3)? != 0,
-        created_at: row.get(4)?,
-        updated_at: row.get(5)?,
+        schedule_json: row.get(4)?,
+        shortcut: row.get(5)?,
+        created_at: row.get(6)?,
+        updated_at: row.get(7)?,
     })
 }
 
@@ -88,6 +91,38 @@ pub fn rename_profile(conn: &Connection, id: &str, name: &str) -> Result<Profile
         return Err(Error::NotFound);
     }
     get_profile(conn, id)
+}
+
+/// Store a profile's schedule, already validated by the scheduler's reader.
+pub fn set_schedule(conn: &mut Connection, id: &str, schedule_json: &str) -> Result<Profile> {
+    let changed = conn.execute(
+        "UPDATE profile SET schedule_json = ?2, updated_at = ?3 WHERE id = ?1",
+        params![id, schedule_json, now()],
+    )?;
+    if changed == 0 {
+        return Err(Error::NotFound);
+    }
+    get_profile(conn, id)
+}
+
+/// Store a profile's key combination, as its canonical text; '' removes it.
+pub fn set_shortcut(conn: &mut Connection, id: &str, shortcut: &str) -> Result<Profile> {
+    let changed = conn.execute(
+        "UPDATE profile SET shortcut = ?2, updated_at = ?3 WHERE id = ?1",
+        params![id, shortcut, now()],
+    )?;
+    if changed == 0 {
+        return Err(Error::NotFound);
+    }
+    get_profile(conn, id)
+}
+
+/// Every profile with a key combination: what is registered at start.
+pub fn shortcuts(conn: &Connection) -> Result<Vec<(String, String)>> {
+    let mut statement =
+        conn.prepare("SELECT id, shortcut FROM profile WHERE shortcut <> '' ORDER BY position")?;
+    let rows = statement.query_map([], |row| Ok((row.get(0)?, row.get(1)?)))?;
+    Ok(rows.collect::<rusqlite::Result<Vec<_>>>()?)
 }
 
 /// Remove a profile and its steps. Runs it made keep its name and survive it.
@@ -716,5 +751,27 @@ mod tests {
             list_steps(&conn, &profile.id).unwrap().len(),
             STEP_KINDS.len()
         );
+    }
+
+    #[test]
+    fn a_profile_keeps_its_schedule_and_its_shortcut() {
+        let mut conn = memory();
+        let profile = create_profile(&conn, "Morning").unwrap();
+        assert_eq!(profile.schedule_json, "{}");
+        assert_eq!(profile.shortcut, "");
+        let scheduled = set_schedule(&mut conn, &profile.id, r#"{"at":"07:30"}"#).unwrap();
+        assert_eq!(scheduled.schedule_json, r#"{"at":"07:30"}"#);
+        let keyed = set_shortcut(&mut conn, &profile.id, "Ctrl+Alt+D").unwrap();
+        assert_eq!(keyed.shortcut, "Ctrl+Alt+D");
+        assert_eq!(
+            shortcuts(&conn).unwrap(),
+            vec![(profile.id.clone(), "Ctrl+Alt+D".to_string())]
+        );
+        set_shortcut(&mut conn, &profile.id, "").unwrap();
+        assert!(shortcuts(&conn).unwrap().is_empty());
+        assert!(matches!(
+            set_schedule(&mut conn, "missing", "{}"),
+            Err(Error::NotFound)
+        ));
     }
 }
