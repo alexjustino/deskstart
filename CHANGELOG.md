@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed — F11, accessibility and polish
+
+- Content surfaces are opaque: text is readable in both themes on any machine, with or without
+  Mica, which now backs the window rather than sitting behind text (ADR-026).
+- The scrollable regions take the keyboard, so a window taller than the screen scrolls without a
+  mouse.
+- Every screen passes axe-core — contrast, names, roles, structure — in the light theme and the
+  dark one, checked by a suite that injects axe into the running window.
+
 ### Added — F10, settings, diagnostics, backup
 
 - A **Settings** screen: the theme (now kept in the workspace, not just for the window), Start
