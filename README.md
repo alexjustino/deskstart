@@ -18,7 +18,7 @@ No cloud. No account. No telemetry. No shell.
 > **Status: early.** Deskstart is being built in public, one vertical slice at a time. What
 > exists today is the foundation (F0), the profile editor (F1), time (F2), Stop (F3),
 > waiting (F4), the file (F5), the window (F6), the tools (F7), the machines (F8) and the
-> triggers (F9):
+> triggers (F9) and settings (F10):
 > profiles of applications, folders, files and web pages, with pauses, holds and cycles; a Run
 > button that really opens them and really closes them when their time is up; a Stop that
 > closes what the run opened and nothing else; and a log that really says what happened. Everything else on this page is marked as planned. Installers arrive with the
@@ -66,6 +66,10 @@ twenty minutes, then close it" and "open, close, reopen" are first-class, not a 
   dialog or pasted in. An imported profile **runs nothing** until every one of its steps has
   been read and accepted, each shown with its path resolved absolute and each argument on its
   own line.
+- **Settings, and a backup that is everything.** A Settings screen keeps the theme, Start with
+  Windows, and About; a **backup** saves the whole workspace — every profile and every run — to
+  one file, and a **restore** brings it all back. Diagnostics lists every program a step can call,
+  found or not found with its path.
 - **Triggers.** A profile can start at a **time of day** — handed to the Windows Task Scheduler,
   so Deskstart need not be open — or from a **key combination** pressed in any program, or from
   `deskstart.exe --run <id>`. Closing the window keeps Deskstart in the tray; **Start with

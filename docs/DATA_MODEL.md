@@ -103,3 +103,10 @@ host was asked to act on — and `source`, the path as written, when expansion c
 A run's first event and its row are inserted in one transaction; so are its last event and
 its outcome. Later slices add `waiting`, `ready`, `timed_out`, `closed`, `not_stoppable`,
 `placed`, `could_not_place`, `unavailable` — each documented here when it arrives.
+
+## `setting`
+
+| Column  | Meaning                                                                                                                                                                            |
+| ------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `key`   | the setting's name (`theme`)                                                                                                                                                       |
+| `value` | its value, as a string; what it means is the domain's (`domain/settings`). An absent key is the default, so there is no row for a setting left at its default (F10, migration 009) |

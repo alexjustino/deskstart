@@ -30,6 +30,7 @@ part that matters most later — the cost we accepted.
 | [022](#adr-022) | A tool is found where it is installed, never on PATH                                     | Accepted |
 | [023](#adr-023) | A hypervisor is asked as a bounded command; a value never enters a command line          | Accepted |
 | [024](#adr-024) | A trigger binds to a profile id; the window closes to the tray                           | Accepted |
+| [025](#adr-025) | A backup is the workspace file; a restore is staged and applied at the next start        | Accepted |
 
 ---
 
@@ -463,3 +464,33 @@ off until a person turns it on; nothing is written to the Run key by an install.
 the debug build — the executable is whichever one registered it, which is what a person testing
 wants and a surprise for anyone else; Diagnostics will say which (F10). A shortcut another program
 already holds is refused with that reason, and there is no arbitration.
+
+## ADR-025 — A backup is the workspace file; a restore is staged and applied at the next start {#adr-025}
+
+**Context.** F10 backs the workspace up and restores it. A backup has to capture every profile,
+step, run, event and setting; a restore has to bring them all back. Two things make the obvious
+"export rows to JSON, import them back" wrong here: the run log is append-only and its triggers
+refuse a delete (ADR-011), so an import could not clear it to replace it; and any format of our
+own is a second description of the workspace that can drift from the first.
+
+**Decision, the backup.** It is the workspace, entire, written by SQLite's `VACUUM INTO` — one
+consistent file with the write-ahead log folded in, taken under a read lock so a run in progress
+is neither missed nor blocked. The file _is_ a workspace; there is nothing to keep in sync.
+
+**Decision, the restore.** A restore does not edit the workspace — it replaces it with another
+workspace, and replacing a file is not mutating it, so the append-only triggers are not in its
+way. But the live file is open and locked while the product runs. So a restore **stages**: the
+chosen file, validated, is copied beside the workspace as `<name>.pending`, and applied at the
+next start — `db::open` moves it into place before it opens anything, the one moment the file is
+not locked. The product calls `app.restart()` so "the next start" is now.
+
+**Decision, the untrusted file.** A restore replaces everything, so the file is opened read-only
+and checked to be a Deskstart workspace — the tables are there, the schema version is between 1
+and this build's — before it is staged. A garbage file, or one from a newer version, is refused
+with a sentence rather than swapped in and found broken at the next boot. An older backup opens
+because migrations run it forward on first open, the same as any old workspace.
+
+**Cost accepted.** A restore restarts the product; it is not a live swap, and the one screen that
+cannot survive it is the one asking for it. The staged file briefly doubles the workspace on disk.
+And a backup is a full copy every time — there is no incremental backup, which a page of profiles
+does not need.
