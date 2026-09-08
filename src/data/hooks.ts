@@ -25,7 +25,7 @@ import type { Schedule, Shortcut, Trigger } from '@/domain/triggers';
 import { executeProfile, Stopper, type Runnable } from './execute';
 import * as profileApi from './profiles';
 import * as runApi from './runs';
-import { fetchEnvironment, fetchMonitors, fetchTools } from './system';
+import { fetchEnvironment, fetchMonitors, fetchSettings, fetchTools, setSetting } from './system';
 
 export const keys = {
   profiles: ['profiles'] as const,
@@ -35,6 +35,7 @@ export const keys = {
   environment: ['environment'] as const,
   monitors: ['monitors'] as const,
   tools: ['tools'] as const,
+  settings: ['settings'] as const,
   scheduled: (profileId: string) => ['scheduled', profileId] as const,
 };
 
@@ -55,6 +56,20 @@ export function useMonitors() {
 /** The tools this machine has, and the ones it has not (F7). */
 export function useTools() {
   return useQuery({ queryKey: keys.tools, queryFn: fetchTools });
+}
+
+/** The settings a person has chosen, read once at start (F10). */
+export function useSettings() {
+  return useQuery({ queryKey: keys.settings, queryFn: fetchSettings });
+}
+
+/** Store one setting, then refetch so what is shown is what is on disk. */
+export function useSetSetting() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: ({ key, value }: { key: string; value: string }) => setSetting(key, value),
+    onSuccess: () => client.invalidateQueries({ queryKey: keys.settings }),
+  });
 }
 
 export function useCreateProfile() {

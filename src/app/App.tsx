@@ -1,10 +1,13 @@
 import { useCallback, useEffect, useState } from 'react';
 
-import { applyAccent, applyTheme, type ThemeChoice } from '@/app/theme';
+import { applyAccent, applyTheme } from '@/app/theme';
 import { fetchAccentRamp, onRunRequested, pendingRun, type RunRequest } from '@/data/system';
+import { useSettings } from '@/data/hooks';
+import { readSettings } from '@/domain/settings';
 import { DiagnosticsPage } from '@/features/diagnostics/DiagnosticsPage';
 import { ProfilesPage } from '@/features/profiles/ProfilesPage';
 import { RunsPage } from '@/features/runs/RunsPage';
+import { SettingsPage } from '@/features/settings/SettingsPage';
 import { Sidebar, type Destination } from '@/features/shell/Sidebar';
 import { TitleBar } from '@/features/shell/TitleBar';
 
@@ -18,12 +21,13 @@ import { TitleBar } from '@/features/shell/TitleBar';
  */
 export function App() {
   const [destination, setDestination] = useState<Destination>('profiles');
-  // Held in memory until Settings (F10) persists it. The choice is applied
-  // through the same function Settings will use, so nothing is rewritten then.
-  const [theme, setTheme] = useState<ThemeChoice>('system');
 
-  // The accent ramp follows the desktop. Applied at start, and again on a
-  // theme change, because the shade that reads on white does not read on black.
+  // The theme is a stored setting now (F10). It is applied whenever it is read
+  // or changed — Settings writes it, this query refetches, and the effect
+  // re-applies — and the accent ramp is re-read with it, because the shade that
+  // reads on white does not read on black.
+  const settings = useSettings();
+  const theme = readSettings(settings.data).theme;
   useEffect(() => {
     applyTheme(theme);
     void fetchAccentRamp()
@@ -61,7 +65,8 @@ export function App() {
         <main className="min-w-0 flex-1 overflow-y-auto bg-layer">
           {destination === 'profiles' && <ProfilesPage request={request} />}
           {destination === 'runs' && <RunsPage />}
-          {destination === 'diagnostics' && <DiagnosticsPage theme={theme} onTheme={setTheme} />}
+          {destination === 'diagnostics' && <DiagnosticsPage />}
+          {destination === 'settings' && <SettingsPage />}
         </main>
       </div>
     </div>

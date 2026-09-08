@@ -159,3 +159,40 @@ export function onRunRequested(handler: (request: RunRequest) => void): () => vo
     void stop.then((unlisten) => unlisten());
   };
 }
+
+/** Every setting a person has chosen, as the domain will read them (F10). */
+export async function fetchSettings(): Promise<Record<string, string>> {
+  return invoke<Record<string, string>>('settings_all');
+}
+
+/** Store one setting. */
+export async function setSetting(key: string, value: string): Promise<void> {
+  await invoke('setting_set', { key, value });
+}
+
+/** What a backup file holds, read before it is restored. */
+export interface BackupSummary {
+  schemaVersion: number;
+  profiles: number;
+  runs: number;
+}
+
+/** Write the whole workspace to the file the person chose. */
+export async function backupWorkspace(path: string): Promise<void> {
+  await invoke('workspace_backup', { path });
+}
+
+/** Read what a backup holds, without touching the workspace. */
+export async function backupSummary(path: string): Promise<BackupSummary> {
+  return invoke<BackupSummary>('workspace_backup_summary', { path });
+}
+
+/** Stage a backup to replace the workspace at the next start; returns what it holds. */
+export async function restoreWorkspace(path: string): Promise<BackupSummary> {
+  return invoke<BackupSummary>('workspace_restore', { path });
+}
+
+/** Restart the product, so a staged restore is applied. */
+export async function restart(): Promise<void> {
+  await invoke('restart');
+}
