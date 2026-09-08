@@ -260,3 +260,79 @@ describe('the steps that call a tool', () => {
     });
   });
 });
+
+describe('a virtual machine', () => {
+  it('reads a machine on each hypervisor, and refuses one it does not know', () => {
+    expect(readStepConfig({ kind: 'vm', hypervisor: 'hyperv', machine: ' dev ' })).toEqual({
+      kind: 'vm',
+      hypervisor: 'hyperv',
+      machine: 'dev',
+    });
+    expect(readStepConfig({ kind: 'vm', hypervisor: 'parallels', machine: 'dev' })).toEqual([
+      {
+        path: 'step.hypervisor',
+        problem: 'a machine is started by one of: hyperv, virtualbox, vmware',
+      },
+    ]);
+    expect(readStepConfig({ kind: 'vm', hypervisor: 'hyperv' })).toEqual([
+      { path: 'step.machine', problem: 'name the machine — or, for VMware, the path to its .vmx' },
+    ]);
+  });
+
+  it('is one fixed argument shape per hypervisor, the machine as one argument', () => {
+    const hyperv = readStepConfig({ kind: 'vm', hypervisor: 'hyperv', machine: 'dev; whoami' });
+    const vbox = readStepConfig({ kind: 'vm', hypervisor: 'virtualbox', machine: 'W11 --foo' });
+    if (Array.isArray(hyperv) || Array.isArray(vbox)) throw new Error('both read');
+    expect(resolveStep(hyperv, ENV)).toEqual({
+      ok: true,
+      launch: {
+        kind: 'tool',
+        tool: 'hyperv',
+        args: ['dev; whoami'],
+        what: 'Hyper-V — dev; whoami',
+        source: null,
+      },
+    });
+    expect(resolveStep(vbox, ENV)).toEqual({
+      ok: true,
+      launch: {
+        kind: 'tool',
+        tool: 'virtualbox',
+        args: ['startvm', 'W11 --foo', '--type', 'gui'],
+        what: 'VirtualBox — W11 --foo',
+        source: null,
+      },
+    });
+  });
+
+  it('knows a VMware machine by its .vmx, resolved, and refuses anything else', () => {
+    const vmware = readStepConfig({
+      kind: 'vm',
+      hypervisor: 'vmware',
+      machine: '%USERPROFILE%/VMs/dev/dev.vmx',
+    });
+    if (Array.isArray(vmware)) throw new Error('the step reads');
+    const resolved = resolveStep(vmware, ENV);
+    expect(resolved.ok).toBe(true);
+    if (resolved.ok) {
+      expect(resolved.launch).toMatchObject({
+        kind: 'tool',
+        tool: 'vmware',
+        what: 'VMware — dev',
+        source: '%USERPROFILE%/VMs/dev/dev.vmx',
+      });
+      if (resolved.launch.kind === 'tool') {
+        expect(resolved.launch.args.slice(0, 3)).toEqual(['-T', 'ws', 'start']);
+        expect(resolved.launch.args[3]).toMatch(/^C:\\Users\\Alex\\VMs\\dev\\dev\.vmx$/);
+        expect(resolved.launch.args[4]).toBe('gui');
+      }
+    }
+    const notVmx = readStepConfig({ kind: 'vm', hypervisor: 'vmware', machine: 'C:\\VMs\\dev' });
+    if (Array.isArray(notVmx)) throw new Error('the step reads');
+    expect(resolveStep(notVmx, ENV)).toEqual({
+      ok: false,
+      problems: [{ path: 'machine', problem: 'VMware knows a machine by its .vmx file' }],
+    });
+    expect(stepTitle(vmware)).toBe('dev');
+  });
+});

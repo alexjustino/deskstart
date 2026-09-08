@@ -76,8 +76,12 @@ export function describe(line: LogLine): { text: string; detail: string | null }
     }
     case 'spawned':
       return { text: `Started ${nameOf(p)}${pidSuffix(p)}`, detail: detailOf(p) };
-    case 'opened':
-      return { text: `Opened ${noun(p)}${pidSuffix(p)}`, detail: detailOf(p) };
+    case 'opened': {
+      // A hypervisor's tool ran to its end and may have said something on the
+      // way (F8); what it said is worth a line of its own under the sentence.
+      const said = typeof p.said === 'string' && p.said !== '' ? `it said: ${p.said}` : null;
+      return { text: `Opened ${noun(p)}${pidSuffix(p)}`, detail: said ?? detailOf(p) };
+    }
     case 'would_spawn':
       return { text: `Would start ${nameOf(p)}`, detail: detailOf(p) };
     case 'would_open':

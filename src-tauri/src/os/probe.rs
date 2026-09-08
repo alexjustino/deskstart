@@ -78,6 +78,7 @@ mod tests {
                 "127.0.0.1".into(),
             ],
             working_dir: None,
+            env: Vec::new(),
         })
         .expect("spawn");
         assert!(!has_window(spawned.pid));

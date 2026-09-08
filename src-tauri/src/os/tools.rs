@@ -19,10 +19,40 @@
 //! Bookmarks live beside the browser, in its own user data. Only the `Default`
 //! profile is read, which is the one nearly everybody has; another profile is a
 //! field this slice did not add rather than a guess it makes.
+//!
+//! F8 adds three hypervisors, and a distinction the first four tools did not
+//! need: a **launcher** (Windows Terminal, VS Code, a browser) is handed a
+//! desktop and left alone, while a **command** (`VBoxManage`, `vmrun`, the
+//! PowerShell that asks Hyper-V) does one thing, says whether it could, and
+//! exits — so it is waited for, within a budget, and what it said is the
+//! reason a person reads. Hyper-V has no command-line tool of its own: it is
+//! asked through PowerShell, with a **constant** command and the machine's
+//! name in the child's environment, never in the command line (ADR-023).
 
 use std::path::PathBuf;
 
 use serde::Serialize;
+
+use crate::os::process::Launch;
+
+/// How a tool is run once found.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Mode {
+    /// Handed a desktop and left alone; the process is held by the run.
+    Launcher,
+    /// Run to its end within a budget; what it says is the reason.
+    Command,
+}
+
+/// The variable a machine's name travels in, for Hyper-V (ADR-023).
+pub const VM_NAME_VARIABLE: &str = "DESKSTART_VM";
+
+/// What PowerShell is asked, verbatim and always the same. The name is read
+/// from the environment inside PowerShell, as a string; nothing a person typed
+/// is ever part of this text.
+const HYPERV_COMMAND: &str = "$ErrorActionPreference = 'Stop'; \
+     Start-VM -Name $env:DESKSTART_VM; \
+     & (Join-Path $env:SystemRoot 'System32\\vmconnect.exe') localhost $env:DESKSTART_VM";
 
 /// One tool, as the interface and the log talk about it.
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
@@ -38,11 +68,14 @@ pub struct Tool {
 }
 
 /// The ids a launch may name, with what they are called.
-const TOOLS: [(&str, &str); 4] = [
+const TOOLS: [(&str, &str); 7] = [
     ("chrome", "Google Chrome"),
     ("edge", "Microsoft Edge"),
     ("terminal", "Windows Terminal"),
     ("editor", "VS Code"),
+    ("hyperv", "Hyper-V"),
+    ("virtualbox", "VirtualBox"),
+    ("vmware", "VMware Workstation"),
 ];
 
 fn env_path(variable: &str, tail: &str) -> Option<PathBuf> {
@@ -73,6 +106,18 @@ fn candidates(id: &str) -> Vec<PathBuf> {
             ("PROGRAMFILES", r"Microsoft VS Code\Code.exe"),
             ("PROGRAMFILES(X86)", r"Microsoft VS Code\Code.exe"),
         ],
+        // Hyper-V is "installed" when its console is: `vmconnect.exe` arrives
+        // with the management tools and with nothing else. PowerShell, which
+        // does the asking, is on every Windows and is not what is looked for.
+        "hyperv" => &[("SYSTEMROOT", r"System32\vmconnect.exe")],
+        "virtualbox" => &[
+            ("PROGRAMFILES", r"Oracle\VirtualBox\VBoxManage.exe"),
+            ("PROGRAMFILES(X86)", r"Oracle\VirtualBox\VBoxManage.exe"),
+        ],
+        "vmware" => &[
+            ("PROGRAMFILES(X86)", r"VMware\VMware Workstation\vmrun.exe"),
+            ("PROGRAMFILES", r"VMware\VMware Workstation\vmrun.exe"),
+        ],
         _ => &[],
     };
     places
@@ -84,6 +129,53 @@ fn candidates(id: &str) -> Vec<PathBuf> {
 /// Where this tool is on this machine, if it is anywhere.
 pub fn find(id: &str) -> Option<PathBuf> {
     candidates(id).into_iter().find(|path| path.is_file())
+}
+
+/// Launcher or command: what happens after the tool is found.
+pub fn mode(id: &str) -> Mode {
+    match id {
+        "hyperv" | "virtualbox" | "vmware" => Mode::Command,
+        _ => Mode::Launcher,
+    }
+}
+
+/// The exact process to start for this tool with these arguments, or None
+/// when the tool is not installed here.
+///
+/// For every tool but one this is the tool itself and the arguments as given.
+/// Hyper-V is asked through PowerShell: a constant command, and the machine's
+/// name — the one argument the domain sent — in the child's environment.
+pub fn invocation(id: &str, args: &[String]) -> Option<Launch> {
+    let found = find(id)?;
+    if id == "hyperv" {
+        let system = std::env::var_os("SYSTEMROOT")?;
+        let powershell =
+            PathBuf::from(system).join(r"System32\WindowsPowerShell\v1.0\powershell.exe");
+        if !powershell.is_file() {
+            return None;
+        }
+        return Some(Launch {
+            program: powershell,
+            args: vec![
+                "-NoProfile".into(),
+                "-NonInteractive".into(),
+                "-NoLogo".into(),
+                "-Command".into(),
+                HYPERV_COMMAND.into(),
+            ],
+            working_dir: None,
+            env: vec![(
+                VM_NAME_VARIABLE.to_string(),
+                args.first().cloned().unwrap_or_default(),
+            )],
+        });
+    }
+    Some(Launch {
+        program: found,
+        args: args.to_vec(),
+        working_dir: None,
+        env: Vec::new(),
+    })
 }
 
 /// What a person calls this tool, whether or not it is installed.
@@ -163,6 +255,35 @@ mod tests {
             assert_eq!(tool.found, tool.path.is_some());
             assert!(!tool.name.is_empty());
         }
+    }
+
+    #[test]
+    fn a_hypervisor_is_a_command_and_everything_else_is_a_launcher() {
+        for id in ["hyperv", "virtualbox", "vmware"] {
+            assert_eq!(mode(id), Mode::Command, "{id}");
+        }
+        for id in ["chrome", "edge", "terminal", "editor"] {
+            assert_eq!(mode(id), Mode::Launcher, "{id}");
+        }
+    }
+
+    #[test]
+    fn the_hyperv_command_carries_no_machine_name_and_reads_it_from_the_environment() {
+        assert!(HYPERV_COMMAND.contains("$env:DESKSTART_VM"));
+        // Nothing in it is a placeholder for text: it is the same string every
+        // time, whatever the machine is called.
+        assert!(!HYPERV_COMMAND.contains("{}"));
+        assert!(!HYPERV_COMMAND.contains("{name}"));
+    }
+
+    #[test]
+    fn a_tool_that_is_not_here_has_no_invocation() {
+        // On a machine without VirtualBox there is nothing to invoke, and the
+        // answer is None rather than a path that would fail later.
+        if find("virtualbox").is_none() {
+            assert!(invocation("virtualbox", &["startvm".into()]).is_none());
+        }
+        assert!(invocation("firefox", &[]).is_none());
     }
 
     #[test]

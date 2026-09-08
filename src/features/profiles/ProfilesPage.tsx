@@ -14,6 +14,7 @@ import {
   Globe20Regular,
   Play20Regular,
   PlayCircle20Regular,
+  Server20Regular,
   Share20Regular,
   Stop20Regular,
   WindowConsole20Regular,
@@ -64,7 +65,7 @@ import { LogLines, RunHeading } from '../runs/LogLines';
 import { ExportProfile } from './ExportProfile';
 import { ImportProfile } from './ImportProfile';
 import { ReviewSteps } from './ReviewSteps';
-import { KIND_LABELS } from './kinds';
+import { HYPERVISOR_LABELS, KIND_LABELS } from './kinds';
 import { StepForm, type EarlierStep, type Screen, type ToolState } from './StepForm';
 
 /**
@@ -445,6 +446,7 @@ const KIND_ICONS: Record<StepKind, ReactNode> = {
   bookmarks: <Bookmark20Regular />,
   terminal: <WindowConsole20Regular />,
   editor: <Code20Regular />,
+  vm: <Server20Regular />,
 };
 
 /** What a person calls the step, judged after expansion: the folder's real name, not `%USERPROFILE%`. */
@@ -487,6 +489,8 @@ function summary(config: StepConfig, env: Readonly<Record<string, string>>): str
         );
       case 'editor':
         return config.path;
+      case 'vm':
+        return `${config.machine} — ${HYPERVISOR_LABELS[config.hypervisor]}`;
     }
   })();
   if (!resolved.ok) return written;

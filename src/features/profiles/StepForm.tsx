@@ -3,10 +3,12 @@ import { useState, type FormEvent } from 'react';
 
 import {
   BROWSERS,
+  HYPERVISORS,
   readStepConfig,
   resolveStep,
   STEP_KINDS,
   type Browser,
+  type Hypervisor,
   type Problem,
   type StepConfig,
   type StepKind,
@@ -57,6 +59,9 @@ interface Draft {
   /** Terminal: the Windows Terminal profile, and where it opens. */
   terminalProfile: string;
   directory: string;
+  /** A virtual machine: which hypervisor, and the machine's name or .vmx. */
+  hypervisor: Hypervisor;
+  machine: string;
   pauseAfterS: string;
   holdS: string;
   repeat: string;
@@ -107,6 +112,8 @@ const EMPTY: Draft = {
   folder: '',
   terminalProfile: '',
   directory: '',
+  hypervisor: 'hyperv',
+  machine: '',
   pauseAfterS: '',
   holdS: '',
   repeat: '1',
@@ -186,6 +193,14 @@ function draftOf(
       };
     case 'editor':
       return { ...EMPTY, ...time, kind: 'editor', path: config.path };
+    case 'vm':
+      return {
+        ...EMPTY,
+        ...time,
+        kind: 'vm',
+        hypervisor: config.hypervisor,
+        machine: config.machine,
+      };
   }
 }
 
@@ -214,6 +229,8 @@ function documentOf(draft: Draft): Record<string, unknown> {
       };
     case 'editor':
       return { kind: 'editor', path: draft.path };
+    case 'vm':
+      return { kind: 'vm', hypervisor: draft.hypervisor, machine: draft.machine };
   }
 }
 
@@ -364,7 +381,9 @@ export function StepForm({
       ? draft.browser
       : draft.kind === 'terminal' || draft.kind === 'editor'
         ? draft.kind
-        : null;
+        : draft.kind === 'vm'
+          ? draft.hypervisor
+          : null;
   const tool = needs === null ? undefined : tools.find((candidate) => candidate.id === needs);
   const missingTool = tool !== undefined && !tool.found ? tool.name : null;
 
@@ -607,6 +626,34 @@ export function StepForm({
           onChange={(e) => set({ path: e.target.value })}
           disabled={pending}
         />
+      )}
+
+      {draft.kind === 'vm' && (
+        <>
+          <ChoiceGroup
+            label="Started by"
+            options={HYPERVISORS}
+            value={draft.hypervisor}
+            onChange={(hypervisor) => set({ hypervisor })}
+            labels={{ hyperv: 'Hyper-V', virtualbox: 'VirtualBox', vmware: 'VMware' }}
+            disabled={pending}
+          />
+          <Input
+            aria-label="Machine"
+            placeholder={
+              draft.hypervisor === 'vmware'
+                ? 'The machine\u2019s .vmx, e.g. %USERPROFILE%\\VMs\\dev\\dev.vmx'
+                : 'The machine\u2019s name, as the hypervisor lists it'
+            }
+            value={draft.machine}
+            onChange={(e) => set({ machine: e.target.value })}
+            disabled={pending}
+          />
+          <p className="text-caption text-fg-tertiary">
+            The machine is started and its console opened. Starting it is asked of the hypervisor
+            and waited for, up to a minute; what the hypervisor answers is in the log.
+          </p>
+        </>
       )}
 
       {draft.kind === 'url' && (

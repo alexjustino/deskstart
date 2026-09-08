@@ -29,6 +29,7 @@ const AS_WRITTEN: Record<StepConfig['kind'], string> = {
   bookmarks: 'a bookmark folder',
   terminal: 'a terminal',
   editor: 'an editor window',
+  vm: 'a virtual machine',
 };
 
 /**
@@ -47,6 +48,7 @@ const WHY_NOT: Record<Exclude<StepConfig['kind'], 'app'>, string> = {
   bookmarks: 'hands its window to the browser, which this product did not start',
   terminal: 'hands its window to Windows Terminal, which outlives the process that asked for it',
   editor: 'hands its window to the editor, which may have been running already',
+  vm: 'shows a console the hypervisor owns; the process this product started only asked for it',
 };
 
 /**

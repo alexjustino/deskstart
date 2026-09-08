@@ -1,4 +1,11 @@
-import type { StepKind } from '@/domain/profile';
+import type { Hypervisor, StepKind } from '@/domain/profile';
+
+/** What each hypervisor is called on screen. */
+export const HYPERVISOR_LABELS: Record<Hypervisor, string> = {
+  hyperv: 'Hyper-V',
+  virtualbox: 'VirtualBox',
+  vmware: 'VMware Workstation',
+};
 
 /** What each kind of step is called on screen. Data, apart from the components that use it. */
 export const KIND_LABELS: Record<StepKind, string> = {
@@ -9,6 +16,7 @@ export const KIND_LABELS: Record<StepKind, string> = {
   bookmarks: 'Bookmark folder',
   terminal: 'Terminal',
   editor: 'VS Code',
+  vm: 'Virtual machine',
 };
 
 /**
@@ -24,4 +32,5 @@ export const HOW_IT_OPENS: Record<StepKind, string> = {
   bookmarks: 'every page in that folder, opened as one browser window',
   terminal: 'opened in Windows Terminal',
   editor: 'opened in VS Code',
+  vm: 'started by its hypervisor, with its console showing',
 };

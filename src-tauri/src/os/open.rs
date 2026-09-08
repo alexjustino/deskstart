@@ -36,6 +36,7 @@ pub fn folder(path: &Path) -> Result<Opened, LaunchFailure> {
         program: explorer(),
         args: vec![path.to_string_lossy().into_owned()],
         working_dir: None,
+        env: Vec::new(),
     })?;
     Ok(Opened {
         pid: Some(spawned.pid),
