@@ -115,6 +115,16 @@ the run and brings the window forward — a run that starts by itself is seen st
 heading says what started it. Closing the window keeps Deskstart in the tray; nothing is written
 to the Windows Run key until you turn _Start with Windows_ on.
 
+### What a restore can do
+
+Replace your whole workspace with a backup file. Because it replaces everything, the file is
+opened **read-only** and checked to be a Deskstart workspace — the right tables, a schema version
+no newer than this build — before it is staged; a garbage file or one from a future version is
+refused with a sentence, not swapped in. The replacement happens at the next start, before the
+workspace is opened, so nothing half-reads the old file and the new one at once. A backup itself
+is a copy of the workspace and holds exactly what the workspace holds — no more, and readable by
+any SQLite tool, so it is yours to keep wherever you keep files.
+
 ### What the log promises
 
 The run log is **append-only** (ADR-011). Database triggers refuse any update or delete of an

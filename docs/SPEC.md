@@ -181,21 +181,21 @@ Depth before breadth. F0 crosses Rust → SQLite → commands → domain → UI 
 a profile with one step really opens a program and the log really says so. If the execution
 loop is wrong, that shows on day one.
 
-| #      | Slice                                                | Proof of done                                                                                                                                                                   |
-| ------ | ---------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **F0** | Foundation, Fluent shell, one step, **Run**, the log | **a profile with one step opens Notepad and the log says when and with which PID** · gates green · e2e against the binary · MSI inside the budget · `SECURITY.md` written       |
-| F1     | Profile editor and dry-run                           | steps of every basic kind (app, folder, file, URL) with arguments and working directory; **dry-run lists resolved absolute paths and spawns nothing** (e2e asserts no process)  |
-| F2     | Time: pause, hold, cycle                             | the negative-case battery is green; a 5 s hold closes at 5 s ± 250 ms on the real binary; a cycle of three runs three times and stops                                           |
-| F3     | Stop, and the run history                            | Stop closes only what the run opened — a Notepad opened by hand survives; every run is listed with its outcome and opens onto its events                                        |
-| F4     | Dependencies and readiness                           | X does not start until Y's window exists (or its port answers); Y timing out marks X skipped **with the reason**, and the profile continues                                     |
-| F5     | Profile as a file: export, import, review            | an exported profile round-trips; an imported one **cannot run until every step is accepted**; a tampered path is shown absolute                                                 |
-| F6     | Window control                                       | **done** — a window lands at the chosen rectangle and state, measured by Windows itself; a screen that is not there is reported and the primary is used                         |
-| F7     | Context steps: bookmarks, terminal, editor           | **done** — a real bookmark folder is read and its pages named; Windows Terminal really opens in the directory; a folder that is not there names the ones that are               |
-| F8     | Virtual machines                                     | **done here as far as a machine without a hypervisor allows** — a missing hypervisor is a reason within a second, never a hang; two machines starting is the host proof, Alex's |
-| F9     | Triggers: schedule, shortcut, autostart              | **done** — the task fires at the minute set and the run is in the log marked _Scheduled_; a key combination pressed by a hand outside the product starts it                     |
-| F10    | Settings, Diagnostics, About, backup                 | Diagnostics shows every adapter as found / not found with the path; a restored backup restores every profile and run                                                            |
-| F11    | Fluent polish and accessibility                      | every screen opened for real, both themes, keyboard; axe green                                                                                                                  |
-| F12    | Release 1.0.0                                        | the installer runs on a clean machine and F0's proof passes on it                                                                                                               |
+| #      | Slice                                                | Proof of done                                                                                                                                                                           |
+| ------ | ---------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **F0** | Foundation, Fluent shell, one step, **Run**, the log | **a profile with one step opens Notepad and the log says when and with which PID** · gates green · e2e against the binary · MSI inside the budget · `SECURITY.md` written               |
+| F1     | Profile editor and dry-run                           | steps of every basic kind (app, folder, file, URL) with arguments and working directory; **dry-run lists resolved absolute paths and spawns nothing** (e2e asserts no process)          |
+| F2     | Time: pause, hold, cycle                             | the negative-case battery is green; a 5 s hold closes at 5 s ± 250 ms on the real binary; a cycle of three runs three times and stops                                                   |
+| F3     | Stop, and the run history                            | Stop closes only what the run opened — a Notepad opened by hand survives; every run is listed with its outcome and opens onto its events                                                |
+| F4     | Dependencies and readiness                           | X does not start until Y's window exists (or its port answers); Y timing out marks X skipped **with the reason**, and the profile continues                                             |
+| F5     | Profile as a file: export, import, review            | an exported profile round-trips; an imported one **cannot run until every step is accepted**; a tampered path is shown absolute                                                         |
+| F6     | Window control                                       | **done** — a window lands at the chosen rectangle and state, measured by Windows itself; a screen that is not there is reported and the primary is used                                 |
+| F7     | Context steps: bookmarks, terminal, editor           | **done** — a real bookmark folder is read and its pages named; Windows Terminal really opens in the directory; a folder that is not there names the ones that are                       |
+| F8     | Virtual machines                                     | **done here as far as a machine without a hypervisor allows** — a missing hypervisor is a reason within a second, never a hang; two machines starting is the host proof, Alex's         |
+| F9     | Triggers: schedule, shortcut, autostart              | **done** — the task fires at the minute set and the run is in the log marked _Scheduled_; a key combination pressed by a hand outside the product starts it                             |
+| F10    | Settings, Diagnostics, About, backup                 | **done** — Diagnostics lists every adapter found / not found with its path; a backup is the whole workspace and a restore brings every profile and run back (round-trip proven in Rust) |
+| F11    | Fluent polish and accessibility                      | every screen opened for real, both themes, keyboard; axe green                                                                                                                          |
+| F12    | Release 1.0.0                                        | the installer runs on a clean machine and F0's proof passes on it                                                                                                                       |
 
 ### Delivered in F0
 
@@ -289,6 +289,34 @@ one a person opened — is never touched, and the suite proves it with a Charact
 by hand that survives. The run finishes `stopped` with the rest skipped. The editor offers
 "again and again, until the run is stopped", which the domain had since F2 and the screen
 could not offer without Stop.
+
+### Delivered in F10
+
+Settings, kept in the workspace. The theme — held only for the window until now — is a stored
+setting, applied when it is read and when it changes; it and **Start with Windows** moved from
+Diagnostics to a **Settings** screen, alongside **backup and restore** and **About**. Diagnostics
+keeps what it only shows, and gains **Adapters**: every program a step can call — Chrome, Edge,
+Windows Terminal, VS Code, and the three hypervisors — listed found or not found with its path,
+so what a step will and will not be able to do is checkable rather than asserted.
+
+A **backup** is the whole workspace in one file (`VACUUM INTO`): every profile, step, run, event
+and setting. A **restore** replaces the workspace with a backup — validated as a workspace no
+newer than this build, staged beside the live file, and applied at the next start, which a
+restart makes now (ADR-025). It is not an edit of the append-only log; it is one workspace file
+put in the place of another.
+
+### Deferred out of F10, and why
+
+- **Settings beyond the theme.** The store is a map and the reader defaults the unknown, so a
+  second setting is a key and a card, not a migration. None is needed yet.
+- **An incremental or scheduled backup.** A backup is a full copy, which a page of profiles does
+  not need, and it is a button, not a routine — a product that backs itself up on a timer is
+  keeping something it has not been asked to keep.
+- **An in-app editor for a backup, or a merge.** Restore replaces; it does not merge one
+  workspace into another, which would ask the same questions import (F5) deferred, at the scale
+  of the whole workspace.
+- **About as a screen of its own.** It is a card on Settings — a solo, offline product's About is
+  three honest paragraphs, not a page.
 
 ### Delivered in F9
 

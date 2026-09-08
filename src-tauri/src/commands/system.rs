@@ -5,7 +5,7 @@ use std::collections::BTreeMap;
 use serde::Serialize;
 use tauri::{AppHandle, State};
 
-use crate::db::{migrations, Db, DATA_DIR_ENV};
+use crate::db::{backup, database_path, migrations, settings, Db, DATA_DIR_ENV};
 use crate::error::Result;
 use crate::os::{accent, files, tools, window};
 
@@ -136,4 +136,48 @@ pub fn bookmarks_read(browser: String) -> Result<String> {
         "that browser is not one this product reads",
     ))?;
     files::read_text_capped(&path, files::MAX_BOOKMARKS_BYTES)
+}
+
+/// Every setting a person has chosen, key to value (F10). What a value means,
+/// and what an unknown one falls back to, is the domain's (`domain/settings`).
+#[tauri::command]
+pub fn settings_all(db: State<'_, Db>) -> Result<std::collections::BTreeMap<String, String>> {
+    let conn = db.0.lock().expect("the database lock was poisoned");
+    settings::all(&conn)
+}
+
+/// Store one setting, replacing what was there.
+#[tauri::command]
+pub fn setting_set(db: State<'_, Db>, key: String, value: String) -> Result<()> {
+    let conn = db.0.lock().expect("the database lock was poisoned");
+    settings::set(&conn, &key, &value)
+}
+
+/// Write the whole workspace to the file the person chose (F10).
+#[tauri::command]
+pub fn workspace_backup(db: State<'_, Db>, path: String) -> Result<()> {
+    let conn = db.0.lock().expect("the database lock was poisoned");
+    backup::backup_to(&conn, &std::path::PathBuf::from(path))
+}
+
+/// Read what a backup holds, without touching the workspace. The interface
+/// shows this before it offers to restore.
+#[tauri::command]
+pub fn workspace_backup_summary(path: String) -> Result<backup::BackupSummary> {
+    backup::inspect(&std::path::PathBuf::from(path))
+}
+
+/// Validate a backup and stage it to replace the workspace at the next start.
+/// The summary of what will replace it comes back so the interface can say so.
+#[tauri::command]
+pub fn workspace_restore(app: AppHandle, path: String) -> Result<backup::BackupSummary> {
+    let workspace = database_path(&app)?;
+    backup::stage_restore(&workspace, &std::path::PathBuf::from(path))
+}
+
+/// Restart the product, so a staged restore is applied. Called only after a
+/// restore has been staged and the person has been told what it will do.
+#[tauri::command]
+pub fn restart(app: AppHandle) {
+    app.restart();
 }

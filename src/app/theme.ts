@@ -9,8 +9,9 @@
  */
 
 import type { AccentRamp } from '@/data/system';
+import type { ThemeChoice } from '@/domain/settings';
 
-export type ThemeChoice = 'system' | 'light' | 'dark';
+export type { ThemeChoice };
 export type Density = 'comfortable' | 'compact';
 
 /**

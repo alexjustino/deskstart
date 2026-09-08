@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added — F10, settings, diagnostics, backup
+
+- A **Settings** screen: the theme (now kept in the workspace, not just for the window), Start
+  with Windows, backup and restore, and About.
+- **Diagnostics** gains **Adapters**: every program a step can call, found or not found, with its
+  path — and keeps only what it shows.
+- **Backup** writes the whole workspace to one file; **restore** replaces the workspace with a
+  backup and restarts. A file that is not a Deskstart workspace, or is from a newer version, is
+  refused before anything is staged.
+- Migration **009** adds the settings store.
+
 ### Added — F9, what starts a run without the button
 
 - A **schedule**: a time of day, every day or on weekdays, handed to the Windows Task Scheduler.
