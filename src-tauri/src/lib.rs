@@ -36,6 +36,8 @@
 //!   handed to the Task Scheduler, a key combination the system reports, the
 //!   `--run <id>` a second launch hands to the first — a tray so closing the
 //!   window does not end the product, and starting with Windows.
+//! - F10: settings kept in the workspace (migration 009), a backup that is the
+//!   whole workspace, and a restore staged and applied at the next start.
 
 pub mod commands;
 pub mod db;
@@ -191,6 +193,12 @@ pub fn run() {
             commands::system::monitors,
             commands::system::tools_list,
             commands::system::bookmarks_read,
+            commands::system::settings_all,
+            commands::system::setting_set,
+            commands::system::workspace_backup,
+            commands::system::workspace_backup_summary,
+            commands::system::workspace_restore,
+            commands::system::restart,
             commands::triggers::pending_run,
             commands::triggers::profile_schedule_set,
             commands::triggers::schedule_registered,
