@@ -11,13 +11,15 @@ Migrations are forward-only and numbered (`VERSIONING.md`).
 
 ## `profile`
 
-| Column                      | Meaning                                                                                                 |
-| --------------------------- | ------------------------------------------------------------------------------------------------------- |
-| `id`                        | UUID v7                                                                                                 |
-| `name`                      | as typed, trimmed; never empty                                                                          |
-| `position`                  | order in the list; integer, dense                                                                       |
-| `imported_unreviewed`       | `1` while an imported profile has not been reviewed step by step — the host refuses to run it (ADR-013) |
-| `created_at` / `updated_at` | a step change touches the profile                                                                       |
+| Column                      | Meaning                                                                                                                                                             |
+| --------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `id`                        | UUID v7                                                                                                                                                             |
+| `name`                      | as typed, trimmed; never empty                                                                                                                                      |
+| `position`                  | order in the list; integer, dense                                                                                                                                   |
+| `schedule_json`             | when the Task Scheduler starts it (F9, migration 008): `{ at: "HH:MM", days: ["mon", …] }`; `{}` is none. The task itself lives in Windows, under `\Deskstart\<id>` |
+| `shortcut`                  | the key combination that starts it, as canonical text (`Ctrl+Alt+D`); '' is none                                                                                    |
+| `imported_unreviewed`       | `1` while an imported profile has not been reviewed step by step — the host refuses to run it (ADR-013)                                                             |
+| `created_at` / `updated_at` | a step change touches the profile                                                                                                                                   |
 
 ## `step`
 
@@ -43,7 +45,7 @@ The host stores `config_json` verbatim and parses it only to act, refusing unkno
 | `profile_id`   | `NULL` once the profile is deleted (`ON DELETE SET NULL`)                             |
 | `profile_name` | the name at the time — history keeps its subject                                      |
 | `mode`         | `real` or `dry`                                                                       |
-| `trigger`      | `button`, `shortcut` or `schedule`                                                    |
+| `trigger`      | `button`, `shortcut`, `schedule` or `command`                                         |
 | `started_at`   |                                                                                       |
 | `finished_at`  | `NULL` while in progress                                                              |
 | `outcome`      | `completed`, `completed_with_failures`, `failed`, `stopped`; `NULL` while in progress |

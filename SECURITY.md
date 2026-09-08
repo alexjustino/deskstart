@@ -102,6 +102,19 @@ The hypervisor's tool is waited for, up to a minute, and ended if it does not an
 machine may need rights this product does not have; when it does, the log says what the
 hypervisor said, and nothing is elevated on your behalf (ADR-014).
 
+### What a trigger can do
+
+Start one profile, by its id, through the same gate the button uses. A scheduled task is
+registered as this executable by absolute path with `--run <id> --trigger schedule`; the time of
+day and the days are validated into the scheduler's own words on the host, and nothing you typed
+reaches `schtasks`. `--run` takes an id and never a file, an id that is not this product's shape
+is ignored, and a profile still under review cannot be scheduled or given a key.
+
+The host never starts a run on its own. A trigger hands its request to the screen, which starts
+the run and brings the window forward — a run that starts by itself is seen starting, and its
+heading says what started it. Closing the window keeps Deskstart in the tray; nothing is written
+to the Windows Run key until you turn _Start with Windows_ on.
+
 ### What the log promises
 
 The run log is **append-only** (ADR-011). Database triggers refuse any update or delete of an
