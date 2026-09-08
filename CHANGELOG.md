@@ -5,7 +5,15 @@ All notable changes to this project are documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [1.0.0] — 2026-09-08 — The button
+
+The first release. Deskstart is a profile of steps — applications, folders, files, web pages,
+bookmark folders, terminals, editors and virtual machines — run in order, with timing, from one
+button, and logged. It runs entirely on your machine: no account, no cloud, no telemetry.
+
+What a release of "the button" is, slice by slice, is below: the foundation and the log (F0), the
+editor (F1), time (F2), Stop (F3), waiting (F4), the file (F5), the window (F6), the tools (F7),
+virtual machines (F8), triggers (F9), settings and backup (F10), and the accessibility pass (F11).
 
 ### Changed — F11, accessibility and polish
 

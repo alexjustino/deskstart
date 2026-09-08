@@ -30,12 +30,13 @@ describe('shell', () => {
     const { driver } = session;
     const buttons = await driver.findAll('nav[aria-label="Main"] button');
     const labels = await Promise.all(buttons.map((b) => b.text()));
-    expect(labels).toEqual(['Profiles', 'Runs', 'Diagnostics']);
+    expect(labels).toEqual(['Profiles', 'Runs', 'Diagnostics', 'Settings']);
   });
 
   it.each([
     ['Runs', 'h1'],
     ['Diagnostics', 'h1'],
+    ['Settings', 'h1'],
     ['Profiles', 'input[aria-label="New profile name"]'],
   ])('navigates to %s and renders it', async (label, marker) => {
     const { driver } = session;
@@ -58,8 +59,9 @@ describe('shell', () => {
 
   it('renders in the dark theme too', async () => {
     const { driver } = session;
+    await (await driver.findByXPath('//nav//button[normalize-space(.)="Settings"]')).click();
     await (
-      await driver.findByXPath('//button[@role="radio" and normalize-space(.)="dark"]')
+      await driver.findByXPath('//button[@role="radio" and normalize-space(.)="Dark"]')
     ).click();
     await driver.waitFor(
       'the dark theme',
@@ -68,9 +70,9 @@ describe('shell', () => {
           'return document.documentElement.getAttribute("data-theme")',
         )) === 'dark',
     );
-    await session.screenshot('diagnostics-dark');
+    await session.screenshot('shell-dark');
     await (
-      await driver.findByXPath('//button[@role="radio" and normalize-space(.)="system"]')
+      await driver.findByXPath('//button[@role="radio" and normalize-space(.)="Match Windows"]')
     ).click();
   });
 });
