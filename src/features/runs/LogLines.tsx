@@ -1,4 +1,5 @@
 import type { LogLine, Run } from '@/data/runs';
+import { describeTrigger } from '@/domain/triggers';
 import { Chip } from '@/ui/Chip';
 
 import { clock, describe, outcomeLabel, outcomeTone, when } from './describe';
@@ -15,12 +16,15 @@ import { clock, describe, outcomeLabel, outcomeTone, when } from './describe';
 
 export function RunHeading({ run }: { run: Run }) {
   return (
-    <div className="flex flex-wrap items-center gap-2 text-body text-fg-secondary">
+    <div data-run-heading className="flex flex-wrap items-center gap-2 text-body text-fg-secondary">
       <span className="font-semibold text-fg">{run.profileName}</span>
       <Chip tone={run.mode === 'dry' ? 'info' : 'accent'}>
         {run.mode === 'dry' ? 'Dry run' : 'Run'}
       </Chip>
       <span>{when(run.startedAt)}</span>
+      {describeTrigger(run.trigger) !== null && (
+        <Chip tone="neutral">{describeTrigger(run.trigger)}</Chip>
+      )}
       <Chip tone={outcomeTone(run.outcome)}>{outcomeLabel(run.outcome)}</Chip>
     </div>
   );

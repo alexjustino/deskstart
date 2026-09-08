@@ -7,3 +7,4 @@
 pub mod profiles;
 pub mod runs;
 pub mod system;
+pub mod triggers;

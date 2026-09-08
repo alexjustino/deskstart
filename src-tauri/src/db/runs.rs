@@ -16,7 +16,7 @@ const RUN_COLUMNS: &str =
 const EVENT_COLUMNS: &str = "id, run_id, seq, at, step_id, kind, payload_json";
 
 pub const MODES: [&str; 2] = ["real", "dry"];
-pub const TRIGGERS: [&str; 3] = ["button", "shortcut", "schedule"];
+pub const TRIGGERS: [&str; 4] = ["button", "shortcut", "schedule", "command"];
 pub const OUTCOMES: [&str; 4] = ["completed", "completed_with_failures", "failed", "stopped"];
 
 fn read_run(row: &rusqlite::Row<'_>) -> rusqlite::Result<Run> {

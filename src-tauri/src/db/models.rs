@@ -14,6 +14,10 @@ pub struct Profile {
     pub position: i64,
     /// The review gate (ADR-013). While true the host refuses to run it.
     pub imported_unreviewed: bool,
+    /// A schedule handed to the Task Scheduler (F9); `{}` is "none".
+    pub schedule_json: String,
+    /// A key combination registered with the system (F9); '' is "none".
+    pub shortcut: String,
     pub created_at: String,
     pub updated_at: String,
 }

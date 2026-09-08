@@ -29,6 +29,7 @@ part that matters most later — the cost we accepted.
 | [021](#adr-021) | A window is placed only if the run opened it                                             | Accepted |
 | [022](#adr-022) | A tool is found where it is installed, never on PATH                                     | Accepted |
 | [023](#adr-023) | A hypervisor is asked as a bounded command; a value never enters a command line          | Accepted |
+| [024](#adr-024) | A trigger binds to a profile id; the window closes to the tray                           | Accepted |
 
 ---
 
@@ -429,3 +430,36 @@ tools and with nothing else. PowerShell is on every Windows and is not what is l
 tool returns once the start is under way — is ended and reported. Hyper-V through PowerShell
 is slower than a native call would be, by about a second, and needs the person to be allowed
 to manage Hyper-V, which the product does not arrange (ADR-014: elevation is never silent).
+
+## ADR-024 — A trigger binds to a profile id; the window closes to the tray {#adr-024}
+
+**Context.** F9 lets a run start without a person pressing Run: at a time of day, from a key
+combination, from a second launch. Each is a way for something other than the person in front of
+the screen to start programs with that person's rights.
+
+**Decision, what a trigger may name.** A profile **id** — a UUID this product generated — and
+nothing else. `--run` takes an id, never a file (ADR-013 said so; this is where it is enforced,
+and an id that is not this product's shape is ignored with a line in the log). A schedule is
+registered with the Windows Task Scheduler (ADR-017) as this executable, by absolute path, with
+`--run <id> --trigger schedule` — the time of day and the days are validated into the
+scheduler's own vocabulary on the host, and the person's text never reaches `schtasks`. A
+shortcut is a key combination the system reports; it needs Ctrl, Alt or Win, because Shift and a
+letter is typing. Neither binds to a profile that is still unreviewed.
+
+**Decision, what happens when it fires.** The host never starts a run on its own. It hands the
+request to the interface — remembered for a screen that is not listening yet, announced to one
+that is — and the interface runs it through the same gate as the button: a profile that cannot be
+run by hand cannot be run by a clock. A second launch with `--run` is handed to the first instance
+and exits; if there is no first instance, the launch **is** the instance. The window is brought
+forward either way, so a run that starts by itself is seen starting (ADR-016).
+
+**Decision, the tray.** Closing the window hides it; Deskstart stays, with a tray icon whose menu
+says _Open_ and _Quit_ in words. A schedule at 07:30 needs something to arrive at and a shortcut
+needs something to reach, and "the product is running because you closed its window" is the
+convention every launcher on Windows follows. Starting with Windows is a checkbox on Diagnostics,
+off until a person turns it on; nothing is written to the Run key by an install.
+
+**Cost accepted.** Quit is one click further than it was. A task registered by a debug build starts
+the debug build — the executable is whichever one registered it, which is what a person testing
+wants and a surprise for anyone else; Diagnostics will say which (F10). A shortcut another program
+already holds is refused with that reason, and there is no arbitration.

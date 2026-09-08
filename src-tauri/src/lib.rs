@@ -32,6 +32,10 @@
 //! - F8: three hypervisors (migration 007), asked as commands that run to an
 //!   end within a budget; Hyper-V through a constant PowerShell command with
 //!   the machine's name in the environment.
+//! - F9: what starts a run without the button (migration 008) — a schedule
+//!   handed to the Task Scheduler, a key combination the system reports, the
+//!   `--run <id>` a second launch hands to the first — a tray so closing the
+//!   window does not end the product, and starting with Windows.
 
 pub mod commands;
 pub mod db;
@@ -40,23 +44,71 @@ pub mod os;
 
 use std::sync::Mutex;
 
-use tauri::Manager;
+use tauri::menu::{Menu, MenuItem};
+use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
+use tauri::{AppHandle, Manager, WindowEvent};
+use tauri_plugin_global_shortcut::ShortcutState;
+
+use crate::commands::triggers::{self, Pending, RunRequest, Shortcuts};
+
+/// Bring the main window back: from the tray, from a trigger, from a second launch.
+fn show_main(app: &AppHandle) {
+    if let Some(window) = app.get_webview_window("main") {
+        let _ = window.show();
+        let _ = window.unminimize();
+        let _ = window.set_focus();
+    }
+}
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let mut builder = tauri::Builder::default();
 
+    // The request this process was started with, if a trigger started it
+    // (F9): `--run <id> --trigger schedule`. Taken by the interface once it is
+    // listening; a run is never started by the host on its own.
+    let initial: Option<RunRequest> = triggers::request_from(&std::env::args().collect::<Vec<_>>());
+
     // A second launch must focus the window that already exists rather than
     // opening a rival one — two processes would fight over the same database
-    // and a scheduled run could be started twice.
+    // and a scheduled run could be started twice. What the second launch was
+    // asked to run is handed to the first (F9).
     #[cfg(all(desktop, not(any(target_os = "android", target_os = "ios"))))]
     {
-        builder = builder.plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
-            if let Some(window) = app.get_webview_window("main") {
-                let _ = window.unminimize();
-                let _ = window.set_focus();
+        builder = builder.plugin(tauri_plugin_single_instance::init(|app, argv, _cwd| {
+            match triggers::request_from(&argv) {
+                Some(request) => triggers::deliver(app, request),
+                None => show_main(app),
             }
         }));
+        // Start with Windows, when asked to on Diagnostics. Nothing is written
+        // to the Run key until a person turns it on.
+        builder = builder.plugin(tauri_plugin_autostart::init(
+            tauri_plugin_autostart::MacosLauncher::LaunchAgent,
+            None,
+        ));
+        // A key combination the system reports whatever program is in front.
+        // Which profile it belongs to is looked up here; the request goes the
+        // same way a scheduled one does.
+        builder = builder.plugin(
+            tauri_plugin_global_shortcut::Builder::new()
+                .with_handler(|app, shortcut, event| {
+                    if event.state != ShortcutState::Pressed {
+                        return;
+                    }
+                    let accel = shortcut.to_string();
+                    if let Some(profile_id) = triggers::profile_for(app, &accel) {
+                        triggers::deliver(
+                            app,
+                            RunRequest {
+                                profile_id,
+                                trigger: "shortcut".to_string(),
+                            },
+                        );
+                    }
+                })
+                .build(),
+        );
     }
 
     builder
@@ -83,11 +135,54 @@ pub fn run() {
             let connection = db::open(app.handle())?;
             app.manage(db::Db(Mutex::new(connection)));
             app.manage(commands::runs::Held::default());
+            app.manage(Pending(Mutex::new(initial)));
+            app.manage(Shortcuts::default());
+            triggers::register_all(app.handle());
+
+            // The tray: closing the window hides it, so a schedule or a
+            // shortcut still has a Deskstart to reach; Quit is here, in words.
+            let open = MenuItem::with_id(app, "open", "Open Deskstart", true, None::<&str>)?;
+            let quit = MenuItem::with_id(app, "quit", "Quit Deskstart", true, None::<&str>)?;
+            let menu = Menu::with_items(app, &[&open, &quit])?;
+            let mut tray = TrayIconBuilder::with_id("main")
+                .menu(&menu)
+                .show_menu_on_left_click(false)
+                .tooltip("Deskstart")
+                .on_menu_event(|app, event| match event.id.as_ref() {
+                    "open" => show_main(app),
+                    "quit" => app.exit(0),
+                    _ => {}
+                })
+                .on_tray_icon_event(|tray, event| {
+                    if let TrayIconEvent::Click {
+                        button: MouseButton::Left,
+                        button_state: MouseButtonState::Up,
+                        ..
+                    } = event
+                    {
+                        show_main(tray.app_handle());
+                    }
+                });
+            if let Some(icon) = app.default_window_icon() {
+                tray = tray.icon(icon.clone());
+            }
+            tray.build(app)?;
             log::info!(
                 "workspace opened; Deskstart {} ready",
                 env!("CARGO_PKG_VERSION")
             );
             Ok(())
+        })
+        .on_window_event(|window, event| {
+            // Closing the window keeps the product running, in the tray: a
+            // scheduled run at 07:30 needs something to arrive at, and a
+            // shortcut needs something to reach. Quit is in the tray's menu.
+            if let WindowEvent::CloseRequested { api, .. } = event {
+                if window.label() == "main" {
+                    api.prevent_close();
+                    let _ = window.hide();
+                }
+            }
         })
         .invoke_handler(tauri::generate_handler![
             commands::system::system_info,
@@ -96,6 +191,10 @@ pub fn run() {
             commands::system::monitors,
             commands::system::tools_list,
             commands::system::bookmarks_read,
+            commands::triggers::pending_run,
+            commands::triggers::profile_schedule_set,
+            commands::triggers::schedule_registered,
+            commands::triggers::profile_shortcut_set,
             commands::profiles::profiles_list,
             commands::profiles::profile_create,
             commands::profiles::profile_rename,

@@ -192,7 +192,7 @@ loop is wrong, that shows on day one.
 | F6     | Window control                                       | **done** — a window lands at the chosen rectangle and state, measured by Windows itself; a screen that is not there is reported and the primary is used                         |
 | F7     | Context steps: bookmarks, terminal, editor           | **done** — a real bookmark folder is read and its pages named; Windows Terminal really opens in the directory; a folder that is not there names the ones that are               |
 | F8     | Virtual machines                                     | **done here as far as a machine without a hypervisor allows** — a missing hypervisor is a reason within a second, never a hang; two machines starting is the host proof, Alex's |
-| F9     | Triggers: schedule, shortcut, autostart              | a task registered by the app fires at the minute set and the run appears in the log; the shortcut runs the profile over another program                                         |
+| F9     | Triggers: schedule, shortcut, autostart              | **done** — the task fires at the minute set and the run is in the log marked _Scheduled_; a key combination pressed by a hand outside the product starts it                     |
 | F10    | Settings, Diagnostics, About, backup                 | Diagnostics shows every adapter as found / not found with the path; a restored backup restores every profile and run                                                            |
 | F11    | Fluent polish and accessibility                      | every screen opened for real, both themes, keyboard; axe green                                                                                                                  |
 | F12    | Release 1.0.0                                        | the installer runs on a clean machine and F0's proof passes on it                                                                                                               |
@@ -289,6 +289,40 @@ one a person opened — is never touched, and the suite proves it with a Charact
 by hand that survives. The run finishes `stopped` with the rest skipped. The editor offers
 "again and again, until the run is stopped", which the domain had since F2 and the screen
 could not offer without Stop.
+
+### Delivered in F9
+
+A run can start without the button. A **schedule** — a time of day, every day or on weekdays — is
+handed to the Windows Task Scheduler, which fires it whether or not Deskstart is open: the task
+starts this executable with `--run <id> --trigger schedule`, a running instance is handed the
+request, and otherwise the launch is the instance. A **shortcut** — a key combination with Ctrl,
+Alt or Win — is registered with the system and reported whatever program is in front. A second
+**launch** with `--run <id>` is handed to the first. Each is a trigger of a profile **id** and
+nothing else, refused for a profile still under review, and each runs through the same gate as
+the button (ADR-024).
+
+The host never starts a run on its own; it hands the request to the screen, which starts it,
+brings the window forward, and writes the trigger on the run's heading — _Scheduled_, _Shortcut_,
+_Command line_ — so a run that started by itself says so. Closing the window keeps Deskstart in
+the tray, with _Open_ and _Quit_ in words; **Start with Windows** is a checkbox on Diagnostics,
+off until a person turns it on.
+
+### Deferred out of F9, and why
+
+- **Days of the week, one by one.** The schedule stores any set of days; the editor offers every
+  day or weekdays, which is what a working setup means. Seven checkboxes are a field to add when a
+  profile wants Tuesday.
+- **A trigger that runs a dry run**, or a trigger's own log. A trigger starts the run the button
+  would; what it did is in the same log, with its trigger on the heading.
+- **Arbitrating a shortcut another program holds.** Refused with that reason; choosing another
+  combination is the person's.
+- **Running while no one is signed in.** The task runs in the signed-in session, because a
+  profile opens windows and windows need a desktop. A machine that starts a setup before anyone
+  arrives is a different product.
+- **Which build a task starts.** The one that registered it, by absolute path; the Diagnostics
+  page of F10 will list the tasks and say which executable each one names.
+
+### Delivered in F8
 
 ### Delivered in F8
 

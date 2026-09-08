@@ -17,7 +17,8 @@ No cloud. No account. No telemetry. No shell.
 
 > **Status: early.** Deskstart is being built in public, one vertical slice at a time. What
 > exists today is the foundation (F0), the profile editor (F1), time (F2), Stop (F3),
-> waiting (F4), the file (F5), the window (F6), the tools (F7) and the machines (F8):
+> waiting (F4), the file (F5), the window (F6), the tools (F7), the machines (F8) and the
+> triggers (F9):
 > profiles of applications, folders, files and web pages, with pauses, holds and cycles; a Run
 > button that really opens them and really closes them when their time is up; a Stop that
 > closes what the run opened and nothing else; and a log that really says what happened. Everything else on this page is marked as planned. Installers arrive with the
@@ -65,6 +66,11 @@ twenty minutes, then close it" and "open, close, reopen" are first-class, not a 
   dialog or pasted in. An imported profile **runs nothing** until every one of its steps has
   been read and accepted, each shown with its path resolved absolute and each argument on its
   own line.
+- **Triggers.** A profile can start at a **time of day** — handed to the Windows Task Scheduler,
+  so Deskstart need not be open — or from a **key combination** pressed in any program, or from
+  `deskstart.exe --run <id>`. Closing the window keeps Deskstart in the tray; **Start with
+  Windows** is a checkbox, off until you turn it on. A run that started by itself says so on its
+  heading.
 - **Virtual machines.** A machine on Hyper-V, VirtualBox or VMware Workstation, started with
   its console showing. The hypervisor is asked and waited for, up to a minute, and what it
   answered — a machine that is not there, a permission that is missing — is in the log. A
@@ -87,12 +93,11 @@ twenty minutes, then close it" and "open, close, reopen" are first-class, not a 
 
 ## What is planned
 
-| Slice | What                                                   |
-| ----- | ------------------------------------------------------ |
-| F9    | Triggers: schedule via Task Scheduler, global shortcut |
-| F10   | Settings, Diagnostics, About, backup                   |
-| F11   | Fluent polish and accessibility                        |
-| F12   | Release 1.0.0                                          |
+| Slice | What                                 |
+| ----- | ------------------------------------ |
+| F10   | Settings, Diagnostics, About, backup |
+| F11   | Fluent polish and accessibility      |
+| F12   | Release 1.0.0                        |
 
 The specification, with a proof of done per slice, is [`docs/SPEC.md`](docs/SPEC.md).
 

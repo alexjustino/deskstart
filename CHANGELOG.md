@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added — F9, what starts a run without the button
+
+- A **schedule**: a time of day, every day or on weekdays, handed to the Windows Task Scheduler.
+  It fires whether or not Deskstart is open; the run appears in the log marked _Scheduled_.
+- A **shortcut**: a key combination with Ctrl, Alt or Win, pressed from any program.
+- `deskstart.exe --run <id>` from a second launch is handed to the running one. An id is the only
+  thing `--run` takes — never a file.
+- Closing the window keeps Deskstart in the **tray**, with _Open_ and _Quit_ in its menu.
+- **Start with Windows**, a checkbox on Diagnostics, off until turned on.
+- A run's heading says what started it. Migration **008** adds the schedule and the shortcut to a
+  profile.
+
 ### Added — F8, virtual machines
 
 - A **virtual machine** step: Hyper-V, VirtualBox or VMware Workstation, named the way its

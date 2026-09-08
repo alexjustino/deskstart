@@ -20,6 +20,7 @@ import type { Mode } from '@/domain/run';
 import type { WaitFor } from '@/domain/readiness';
 import type { Placement } from '@/domain/placement';
 import type { Timing } from '@/domain/timing';
+import type { Schedule, Shortcut, Trigger } from '@/domain/triggers';
 
 import { executeProfile, Stopper, type Runnable } from './execute';
 import * as profileApi from './profiles';
@@ -34,6 +35,7 @@ export const keys = {
   environment: ['environment'] as const,
   monitors: ['monitors'] as const,
   tools: ['tools'] as const,
+  scheduled: (profileId: string) => ['scheduled', profileId] as const,
 };
 
 export function useProfiles() {
@@ -104,6 +106,37 @@ export function useAcceptProfile() {
       void client.invalidateQueries({ queryKey: keys.profiles });
       void client.invalidateQueries({ queryKey: keys.steps(id) });
     },
+  });
+}
+
+/** Hand a profile's schedule to Windows, or take it back. */
+export function useSetSchedule() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, schedule }: { id: string; schedule: Schedule | null }) =>
+      profileApi.setSchedule(id, schedule),
+    onSuccess: (_profile, { id }) => {
+      void client.invalidateQueries({ queryKey: keys.profiles });
+      void client.invalidateQueries({ queryKey: keys.scheduled(id) });
+    },
+  });
+}
+
+/** Is the task there, as Windows sees it — not as the row remembers it. */
+export function useScheduleRegistered(id: string) {
+  return useQuery({
+    queryKey: keys.scheduled(id),
+    queryFn: () => profileApi.scheduleRegistered(id),
+  });
+}
+
+/** Register a profile's key combination, or remove it. */
+export function useSetShortcut() {
+  const client = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, shortcut }: { id: string; shortcut: Shortcut | null }) =>
+      profileApi.setShortcut(id, shortcut),
+    onSuccess: () => client.invalidateQueries({ queryKey: keys.profiles }),
   });
 }
 
@@ -218,6 +251,7 @@ export function useExecuteProfile() {
       env,
       onLine,
       onBegin,
+      trigger,
     }: {
       profile: Runnable;
       steps: Step[];
@@ -225,6 +259,8 @@ export function useExecuteProfile() {
       env: Readonly<Record<string, string>>;
       onLine?: (line: runApi.LogLine) => void;
       onBegin?: (run: runApi.Run) => void;
+      /** Why the run starts; a person's button unless a trigger says otherwise. */
+      trigger?: Trigger;
     }) => {
       stopper.current = new Stopper();
       return executeProfile(
@@ -244,6 +280,7 @@ export function useExecuteProfile() {
           onBegin?.(run);
         },
         stopper.current,
+        trigger ?? 'button',
       );
     },
     // The last line — `run_finished` — is written by the host without an

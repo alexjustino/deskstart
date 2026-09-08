@@ -12,6 +12,7 @@ import type { Launch } from '@/domain/profile';
 import type { Placement } from '@/domain/placement';
 import type { Probe } from '@/domain/readiness';
 import type { Mode, Outcome, RunEvent } from '@/domain/run';
+import type { Trigger } from '@/domain/triggers';
 
 export interface Run {
   id: string;
@@ -118,8 +119,12 @@ export function toRunEvent(line: LogLine, at = Date.parse(line.at)): RunEvent | 
   return null;
 }
 
-export async function runBegin(profileId: string, mode: Mode): Promise<Run> {
-  return toRun(await invoke<RawRun>('run_begin', { profileId, mode, trigger: 'button' }));
+export async function runBegin(
+  profileId: string,
+  mode: Mode,
+  trigger: Trigger = 'button',
+): Promise<Run> {
+  return toRun(await invoke<RawRun>('run_begin', { profileId, mode, trigger }));
 }
 
 export async function stepExecute(runId: string, stepId: string, launch: Launch): Promise<LogLine> {
