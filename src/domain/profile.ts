@@ -28,6 +28,7 @@ export const STEP_KINDS = [
   'bookmarks',
   'terminal',
   'editor',
+  'vm',
 ] as const;
 export type StepKind = (typeof STEP_KINDS)[number];
 
@@ -84,8 +85,23 @@ export interface EditorStep {
   path: string;
 }
 
+/** The hypervisors this product knows how to ask for a machine (F8). */
+export const HYPERVISORS = ['hyperv', 'virtualbox', 'vmware'] as const;
+export type Hypervisor = (typeof HYPERVISORS)[number];
+
+/**
+ * A virtual machine, started with its console showing. `machine` is the
+ * machine's name for Hyper-V and VirtualBox, and the path to its `.vmx` for
+ * VMware Workstation, which knows machines by file.
+ */
+export interface VmStep {
+  kind: 'vm';
+  hypervisor: Hypervisor;
+  machine: string;
+}
+
 export type StepConfig =
-  AppStep | FolderStep | FileStep | UrlStep | BookmarksStep | TerminalStep | EditorStep;
+  AppStep | FolderStep | FileStep | UrlStep | BookmarksStep | TerminalStep | EditorStep | VmStep;
 
 /** A step as stored: its configuration, its timing, and the identity the host gave it. */
 export interface Step {
@@ -120,6 +136,7 @@ const FIELDS: Record<StepKind, ReadonlySet<string>> = {
   bookmarks: new Set(['kind', 'browser', 'folder']),
   terminal: new Set(['kind', 'profile', 'directory']),
   editor: new Set(['kind', 'path']),
+  vm: new Set(['kind', 'hypervisor', 'machine']),
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -249,6 +266,24 @@ export function readStepConfig(value: unknown, path = 'step'): StepConfig | Prob
       if (problems.length > 0) return problems;
       return { kind, path: target as string };
     }
+    case 'vm': {
+      const hypervisor = value.hypervisor;
+      if (!(HYPERVISORS as readonly unknown[]).includes(hypervisor)) {
+        problems.push({
+          path: `${path}.hypervisor`,
+          problem: `a machine is started by one of: ${HYPERVISORS.join(', ')}`,
+        });
+      }
+      const machine = requiredText(value.machine);
+      if (machine === null) {
+        problems.push({
+          path: `${path}.machine`,
+          problem: 'name the machine — or, for VMware, the path to its .vmx',
+        });
+      }
+      if (problems.length > 0) return problems;
+      return { kind, hypervisor: hypervisor as Hypervisor, machine: machine as string };
+    }
   }
 }
 
@@ -366,7 +401,15 @@ export function readUrl(raw: string): UrlResult {
  * the arguments, always as a vector, always the user's values as whole
  * arguments (ADR-014).
  */
-export const TOOLS = ['chrome', 'edge', 'terminal', 'editor'] as const;
+export const TOOLS = [
+  'chrome',
+  'edge',
+  'terminal',
+  'editor',
+  'hyperv',
+  'virtualbox',
+  'vmware',
+] as const;
 export type ToolId = (typeof TOOLS)[number];
 
 export type Launch =
@@ -497,6 +540,56 @@ export function resolveStep(
         },
       };
     }
+    case 'vm': {
+      // Each hypervisor has one fixed shape, and the machine is one argument of
+      // it (ADR-014). Hyper-V's is the odd one: the host puts the name in the
+      // environment of a constant PowerShell command rather than in the
+      // command itself, so the shape here is just the name (ADR-023).
+      switch (config.hypervisor) {
+        case 'hyperv':
+          return {
+            ok: true,
+            launch: {
+              kind: 'tool',
+              tool: 'hyperv',
+              args: [config.machine],
+              what: `Hyper-V — ${config.machine}`,
+              source: null,
+            },
+          };
+        case 'virtualbox':
+          return {
+            ok: true,
+            launch: {
+              kind: 'tool',
+              tool: 'virtualbox',
+              args: ['startvm', config.machine, '--type', 'gui'],
+              what: `VirtualBox — ${config.machine}`,
+              source: null,
+            },
+          };
+        case 'vmware': {
+          const vmx = resolvePath(config.machine, env);
+          if (!vmx.ok) return { ok: false, problems: [{ path: 'machine', problem: vmx.problem }] };
+          if (!vmx.path.toLowerCase().endsWith('.vmx')) {
+            return {
+              ok: false,
+              problems: [{ path: 'machine', problem: 'VMware knows a machine by its .vmx file' }],
+            };
+          }
+          return {
+            ok: true,
+            launch: {
+              kind: 'tool',
+              tool: 'vmware',
+              args: ['-T', 'ws', 'start', vmx.path, 'gui'],
+              what: `VMware — ${lastSegment(vmx.path).replace(/\.vmx$/i, '')}`,
+              source: sourceOf(config.machine, vmx.path),
+            },
+          };
+        }
+      }
+    }
   }
 }
 
@@ -523,6 +616,10 @@ export function stepTitle(config: StepConfig): string {
       return config.profile ?? 'Windows Terminal';
     case 'editor':
       return lastSegment(config.path);
+    case 'vm':
+      return config.hypervisor === 'vmware'
+        ? lastSegment(config.machine).replace(/\.vmx$/i, '')
+        : config.machine;
   }
 }
 

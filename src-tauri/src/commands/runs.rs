@@ -47,6 +47,12 @@ const CLOSE_GRACE: Duration = Duration::from_secs(3);
 /// not hold the profile up.
 const WINDOW_TIMEOUT: Duration = Duration::from_secs(5);
 
+/// How long a hypervisor's tool gets to start a machine and answer (F8). A
+/// machine that takes longer to *boot* is not held up by this — the tool
+/// returns once the start is under way; a tool that does not return in a
+/// minute is ended, and that is the reason in the log.
+const COMMAND_BUDGET: Duration = Duration::from_secs(60);
+
 /// Begin a run of a profile. Refused for a profile that was imported and not
 /// yet reviewed (ADR-013): the review gate lives here as well as in the domain.
 #[tauri::command]
@@ -140,6 +146,7 @@ pub fn step_execute(
             program: PathBuf::from(program),
             args: args.clone(),
             working_dir: working_dir.as_ref().map(PathBuf::from),
+            env: Vec::new(),
         })
         .map(|spawned| {
             // Held for the life of the run, and put in its job: a hold ends
@@ -166,14 +173,21 @@ pub fn step_execute(
             open::file(&PathBuf::from(path)).map(|opened| ("opened", opened.pid))
         }
         Launch::Url { url, .. } => open::url(url).map(|opened| ("opened", opened.pid)),
-        Launch::Tool { tool, args, .. } => match tools::find(tool) {
+        Launch::Tool { tool, args, .. } => match tools::invocation(tool, args) {
             None => Err(process::LaunchFailure::ToolMissing(tools::name_of(tool))),
-            Some(program) => process::spawn(&process::Launch {
-                program,
-                args: args.clone(),
-                working_dir: None,
-            })
-            .map(|spawned| {
+            // A hypervisor's tool does one thing, says whether it could, and
+            // exits: it is waited for, within a budget, and what it said is
+            // the reason (F8, ADR-023). The console it opened is the
+            // hypervisor's, not a process this run holds.
+            Some(invocation) if tools::mode(tool) == tools::Mode::Command => {
+                process::run_bounded(&invocation, COMMAND_BUDGET).map(|finished| {
+                    if !finished.said.is_empty() {
+                        payload["said"] = serde_json::json!(finished.said);
+                    }
+                    ("opened", None)
+                })
+            }
+            Some(invocation) => process::spawn(&invocation).map(|spawned| {
                 // Held and put in the run's job like any other program this
                 // product starts: what a Stop reaches is what the run opened,
                 // whatever it was opened with (ADR-015).

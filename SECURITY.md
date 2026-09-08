@@ -90,6 +90,18 @@ A browser's bookmarks file is **read, never written**. What is opened from it ar
 `https` addresses in the one folder named — never its subfolders, never a `file:` or
 `javascript:` bookmark, and never more than fifty pages.
 
+### What a virtual-machine step can do
+
+Ask one hypervisor to start one machine, and open its console. The machine's name is one
+argument of a fixed vector for VirtualBox and VMware; for Hyper-V, which is driven by
+PowerShell, the command is a **constant** and the name travels in the child's environment
+(ADR-023) — a variable PowerShell reads as a string, never as code. A machine called
+`dev; Remove-Item …` is a machine with a strange name, not a script.
+
+The hypervisor's tool is waited for, up to a minute, and ended if it does not answer. Starting a
+machine may need rights this product does not have; when it does, the log says what the
+hypervisor said, and nothing is elevated on your behalf (ADR-014).
+
 ### What the log promises
 
 The run log is **append-only** (ADR-011). Database triggers refuse any update or delete of an

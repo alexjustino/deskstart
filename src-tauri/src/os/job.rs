@@ -114,6 +114,7 @@ mod tests {
                 "127.0.0.1".into(),
             ],
             working_dir: None,
+            env: Vec::new(),
         })
         .unwrap();
         job.assign(&spawned.child).expect("assigned");
@@ -141,6 +142,7 @@ mod tests {
                 "127.0.0.1".into(),
             ],
             working_dir: None,
+            env: Vec::new(),
         })
         .unwrap();
         {

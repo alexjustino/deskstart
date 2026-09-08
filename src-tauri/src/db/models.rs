@@ -59,8 +59,8 @@ pub struct ImportStep {
 }
 
 /// The step kinds the host knows how to act on. The schema's CHECK says the
-/// same, and migration 006 is where the two were last made to agree.
-pub const STEP_KINDS: [&str; 7] = [
+/// same, and migration 007 is where the two were last made to agree.
+pub const STEP_KINDS: [&str; 8] = [
     "app",
     "folder",
     "file",
@@ -68,6 +68,7 @@ pub const STEP_KINDS: [&str; 7] = [
     "bookmarks",
     "terminal",
     "editor",
+    "vm",
 ];
 
 /// What the domain asks the host to do for one step: every path already
@@ -140,6 +141,7 @@ impl Launch {
             Launch::Tool { tool, .. } => match tool.as_str() {
                 "terminal" => "terminal",
                 "editor" => "editor",
+                "hyperv" | "virtualbox" | "vmware" => "vm",
                 _ => "bookmarks",
             },
             Launch::Bookmarks { .. } => "bookmarks",

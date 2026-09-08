@@ -19,6 +19,10 @@ pub struct Launch {
     pub program: PathBuf,
     pub args: Vec<String>,
     pub working_dir: Option<PathBuf>,
+    /// Variables set for the child only. How a value reaches a program without
+    /// ever being part of a command line (ADR-023): the child reads a
+    /// variable, and a variable is never parsed as code.
+    pub env: Vec<(String, String)>,
 }
 
 /// A process that was started. The handle is kept by the caller for as long as
@@ -43,6 +47,15 @@ pub enum LaunchFailure {
     /// A tool this product knows how to call is not installed here (F7).
     /// Not a path: it was looked for in every place it is normally installed.
     ToolMissing(&'static str),
+    /// A command ran to its end and said no (F8): its exit code, and the first
+    /// line it wrote to stderr, which is usually the sentence that matters.
+    Refused {
+        code: Option<i32>,
+        said: String,
+    },
+    /// A command did not finish inside its budget and was ended (F8). The one
+    /// thing a hypervisor is never allowed to do to a run is hang it.
+    TimedOut(u64),
     Os {
         code: Option<i32>,
         message: String,
@@ -71,6 +84,15 @@ impl LaunchFailure {
             }
             LaunchFailure::ToolMissing(name) => {
                 format!("{name} is not installed where this product looks for it")
+            }
+            LaunchFailure::Refused { code, said } => match (code, said.is_empty()) {
+                (Some(code), false) => format!("it answered (exit {code}): {said}"),
+                (Some(code), true) => format!("it answered with exit code {code} and said nothing"),
+                (None, false) => format!("it was ended before answering: {said}"),
+                (None, true) => "it was ended before answering".to_string(),
+            },
+            LaunchFailure::TimedOut(seconds) => {
+                format!("it did not finish within {seconds} s and was ended")
             }
             LaunchFailure::Os { code, message } => match code {
                 Some(code) => format!("Windows could not start it (error {code}): {message}"),
@@ -107,6 +129,9 @@ fn check(launch: &Launch) -> Result<(), LaunchFailure> {
 fn command(launch: &Launch) -> Command {
     let mut command = Command::new(&launch.program);
     command.args(&launch.args);
+    for (name, value) in &launch.env {
+        command.env(name, value);
+    }
     if let Some(dir) = &launch.working_dir {
         command.current_dir(dir);
     }
@@ -131,6 +156,103 @@ pub fn spawn(launch: &Launch) -> Result<Spawned, LaunchFailure> {
     }
 }
 
+/// What a command that ran to its end came back with.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct Finished {
+    pub code: Option<i32>,
+    /// The first non-empty line of stderr, trimmed to a sentence's length.
+    pub said: String,
+}
+
+/// Run a program to its end, within a budget, and report what it said.
+///
+/// The other way this product starts things — `spawn` — hands the program a
+/// desktop and walks away. A hypervisor's command-line tool is not that kind
+/// of program: it does one thing, says whether it could, and exits, and what
+/// it says is the reason a person needs. So it is waited for — up to `budget`,
+/// after which it is ended and the budget is the reason (F8, ADR-023).
+pub fn run_bounded(
+    launch: &Launch,
+    budget: std::time::Duration,
+) -> Result<Finished, LaunchFailure> {
+    use std::io::Read;
+    use std::time::Instant;
+
+    check(launch)?;
+    let mut command = command(launch);
+    command.stderr(Stdio::piped());
+    let mut child = command
+        .spawn()
+        .map_err(|error| classify(error, &launch.program))?;
+
+    // Drained on a thread of its own: a child that fills the pipe would
+    // otherwise block on write while this side blocks on wait. And never
+    // joined without a deadline: a grandchild that inherited the pipe — the
+    // console a hypervisor's tool opened and left running — would hold it open
+    // for as long as it lives, which is exactly the hang F8 forbids.
+    let stderr = child.stderr.take();
+    let (sender, receiver) = std::sync::mpsc::channel::<String>();
+    std::thread::spawn(move || {
+        let mut text = String::new();
+        if let Some(mut pipe) = stderr {
+            let _ = pipe.read_to_string(&mut text);
+        }
+        let _ = sender.send(text);
+    });
+
+    let deadline = Instant::now() + budget;
+    let status = loop {
+        match child.try_wait() {
+            Ok(Some(status)) => break Some(status),
+            Ok(None) if Instant::now() < deadline => {
+                std::thread::sleep(std::time::Duration::from_millis(50));
+            }
+            Ok(None) => {
+                let _ = child.kill();
+                let _ = child.wait();
+                break None;
+            }
+            Err(error) => {
+                log::warn!("waiting for {}: {error}", launch.program.display());
+                let _ = child.kill();
+                break None;
+            }
+        }
+    };
+    let said = first_line(
+        &receiver
+            .recv_timeout(std::time::Duration::from_millis(500))
+            .unwrap_or_default(),
+    );
+
+    match status {
+        None => Err(LaunchFailure::TimedOut(budget.as_secs())),
+        Some(status) if status.success() => Ok(Finished {
+            code: status.code(),
+            said,
+        }),
+        Some(status) => Err(LaunchFailure::Refused {
+            code: status.code(),
+            said,
+        }),
+    }
+}
+
+/// The first line that says anything, cut to a sentence's length.
+fn first_line(text: &str) -> String {
+    let line = text
+        .lines()
+        .map(str::trim)
+        .find(|line| !line.is_empty())
+        .unwrap_or("");
+    if line.chars().count() > 200 {
+        let cut: String = line.chars().take(197).collect();
+        format!("{cut}…")
+    } else {
+        line.to_string()
+    }
+}
+
 fn classify(error: std::io::Error, program: &Path) -> LaunchFailure {
     match error.raw_os_error() {
         Some(ERROR_ELEVATION_REQUIRED) => LaunchFailure::ElevationRequired,
@@ -151,7 +273,69 @@ mod tests {
             program: PathBuf::from(program),
             args: args.iter().map(|a| a.to_string()).collect(),
             working_dir: None,
+            env: Vec::new(),
         }
+    }
+
+    #[test]
+    fn a_command_that_succeeds_is_finished_and_quiet() {
+        let finished = run_bounded(
+            &launch(&cmd(), &["/d", "/c", "exit", "0"]),
+            std::time::Duration::from_secs(10),
+        )
+        .unwrap();
+        assert_eq!(finished.code, Some(0));
+        assert_eq!(finished.said, "");
+    }
+
+    #[test]
+    fn a_command_that_says_no_is_a_reason_with_what_it_said() {
+        let failure = run_bounded(
+            &launch(
+                &cmd(),
+                &["/d", "/c", "echo the machine is not there 1>&2 & exit 3"],
+            ),
+            std::time::Duration::from_secs(10),
+        )
+        .unwrap_err();
+        assert_eq!(
+            failure,
+            LaunchFailure::Refused {
+                code: Some(3),
+                said: "the machine is not there".to_string()
+            }
+        );
+        assert_eq!(
+            failure.reason(),
+            "it answered (exit 3): the machine is not there"
+        );
+    }
+
+    #[test]
+    fn a_command_that_does_not_finish_is_ended_and_the_budget_is_the_reason() {
+        // ping to nowhere: a command that would take seconds, given half of one.
+        let started = std::time::Instant::now();
+        let failure = run_bounded(
+            &launch(&cmd(), &["/d", "/c", "ping -n 6 127.0.0.1 > nul"]),
+            std::time::Duration::from_millis(500),
+        )
+        .unwrap_err();
+        assert_eq!(failure, LaunchFailure::TimedOut(0));
+        assert!(started.elapsed() < std::time::Duration::from_secs(4));
+        assert!(failure.reason().contains("did not finish"));
+    }
+
+    #[test]
+    fn a_value_reaches_the_child_through_its_environment_not_its_command_line() {
+        let mut launch = launch(&cmd(), &["/d", "/c", "exit %DESKSTART_PROBE%"]);
+        launch
+            .env
+            .push(("DESKSTART_PROBE".to_string(), "7".to_string()));
+        let failure = run_bounded(&launch, std::time::Duration::from_secs(10)).unwrap_err();
+        assert!(matches!(
+            failure,
+            LaunchFailure::Refused { code: Some(7), .. }
+        ));
     }
 
     #[test]
@@ -180,6 +364,7 @@ mod tests {
             program,
             args: vec![],
             working_dir: Some(dir.clone()),
+            env: Vec::new(),
         })
         .unwrap_err();
         assert_eq!(failure, LaunchFailure::WorkingDirMissing(dir));

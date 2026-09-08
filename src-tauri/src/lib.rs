@@ -29,6 +29,9 @@
 //! - F7: the tools it can call — Chrome, Edge, Windows Terminal, VS Code —
 //!   found in known places and never on PATH, and one browser's bookmarks file
 //!   read for the domain to make sense of.
+//! - F8: three hypervisors (migration 007), asked as commands that run to an
+//!   end within a budget; Hyper-V through a constant PowerShell command with
+//!   the machine's name in the environment.
 
 pub mod commands;
 pub mod db;

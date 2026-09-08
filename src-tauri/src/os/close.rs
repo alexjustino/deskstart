@@ -135,6 +135,7 @@ mod tests {
             program: cmd(),
             args: vec!["/d".into(), "/c".into(), "exit".into(), "0".into()],
             working_dir: None,
+            env: Vec::new(),
         })
         .unwrap();
         let _ = spawned.child.wait();
@@ -158,6 +159,7 @@ mod tests {
                 "127.0.0.1".into(),
             ],
             working_dir: None,
+            env: Vec::new(),
         })
         .unwrap();
         let started = Instant::now();
