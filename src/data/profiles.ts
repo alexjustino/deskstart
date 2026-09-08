@@ -19,12 +19,24 @@ import {
 import { parseStoredPlacement, serializePlacement, type Placement } from '@/domain/placement';
 import { parseStoredWaitFor, serializeWaitFor, type WaitFor } from '@/domain/readiness';
 import { parseStoredTiming, serializeTiming, type Timing } from '@/domain/timing';
+import {
+  parseStoredSchedule,
+  parseStoredShortcut,
+  serializeSchedule,
+  serializeShortcut,
+  type Schedule,
+  type Shortcut,
+} from '@/domain/triggers';
 
 export interface Profile {
   id: string;
   name: string;
   position: number;
   importedUnreviewed: boolean;
+  /** When the Task Scheduler starts it, or null (F9). */
+  schedule: Schedule | null;
+  /** The key combination that starts it, or null (F9). */
+  shortcut: Shortcut | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -46,6 +58,8 @@ interface RawProfile {
   name: string;
   position: number;
   imported_unreviewed: boolean;
+  schedule_json: string;
+  shortcut: string;
   created_at: string;
   updated_at: string;
 }
@@ -65,11 +79,18 @@ interface RawStep {
 }
 
 function toProfile(raw: RawProfile): Profile {
+  // A trigger the domain cannot read is shown as none: the host only ever
+  // stored what the domain wrote, so this is a row from a future the reader
+  // does not know, not a surprise to raise.
+  const schedule = parseStoredSchedule(raw.schedule_json ?? '{}');
+  const shortcut = parseStoredShortcut(raw.shortcut ?? '');
   return {
     id: raw.id,
     name: raw.name,
     position: raw.position,
     importedUnreviewed: raw.imported_unreviewed,
+    schedule: Array.isArray(schedule) ? null : schedule,
+    shortcut: Array.isArray(shortcut) ? null : shortcut,
     createdAt: raw.created_at,
     updatedAt: raw.updated_at,
   };
@@ -208,4 +229,29 @@ export async function readProfileFile(path: string): Promise<string> {
 /** Write one file the person chose. */
 export async function writeProfileFile(path: string, contents: string): Promise<void> {
   await invoke('profile_file_write', { path, contents });
+}
+
+/** Hand a profile's schedule to the Task Scheduler, or take it back with null. */
+export async function setSchedule(id: string, schedule: Schedule | null): Promise<Profile> {
+  return toProfile(
+    await invoke<RawProfile>('profile_schedule_set', {
+      id,
+      scheduleJson: serializeSchedule(schedule),
+    }),
+  );
+}
+
+/** Is the profile's task registered with Windows right now? Asked of Windows. */
+export async function scheduleRegistered(id: string): Promise<boolean> {
+  return invoke<boolean>('schedule_registered', { id });
+}
+
+/** Register a profile's key combination with the system, or remove it with null. */
+export async function setShortcut(id: string, shortcut: Shortcut | null): Promise<Profile> {
+  return toProfile(
+    await invoke<RawProfile>('profile_shortcut_set', {
+      id,
+      shortcut: serializeShortcut(shortcut),
+    }),
+  );
 }

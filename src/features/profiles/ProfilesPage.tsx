@@ -19,7 +19,15 @@ import {
   Stop20Regular,
   WindowConsole20Regular,
 } from '@fluentui/react-icons';
-import { useCallback, useMemo, useState, type FormEvent, type ReactNode } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type FormEvent,
+  type ReactNode,
+} from 'react';
 
 import { describeError } from '@/data/errors';
 import {
@@ -52,6 +60,8 @@ import { describePlacement } from '@/domain/placement';
 import { describeWaitFor, waitForProblems } from '@/domain/readiness';
 import { reviewState } from '@/domain/review';
 import { describeTiming } from '@/domain/timing';
+import { describeTrigger, type Trigger } from '@/domain/triggers';
+import type { RunRequest } from '@/data/system';
 import { Button } from '@/ui/Button';
 import { Card } from '@/ui/Card';
 import { ConfirmDialog } from '@/ui/ConfirmDialog';
@@ -65,6 +75,7 @@ import { LogLines, RunHeading } from '../runs/LogLines';
 import { ExportProfile } from './ExportProfile';
 import { ImportProfile } from './ImportProfile';
 import { ReviewSteps } from './ReviewSteps';
+import { TriggersCard } from './TriggersCard';
 import { HYPERVISOR_LABELS, KIND_LABELS } from './kinds';
 import { StepForm, type EarlierStep, type Screen, type ToolState } from './StepForm';
 
@@ -75,9 +86,23 @@ import { StepForm, type EarlierStep, type Screen, type ToolState } from './StepF
  * The latest run's log sits under the steps because that is the product's
  * claim in one screen: press Run, watch the lines appear, read what happened.
  */
-export function ProfilesPage() {
+export function ProfilesPage({
+  request = null,
+}: {
+  /** A run a trigger asked for, to be selected and started once (F9). */
+  request?: RunRequestOnce | null;
+}) {
   const profiles = useProfiles();
   const [selectedId, setSelectedId] = useState<string | null>(null);
+
+  // A trigger's request selects its profile; the detail below starts it. The
+  // selection is adjusted during render, from the request that just arrived,
+  // rather than in an effect that would render once more to say the same.
+  const [seenRequest, setSeenRequest] = useState<RunRequestOnce | null>(null);
+  if (request !== seenRequest) {
+    setSeenRequest(request);
+    if (request !== null) setSelectedId(request.profileId);
+  }
 
   // The selection is derived, not synchronised: a profile chosen earlier
   // stays chosen while it exists, and the first one stands in otherwise.
@@ -103,7 +128,7 @@ export function ProfilesPage() {
             description="A profile is the set of things you open to start working. Name one on the left, then add what it should open."
           />
         )}
-        {selected && <ProfileDetail key={selected.id} profile={selected} />}
+        {selected && <ProfileDetail key={selected.id} profile={selected} request={request} />}
       </section>
     </div>
   );
@@ -197,6 +222,9 @@ function ProfileList({
   );
 }
 
+/** A trigger's request with a serial, so it is served once and not on every render. */
+export type RunRequestOnce = RunRequest & { serial: number };
+
 /** A stored step with what the domain makes of it against this machine's environment. */
 interface Judged {
   stored: StoredStep;
@@ -204,7 +232,7 @@ interface Judged {
   problems: Problem[];
 }
 
-function ProfileDetail({ profile }: { profile: Profile }) {
+function ProfileDetail({ profile, request }: { profile: Profile; request: RunRequestOnce | null }) {
   const steps = useSteps(profile.id);
   const environment = useEnvironment();
   const screens = useMonitors();
@@ -264,7 +292,7 @@ function ProfileDetail({ profile }: { profile: Profile }) {
   const events = useEvents(shownRunId);
 
   const start = useCallback(
-    (mode: Mode) => {
+    (mode: Mode, trigger: Trigger = 'button') => {
       setActiveRunId(null);
       execute.mutate(
         {
@@ -272,6 +300,7 @@ function ProfileDetail({ profile }: { profile: Profile }) {
           steps: runnable.map((j) => j.step),
           mode,
           env,
+          trigger,
           onBegin: (run) => setActiveRunId(run.id),
         },
         {
@@ -293,6 +322,30 @@ function ProfileDetail({ profile }: { profile: Profile }) {
     !review.blocked &&
     !execute.isPending &&
     environment.data !== undefined;
+
+  // A trigger's request is run exactly once, when this profile is the one it
+  // names and everything a run needs has loaded. The gate is the same as the
+  // button's: a profile that cannot be run by hand cannot be run by a clock.
+  const served = useRef<number | null>(null);
+  useEffect(() => {
+    if (request === null || request.profileId !== profile.id) return;
+    if (served.current === request.serial) return;
+    if (steps.data === undefined || environment.data === undefined) return;
+    served.current = request.serial;
+    // After this render has committed: a run begun from inside an effect is a
+    // cascade of renders, and the log is in no hurry by a frame.
+    const trigger = request.trigger;
+    const runnableNow = canRun;
+    const timer = setTimeout(() => {
+      if (runnableNow) {
+        start('real', trigger);
+        announce(`${describeTrigger(trigger) ?? 'A trigger'} started ${profile.name}`);
+      } else {
+        announce(`${profile.name} was asked to run and cannot be run right now`);
+      }
+    }, 0);
+    return () => clearTimeout(timer);
+  }, [request, profile.id, profile.name, steps.data, environment.data, canRun, start]);
 
   return (
     <div className="mx-auto flex w-full max-w-3xl flex-col gap-4 p-6">
@@ -393,6 +446,8 @@ function ProfileDetail({ profile }: { profile: Profile }) {
           />
         </Card>
       )}
+
+      {!review.blocked && <TriggersCard profile={profile} />}
 
       <Card
         title={activeRunId !== null && execute.isPending ? 'Run in progress' : 'Latest run'}

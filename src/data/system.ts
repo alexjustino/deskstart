@@ -6,6 +6,7 @@
  */
 
 import { invoke } from '@tauri-apps/api/core';
+import { listen } from '@tauri-apps/api/event';
 
 export interface SystemInfo {
   name: string;
@@ -131,4 +132,30 @@ export async function fetchTools(): Promise<Tool[]> {
  */
 export async function readBookmarks(browser: string): Promise<string> {
   return invoke<string>('bookmarks_read', { browser });
+}
+
+/** What a trigger asked for: a run of one profile, and why (F9). */
+export interface RunRequest {
+  profileId: string;
+  trigger: 'schedule' | 'shortcut' | 'command';
+}
+
+/**
+ * The request this process was started with, if a trigger started it — or
+ * the one made while the screen was not yet listening. Taken once.
+ */
+export async function pendingRun(): Promise<RunRequest | null> {
+  return invoke<RunRequest | null>('pending_run');
+}
+
+/** Requests made while the screen is open: a shortcut pressed, a second launch. */
+export function onRunRequested(handler: (request: RunRequest) => void): () => void {
+  let active = true;
+  const stop = listen<RunRequest>('run-requested', (event) => {
+    if (active) handler(event.payload);
+  });
+  return () => {
+    active = false;
+    void stop.then((unlisten) => unlisten());
+  };
 }

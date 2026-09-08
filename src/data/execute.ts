@@ -23,6 +23,7 @@ import { pagesToOpen, readBookmarkFolder } from '@/domain/bookmarks';
 import { resolveStep, type Launch, type Step } from '@/domain/profile';
 import { whyNotRunnable } from '@/domain/review';
 import { plan, reduce, type Action, type Mode, type RunEvent, type RunState } from '@/domain/run';
+import type { Trigger } from '@/domain/triggers';
 
 import { describeError } from './errors';
 import { readBookmarks } from './system';
@@ -136,6 +137,7 @@ export async function executeProfile(
   onLine: (line: LogLine) => void = () => undefined,
   onBegin: (run: Run) => void = () => undefined,
   stopper: Stopper = new Stopper(),
+  trigger: Trigger = 'button',
 ): Promise<Execution> {
   // The review gate, on the path every run takes rather than only on the
   // button (ADR-013). The host asks the same question again when it is handed
@@ -143,7 +145,7 @@ export async function executeProfile(
   const refusal = whyNotRunnable(profile, steps);
   if (refusal !== null) throw new Error(refusal);
 
-  const run = await runBegin(profile.id, mode);
+  const run = await runBegin(profile.id, mode, trigger);
   // The run exists in the file from this instant; the screen may show it now,
   // not when it is over. A run with an hour of holds is still a run.
   onBegin(run);
