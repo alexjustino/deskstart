@@ -33,6 +33,7 @@ part that matters most later — the cost we accepted.
 | [025](#adr-025) | A backup is the workspace file; a restore is staged and applied at the next start        | Accepted |
 | [026](#adr-026) | Content surfaces are opaque; Mica is the window backdrop, not behind text                | Accepted |
 | [027](#adr-027) | A hypervisor's inventory is discovered locally, each read its own way                    | Accepted |
+| [028](#adr-028) | An encrypted machine's password is asked each run and never stored                       | Accepted |
 
 ---
 
@@ -552,3 +553,28 @@ may be a beat late to appear; the typed `.vmx` path of F8 is always available as
 each reader is bound to its tool's output format, which a major version of that tool could change
 — held, as everywhere, by a parser that treats the output as untrusted and a test over real
 sample output.
+
+## ADR-028 — An encrypted machine's password is asked each run and never stored {#adr-028}
+
+**Context.** A VMware machine can be encrypted; starting it needs a password (`vmrun -vp
+<password> start`). Deskstart has to carry that password from the person to the hypervisor
+without betraying the trust the rest of the product earns.
+
+**Decision.** The password is **asked each time a run needs it, and stored nowhere** — not in the
+profile (ADR-010: a profile is data, never a secret, and a profile is a file people share), not on
+disk, not in the OS credential store. It is held in memory for the length of that run and
+discarded. The passwords a run needs are collected **before the run starts**, so the loop never
+pauses mid-sequence to ask; a step marked as needing a password that was not given is skipped with
+that reason, the way a step that does not resolve is, and the profile carries on.
+
+The secret never travels the path that is logged. The domain marks a VMware step as `encrypted`,
+a boolean — it never holds the password; the resolved launch the log records carries no password;
+the host builds the `vmrun` argument vector with `-vp <password>` at the moment of starting and
+the log line **redacts** it. A profile exported with F5 carries the `encrypted` flag and not the
+secret, so a shared profile asks its recipient for their own password and never leaks the author's.
+
+**Cost accepted.** Typing the password at every run, by design — the choice between convenience
+and a secret that cannot leak, made for the secret. A machine with several encrypted VMs asks for
+several passwords up front. Remembering them — in the session, or in the Windows Credential Manager
+— is a setting this decision deliberately does not add; it can be offered later without changing
+that the password is never in the profile.
