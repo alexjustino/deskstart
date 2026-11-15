@@ -238,6 +238,76 @@ pub fn run_bounded(
     }
 }
 
+/// Run a program to its end within a budget and return what it wrote to
+/// stdout — the list a hypervisor prints when asked its inventory (1.1).
+///
+/// The sibling of `run_bounded`: same bounded wait and drain, but it keeps
+/// stdout rather than the first line of stderr, and a non-zero exit is a
+/// failure carrying stderr as the reason. Nothing it runs is a long-lived
+/// program; it is a question a tool answers and exits.
+pub fn capture_stdout(
+    launch: &Launch,
+    budget: std::time::Duration,
+) -> Result<String, LaunchFailure> {
+    use std::io::Read;
+    use std::time::Instant;
+
+    check(launch)?;
+    let mut command = command(launch);
+    command.stdout(Stdio::piped());
+    command.stderr(Stdio::piped());
+    let mut child = command
+        .spawn()
+        .map_err(|error| classify(error, &launch.program))?;
+
+    let mut out_pipe = child.stdout.take();
+    let mut err_pipe = child.stderr.take();
+    let (sender, receiver) = std::sync::mpsc::channel::<(String, String)>();
+    std::thread::spawn(move || {
+        let mut out = String::new();
+        let mut err = String::new();
+        if let Some(pipe) = out_pipe.as_mut() {
+            let _ = pipe.read_to_string(&mut out);
+        }
+        if let Some(pipe) = err_pipe.as_mut() {
+            let _ = pipe.read_to_string(&mut err);
+        }
+        let _ = sender.send((out, err));
+    });
+
+    let deadline = Instant::now() + budget;
+    let status = loop {
+        match child.try_wait() {
+            Ok(Some(status)) => break Some(status),
+            Ok(None) if Instant::now() < deadline => {
+                std::thread::sleep(std::time::Duration::from_millis(50));
+            }
+            Ok(None) => {
+                let _ = child.kill();
+                let _ = child.wait();
+                break None;
+            }
+            Err(error) => {
+                log::warn!("waiting for {}: {error}", launch.program.display());
+                let _ = child.kill();
+                break None;
+            }
+        }
+    };
+    let (out, err) = receiver
+        .recv_timeout(std::time::Duration::from_millis(500))
+        .unwrap_or_default();
+
+    match status {
+        None => Err(LaunchFailure::TimedOut(budget.as_secs())),
+        Some(status) if status.success() => Ok(out),
+        Some(status) => Err(LaunchFailure::Refused {
+            code: status.code(),
+            said: first_line(&err),
+        }),
+    }
+}
+
 /// The first line that says anything, cut to a sentence's length.
 fn first_line(text: &str) -> String {
     let line = text

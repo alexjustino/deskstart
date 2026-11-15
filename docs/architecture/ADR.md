@@ -32,6 +32,7 @@ part that matters most later — the cost we accepted.
 | [024](#adr-024) | A trigger binds to a profile id; the window closes to the tray                           | Accepted |
 | [025](#adr-025) | A backup is the workspace file; a restore is staged and applied at the next start        | Accepted |
 | [026](#adr-026) | Content surfaces are opaque; Mica is the window backdrop, not behind text                | Accepted |
+| [027](#adr-027) | A hypervisor's inventory is discovered locally, each read its own way                    | Accepted |
 
 ---
 
@@ -518,3 +519,36 @@ a wash behind the whole window. On a Mica machine the change is small — the op
 tuned to how the translucent ones composited — and it is a pure token change, reversible by
 anyone who disagrees. It touches the product's signature look, so it wants a person's eye on a
 real desktop (host proof), not only a passing gate.
+
+## ADR-027 — A hypervisor's inventory is discovered locally, each read its own way {#adr-027}
+
+**Context.** F8 starts a virtual machine you name by hand — a name for Hyper-V and VirtualBox, a
+`.vmx` path for VMware. The 1.1 line makes the machines pickable: show what each hypervisor
+already has, so "start two of these four" is a choice, not a remembered name. Something has to
+decide where that list comes from.
+
+**Decision.** Each hypervisor is asked, **on this machine**, for its own inventory — a local read,
+never a network call (the product's founding promise, ADR-006, holds). The host runs the list
+command or reads the inventory file; `domain/vminventory` decides what the output means, and never
+throws, because a hypervisor's output is somebody else's format. There is one reader per
+hypervisor, because each answers differently:
+
+- **VirtualBox** — `VBoxManage list vms` prints `"name" {uuid}` a line at a time, and `list
+runningvms` the same for the ones that are up. The name is what `startvm` wants, so it is the id.
+- **Hyper-V** — asked through PowerShell with a **constant** command
+  (`Get-VM | Select-Object Name, State | ConvertTo-Json`), nothing a person typed in it, and the
+  answer parsed as JSON — a machine name can hold characters a column-aligned table cannot be
+  parsed through.
+- **VMware Workstation** — has no clean "list all" on Workstation, so its registered machines are
+  read from `%APPDATA%\VMware\inventory.vmls`, a text file of `.vmx` paths, the way F7 reads a
+  browser's bookmarks file. The `.vmx` path is the id; the machine is called by its folder.
+
+A hypervisor that is not installed answers like any missing tool (ADR-022): the caller gets a
+"not found", and the editor says which, rather than an empty list that looks like "no machines".
+
+**Cost accepted.** VMware's inventory is read from a file the application writes, not asked of a
+running service, so a machine registered in this session but not yet flushed to `inventory.vmls`
+may be a beat late to appear; the typed `.vmx` path of F8 is always available as the fallback. And
+each reader is bound to its tool's output format, which a major version of that tool could change
+— held, as everywhere, by a parser that treats the output as untrusted and a test over real
+sample output.

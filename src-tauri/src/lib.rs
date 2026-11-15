@@ -192,6 +192,7 @@ pub fn run() {
             commands::system::environment,
             commands::system::monitors,
             commands::system::tools_list,
+            commands::system::vm_inventory,
             commands::system::bookmarks_read,
             commands::system::settings_all,
             commands::system::setting_set,
