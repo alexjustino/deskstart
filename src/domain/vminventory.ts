@@ -26,7 +26,7 @@
  *   read the way F7 reads a bookmarks file.
  */
 
-import { lastSegment, type Problem } from './profile';
+import { lastSegment } from './profile';
 
 /** One machine a hypervisor knows about. */
 export interface Machine {
@@ -149,4 +149,15 @@ export function readVmwareInventory(vmls: string): InventoryResult {
     machines.push({ id: vmx, label, running: running.has(index) });
   }
   return { ok: true, machines: dedupe(machines) };
+}
+
+/**
+ * The machines ticked, in the inventory's order — the order their steps are
+ * added in, whatever order they were clicked in. An id the list no longer has
+ * goes last, in the order it was ticked.
+ */
+export function inListOrder(picked: readonly string[], listed: readonly string[]): string[] {
+  const index = new Map(listed.map((id, i) => [id, i]));
+  const rank = (id: string) => index.get(id) ?? Number.MAX_SAFE_INTEGER;
+  return [...picked].sort((a, b) => rank(a) - rank(b));
 }

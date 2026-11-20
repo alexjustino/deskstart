@@ -1,6 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
-import { readHyperVList, readVirtualBoxList, readVmwareInventory } from './vminventory';
+import {
+  inListOrder,
+  readHyperVList,
+  readVirtualBoxList,
+  readVmwareInventory,
+} from './vminventory';
 
 describe('reading a VirtualBox inventory', () => {
   const ALL =
@@ -82,5 +87,15 @@ describe('reading a VMware inventory', () => {
   it('is empty, not a crash, for an empty or unrelated file', () => {
     expect(readVmwareInventory('')).toEqual({ ok: true, machines: [] });
     expect(readVmwareInventory('.encoding = "windows-1252"')).toEqual({ ok: true, machines: [] });
+  });
+});
+
+describe('the machines ticked', () => {
+  it('are added in the order listed, whatever order they were clicked in', () => {
+    expect(inListOrder(['d', 'b'], ['a', 'b', 'c', 'd'])).toEqual(['b', 'd']);
+  });
+
+  it('keep one the list no longer has, last', () => {
+    expect(inListOrder(['gone', 'c', 'a'], ['a', 'b', 'c'])).toEqual(['a', 'c', 'gone']);
   });
 });
