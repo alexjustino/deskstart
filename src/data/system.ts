@@ -8,6 +8,14 @@
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 
+import type { Hypervisor } from '@/domain/profile';
+import {
+  readHyperVList,
+  readVirtualBoxList,
+  readVmwareInventory,
+  type InventoryResult,
+} from '@/domain/vminventory';
+
 export interface SystemInfo {
   name: string;
   version: string;
@@ -111,6 +119,24 @@ export interface Monitor {
  */
 export async function fetchMonitors(): Promise<Monitor[]> {
   return invoke<Monitor[]>('monitors');
+}
+
+/**
+ * The machines a hypervisor already has, read on this machine (1.1, ADR-027).
+ * The host fetches the raw listing; what it means is the domain's. A
+ * hypervisor that is not installed is an error with that sentence, which the
+ * editor shows instead of a list.
+ */
+export async function fetchVmInventory(hypervisor: Hypervisor): Promise<InventoryResult> {
+  const raw = await invoke<{ primary: string; running: string }>('vm_inventory', { hypervisor });
+  switch (hypervisor) {
+    case 'virtualbox':
+      return readVirtualBoxList(raw.primary, raw.running);
+    case 'hyperv':
+      return readHyperVList(raw.primary);
+    case 'vmware':
+      return readVmwareInventory(raw.primary);
+  }
 }
 
 /** One tool this product can call, and whether this machine has it (F7). */

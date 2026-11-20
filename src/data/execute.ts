@@ -138,6 +138,12 @@ export async function executeProfile(
   onBegin: (run: Run) => void = () => undefined,
   stopper: Stopper = new Stopper(),
   trigger: Trigger = 'button',
+  /**
+   * The passwords of the encrypted machines this run starts, by step id
+   * (ADR-028): asked before the run, held for it, handed to the host one step
+   * at a time, and never written anywhere by this loop.
+   */
+  passwords: ReadonlyMap<string, string> = new Map(),
 ): Promise<Execution> {
   // The review gate, on the path every run takes rather than only on the
   // button (ADR-013). The host asks the same question again when it is handed
@@ -256,6 +262,23 @@ export async function executeProfile(
             break;
           }
           feedLine(await stepExecute(run.id, action.stepId, pages.launch));
+          break;
+        }
+        // An encrypted machine starts only with its password. Without one it
+        // is skipped, with that reason, before anything is asked of the host;
+        // a dry run starts nothing, so it needs none.
+        if (asked.kind === 'tool' && asked.encrypted === true && !dry) {
+          const password = passwords.get(action.stepId) ?? '';
+          if (password === '') {
+            feed({
+              kind: 'step_unavailable',
+              stepId: action.stepId,
+              reason: 'the machine is encrypted, and its password was not given for this run',
+              at: now(),
+            });
+            break;
+          }
+          feedLine(await stepExecute(run.id, action.stepId, asked, password));
           break;
         }
         feedLine(await stepExecute(run.id, action.stepId, asked));

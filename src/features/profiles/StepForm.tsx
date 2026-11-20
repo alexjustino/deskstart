@@ -31,6 +31,7 @@ import { Input } from '@/ui/Input';
 import { Select } from '@/ui/Select';
 
 import { KIND_LABELS } from './kinds';
+import { MachinePicker } from './MachinePicker';
 
 /**
  * The step editor: one form for adding and for editing, one kind at a time.
@@ -62,6 +63,10 @@ interface Draft {
   /** A virtual machine: which hypervisor, and the machine's name or .vmx. */
   hypervisor: Hypervisor;
   machine: string;
+  /** VMware: the machine is encrypted, its password asked at each run (ADR-028). */
+  encrypted: boolean;
+  /** Adding: the machines ticked in the hypervisor's list, one step each. */
+  picked: string[];
   pauseAfterS: string;
   holdS: string;
   repeat: string;
@@ -114,6 +119,8 @@ const EMPTY: Draft = {
   directory: '',
   hypervisor: 'hyperv',
   machine: '',
+  encrypted: false,
+  picked: [],
   pauseAfterS: '',
   holdS: '',
   repeat: '1',
@@ -200,6 +207,7 @@ function draftOf(
         kind: 'vm',
         hypervisor: config.hypervisor,
         machine: config.machine,
+        encrypted: config.encrypted === true,
       };
   }
 }
@@ -230,7 +238,14 @@ function documentOf(draft: Draft): Record<string, unknown> {
     case 'editor':
       return { kind: 'editor', path: draft.path };
     case 'vm':
-      return { kind: 'vm', hypervisor: draft.hypervisor, machine: draft.machine };
+      return {
+        kind: 'vm',
+        hypervisor: draft.hypervisor,
+        machine: draft.machine,
+        // Only VMware takes a password; the box is not shown for the others,
+        // and a tick left over from switching does not follow them.
+        ...(draft.hypervisor === 'vmware' && draft.encrypted ? { encrypted: true } : {}),
+      };
   }
 }
 
@@ -327,6 +342,7 @@ export function StepForm({
   pending,
   hostError,
   onSubmit,
+  onSubmitMany,
   onCancel,
 }: {
   /** The step being edited, or null to add one. */
@@ -348,6 +364,16 @@ export function StepForm({
   hostError: string | null;
   onSubmit: (
     config: StepConfig,
+    timing: Timing,
+    waitFor: WaitFor | null,
+    placement: Placement,
+  ) => void;
+  /**
+   * Adding several machines picked from a hypervisor's list: one step each,
+   * with the same time, waiting and placement, in the order given.
+   */
+  onSubmitMany?: (
+    configs: StepConfig[],
     timing: Timing,
     waitFor: WaitFor | null,
     placement: Placement,
@@ -393,8 +419,53 @@ export function StepForm({
     setArgument('');
   };
 
+  // Adding machines ticked in the list: each is read and resolved as its own
+  // step, exactly as one typed by hand would be.
+  const many = !editing && draft.kind === 'vm' && draft.picked.length > 0;
+
+  const submitMany = () => {
+    if (Array.isArray(timing)) {
+      setProblems(timing);
+      return;
+    }
+    if (Array.isArray(placement)) {
+      setProblems(placement);
+      return;
+    }
+    if (Array.isArray(waitFor)) {
+      setProblems(waitFor);
+      return;
+    }
+    const configs: StepConfig[] = [];
+    const found: Problem[] = [];
+    for (const machine of draft.picked) {
+      const config = readStepConfig(documentOf({ ...draft, machine }));
+      if (Array.isArray(config)) {
+        found.push(...config);
+        continue;
+      }
+      const resolved = resolveStep(config, env);
+      if (!resolved.ok) {
+        found.push(...resolved.problems);
+        continue;
+      }
+      found.push(...stepProblems(config, timing, placement));
+      configs.push(config);
+    }
+    if (found.length > 0) {
+      setProblems(found);
+      return;
+    }
+    setProblems([]);
+    onSubmitMany?.(configs, timing, waitFor, placement);
+  };
+
   const submit = (event: FormEvent) => {
     event.preventDefault();
+    if (many) {
+      submitMany();
+      return;
+    }
     const config = readStepConfig(documentOf(draft));
     if (Array.isArray(config)) {
       setProblems(config);
@@ -429,6 +500,9 @@ export function StepForm({
   };
 
   const target = (() => {
+    if (many) {
+      return `Will start ${draft.picked.length} ${draft.picked.length === 1 ? 'machine' : 'machines'}, one step each`;
+    }
     if (preview === null || !preview.ok) return null;
     const launch = preview.launch;
     switch (launch.kind) {
@@ -634,8 +708,18 @@ export function StepForm({
             label="Started by"
             options={HYPERVISORS}
             value={draft.hypervisor}
-            onChange={(hypervisor) => set({ hypervisor })}
+            onChange={(hypervisor) => set({ hypervisor, picked: [] })}
             labels={{ hyperv: 'Hyper-V', virtualbox: 'VirtualBox', vmware: 'VMware' }}
+            disabled={pending}
+          />
+          <MachinePicker
+            hypervisor={draft.hypervisor}
+            installed={tool?.found === true}
+            multiple={!editing}
+            picked={editing ? [draft.machine] : draft.picked}
+            onPick={(ids) =>
+              editing ? set({ machine: ids[0] ?? draft.machine }) : set({ picked: ids })
+            }
             disabled={pending}
           />
           <Input
@@ -647,8 +731,31 @@ export function StepForm({
             }
             value={draft.machine}
             onChange={(e) => set({ machine: e.target.value })}
-            disabled={pending}
+            disabled={pending || many}
+            title={
+              many ? 'The machines ticked above are added; untick them to type one' : undefined
+            }
           />
+          {draft.hypervisor === 'vmware' && (
+            <div className="flex flex-col gap-1">
+              <label className="flex items-center gap-3 text-body text-fg">
+                <Checkbox
+                  label="Encrypted: ask for its password at each run"
+                  checked={draft.encrypted}
+                  onChange={(encrypted) => set({ encrypted })}
+                  disabled={pending}
+                />
+                <span>
+                  {many && draft.picked.length > 1 ? 'These machines are' : 'This machine is'}{' '}
+                  encrypted — ask for the password at each run
+                </span>
+              </label>
+              <p className="pl-8 text-caption text-fg-tertiary">
+                The password is asked when you press Run, used for that run, and never stored — not
+                in the profile, not on disk, not in the log.
+              </p>
+            </div>
+          )}
           <p className="text-caption text-fg-tertiary">
             The machine is started and its console opened. Starting it is asked of the hypervisor
             and waited for, up to a minute; what the hypervisor answers is in the log.
@@ -934,7 +1041,11 @@ export function StepForm({
           icon={editing ? undefined : <Add20Regular />}
           disabled={pending}
         >
-          {editing ? 'Save step' : 'Add step'}
+          {editing
+            ? 'Save step'
+            : many && draft.picked.length > 1
+              ? `Add ${draft.picked.length} steps`
+              : 'Add step'}
         </Button>
         {onCancel && (
           <Button onClick={onCancel} disabled={pending}>

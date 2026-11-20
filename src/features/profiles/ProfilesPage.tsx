@@ -48,6 +48,7 @@ import {
 } from '@/data/hooks';
 import type { Profile, StoredStep } from '@/data/profiles';
 import {
+  passwordSteps,
   resolveStep,
   stepTitle,
   type Problem,
@@ -56,14 +57,15 @@ import {
   type StepKind,
 } from '@/domain/profile';
 import type { Mode } from '@/domain/run';
-import { describePlacement } from '@/domain/placement';
-import { describeWaitFor, waitForProblems } from '@/domain/readiness';
+import { describePlacement, type Placement } from '@/domain/placement';
+import { describeWaitFor, waitForProblems, type WaitFor } from '@/domain/readiness';
 import { reviewState } from '@/domain/review';
-import { describeTiming } from '@/domain/timing';
+import { describeTiming, type Timing } from '@/domain/timing';
 import { describeTrigger, type Trigger } from '@/domain/triggers';
 import type { RunRequest } from '@/data/system';
 import { Button } from '@/ui/Button';
 import { Card } from '@/ui/Card';
+import { Chip } from '@/ui/Chip';
 import { ConfirmDialog } from '@/ui/ConfirmDialog';
 import { EmptyState } from '@/ui/EmptyState';
 import { IconButton } from '@/ui/IconButton';
@@ -74,6 +76,7 @@ import { announce } from '@/ui/announce';
 import { LogLines, RunHeading } from '../runs/LogLines';
 import { ExportProfile } from './ExportProfile';
 import { ImportProfile } from './ImportProfile';
+import { PasswordDialog } from './PasswordDialog';
 import { ReviewSteps } from './ReviewSteps';
 import { TriggersCard } from './TriggersCard';
 import { HYPERVISOR_LABELS, KIND_LABELS } from './kinds';
@@ -291,7 +294,12 @@ function ProfileDetail({ profile, request }: { profile: Profile; request: RunReq
   const shownRun = runs.data?.find((r) => r.id === shownRunId) ?? null;
   const events = useEvents(shownRunId);
 
-  const start = useCallback(
+  // The encrypted machines this profile starts, whose passwords Run asks for
+  // first (ADR-028). Null while the dialog is closed.
+  const needPasswords = useMemo(() => passwordSteps(runnable.map((j) => j.step)), [runnable]);
+  const [asking, setAsking] = useState(false);
+
+  const begin = useCallback(
     (mode: Mode, trigger: Trigger = 'button') => {
       setActiveRunId(null);
       execute.mutate(
@@ -314,6 +322,20 @@ function ProfileDetail({ profile, request }: { profile: Profile; request: RunReq
       );
     },
     [execute, profile, runnable, env],
+  );
+
+  // A person pressing Run is asked for the passwords before anything starts.
+  // A dry run starts nothing and needs none; a trigger has nobody to ask, so
+  // its encrypted machines are skipped with that reason and the rest runs.
+  const start = useCallback(
+    (mode: Mode, trigger: Trigger = 'button') => {
+      if (mode === 'real' && trigger === 'button' && needPasswords.length > 0) {
+        setAsking(true);
+        return;
+      }
+      begin(mode, trigger);
+    },
+    [begin, needPasswords.length],
   );
 
   const canRun =
@@ -471,6 +493,18 @@ function ProfileDetail({ profile, request }: { profile: Profile; request: RunReq
         onClose={() => setExporting(false)}
       />
 
+      {asking && (
+        <PasswordDialog
+          machines={needPasswords}
+          onCancel={() => setAsking(false)}
+          onRun={(passwords) => {
+            setAsking(false);
+            execute.givePasswords(passwords);
+            begin('real');
+          }}
+        />
+      )}
+
       <ConfirmDialog
         open={confirmDelete}
         title={`Delete ${profile.name}?`}
@@ -624,6 +658,16 @@ function StepList({
                     <span className="ml-2 text-caption text-fg-tertiary">
                       {KIND_LABELS[step.config.kind]}
                     </span>
+                    {step.config.kind === 'vm' && step.config.encrypted === true && (
+                      <span className="ml-2 inline-flex align-middle">
+                        <Chip
+                          tone="info"
+                          title="Its password is asked each time you press Run, and never stored"
+                        >
+                          Encrypted
+                        </Chip>
+                      </span>
+                    )}
                   </span>
                   <span
                     data-selectable
@@ -756,6 +800,31 @@ function AddStep({
   const add = useAddStep();
   // A new key after every success gives the form a clean slate.
   const [generation, setGeneration] = useState(0);
+  const [adding, setAdding] = useState(false);
+
+  // Several machines ticked at once: added one at a time, in the order listed,
+  // so each lands after the one before it. A refusal stops there and says so;
+  // the ones already added stay, and the list shows them.
+  const addMany = async (
+    configs: StepConfig[],
+    timing: Timing,
+    waitFor: WaitFor | null,
+    placement: Placement,
+  ) => {
+    setAdding(true);
+    try {
+      for (const config of configs) {
+        await add.mutateAsync({ profileId, config, timing, waitFor, placement });
+      }
+      setGeneration((g) => g + 1);
+      announce(`Added ${configs.length} ${configs.length === 1 ? 'machine' : 'machines'}`);
+    } catch {
+      // `add.error` holds the reason; the form shows it.
+    } finally {
+      setAdding(false);
+    }
+  };
+
   return (
     <StepForm
       key={generation}
@@ -764,8 +833,11 @@ function AddStep({
       screens={screens}
       tools={tools}
       env={env}
-      pending={add.isPending}
+      pending={add.isPending || adding}
       hostError={add.isError ? describeError(add.error) : null}
+      onSubmitMany={(configs, timing, waitFor, placement) =>
+        void addMany(configs, timing, waitFor, placement)
+      }
       onSubmit={(config, timing, waitFor, placement) =>
         add.mutate(
           { profileId, config, timing, waitFor, placement },
