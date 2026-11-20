@@ -19,6 +19,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   nothing, and a trigger skips its encrypted machines with the reason. The step shows an
   _Encrypted_ chip.
 
+### Security
+
+- SQLite, which holds the workspace and the run log, moves to the release that fixes
+  RUSTSEC-2026-0459 (`rusqlite` 0.43, `libsqlite3-sys` 0.40, bundled). Patch releases of `vite`,
+  `sharp`, `source-map-js`, `zod` and `minimatch` clear the high-severity npm advisories; all
+  are build-time tools that run while the page is built; none of them is in the installed application.
+
 ## [1.0.0] — 2026-09-08 — The button
 
 The first release. Deskstart is a profile of steps — applications, folders, files, web pages,
