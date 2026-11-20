@@ -83,6 +83,9 @@ interface Draft {
   width: string;
   height: string;
   windowState: WindowState;
+  /** Which new window to place (ADR-029): a piece of its title, its class. */
+  matchTitle: string;
+  matchClass: string;
 }
 
 /** An earlier step, as the "waits for" list offers it. */
@@ -135,6 +138,8 @@ const EMPTY: Draft = {
   width: '',
   height: '',
   windowState: 'normal',
+  matchTitle: '',
+  matchClass: '',
 };
 
 function seconds(ms: number): string {
@@ -166,6 +171,8 @@ function draftOf(
     width: placement.rect === null ? '' : String(placement.rect.width),
     height: placement.rect === null ? '' : String(placement.rect.height),
     windowState: placement.state,
+    matchTitle: placement.match?.title ?? '',
+    matchClass: placement.match?.className ?? '',
   };
   switch (config.kind) {
     case 'app':
@@ -330,6 +337,14 @@ function placementOf(draft: Draft): Record<string, unknown> | Problem[] {
         }
       : {}),
     state: draft.windowState,
+    ...(draft.matchTitle.trim() !== '' || draft.matchClass.trim() !== ''
+      ? {
+          match: {
+            title: draft.matchTitle.trim() === '' ? null : draft.matchTitle,
+            className: draft.matchClass.trim() === '' ? null : draft.matchClass,
+          },
+        }
+      : {}),
   };
 }
 
@@ -854,87 +869,121 @@ export function StepForm({
         </p>
       </fieldset>
 
-      {holdable && (
-        <fieldset className="flex flex-col gap-2 rounded-md border border-stroke-subtle p-3">
-          <legend className="px-1 text-caption font-semibold text-fg-tertiary uppercase">
-            Where
-          </legend>
-          <ChoiceGroup
-            label="Opens"
-            options={['normal', 'maximized', 'minimized'] as const}
-            value={draft.windowState}
-            onChange={(windowState) => set({ windowState })}
-            labels={{ normal: 'Normal', maximized: 'Maximised', minimized: 'Minimised' }}
-            disabled={pending}
-          />
-          <div className="grid grid-cols-[minmax(0,1fr)_12rem] items-center gap-2">
-            <label htmlFor="step-monitor" className="text-body text-fg-secondary">
-              Screen
-            </label>
-            <Select
-              id="step-monitor"
-              aria-label="Screen"
-              value={draft.monitor}
-              onChange={(e) => set({ monitor: e.target.value })}
-              disabled={pending}
-            >
-              <option value="">Wherever it opens</option>
-              {screens.map((screen) => (
-                <option key={screen.number} value={String(screen.number)}>
-                  {screen.number}
-                  {screen.primary ? ' — primary' : ''} ({screen.width}×{screen.height})
-                </option>
-              ))}
-            </Select>
-            <label htmlFor="step-x" className="text-body text-fg-secondary">
-              Position and size on that screen (pixels; all four, or none)
-            </label>
-            <div className="grid grid-cols-2 gap-2">
-              <Input
-                id="step-x"
-                aria-label="X"
-                inputMode="numeric"
-                placeholder="x"
-                value={draft.x}
-                onChange={(e) => set({ x: e.target.value })}
-                disabled={pending}
-              />
-              <Input
-                aria-label="Y"
-                inputMode="numeric"
-                placeholder="y"
-                value={draft.y}
-                onChange={(e) => set({ y: e.target.value })}
-                disabled={pending}
-              />
-              <Input
-                aria-label="Width"
-                inputMode="numeric"
-                placeholder="width"
-                value={draft.width}
-                onChange={(e) => set({ width: e.target.value })}
-                disabled={pending}
-              />
-              <Input
-                aria-label="Height"
-                inputMode="numeric"
-                placeholder="height"
-                value={draft.height}
-                onChange={(e) => set({ height: e.target.value })}
-                disabled={pending}
-              />
-            </div>
-          </div>
+      <fieldset className="flex flex-col gap-2 rounded-md border border-stroke-subtle p-3">
+        <legend className="px-1 text-caption font-semibold text-fg-tertiary uppercase">
+          Where
+        </legend>
+        {!holdable && (
           <p className="text-caption text-fg-secondary">
-            {placeSentence ?? 'Opens wherever the program would have opened it.'}
+            This opens in a window another program owns, so placing it needs a window rule below:
+            which new window to move.
           </p>
-          {screens.length === 0 && (
-            <p className="text-caption text-caution">
-              No screen was found to offer. A step can still ask to be maximised or minimised.
-            </p>
-          )}
-        </fieldset>
-      )}
+        )}
+        <ChoiceGroup
+          label="Opens"
+          options={['normal', 'maximized', 'minimized'] as const}
+          value={draft.windowState}
+          onChange={(windowState) => set({ windowState })}
+          labels={{ normal: 'Normal', maximized: 'Maximised', minimized: 'Minimised' }}
+          disabled={pending}
+        />
+        <div className="grid grid-cols-[minmax(0,1fr)_12rem] items-center gap-2">
+          <label htmlFor="step-monitor" className="text-body text-fg-secondary">
+            Screen
+          </label>
+          <Select
+            id="step-monitor"
+            aria-label="Screen"
+            value={draft.monitor}
+            onChange={(e) => set({ monitor: e.target.value })}
+            disabled={pending}
+          >
+            <option value="">Wherever it opens</option>
+            {screens.map((screen) => (
+              <option key={screen.number} value={String(screen.number)}>
+                {screen.number}
+                {screen.primary ? ' — primary' : ''} ({screen.width}×{screen.height})
+              </option>
+            ))}
+          </Select>
+          <label htmlFor="step-x" className="text-body text-fg-secondary">
+            Position and size on that screen (pixels; all four, or none)
+          </label>
+          <div className="grid grid-cols-2 gap-2">
+            <Input
+              id="step-x"
+              aria-label="X"
+              inputMode="numeric"
+              placeholder="x"
+              value={draft.x}
+              onChange={(e) => set({ x: e.target.value })}
+              disabled={pending}
+            />
+            <Input
+              aria-label="Y"
+              inputMode="numeric"
+              placeholder="y"
+              value={draft.y}
+              onChange={(e) => set({ y: e.target.value })}
+              disabled={pending}
+            />
+            <Input
+              aria-label="Width"
+              inputMode="numeric"
+              placeholder="width"
+              value={draft.width}
+              onChange={(e) => set({ width: e.target.value })}
+              disabled={pending}
+            />
+            <Input
+              aria-label="Height"
+              inputMode="numeric"
+              placeholder="height"
+              value={draft.height}
+              onChange={(e) => set({ height: e.target.value })}
+              disabled={pending}
+            />
+          </div>
+        </div>
+        <p className="text-caption text-fg-secondary">
+          {placeSentence ?? 'Opens wherever the program would have opened it.'}
+        </p>
+        <div className="grid grid-cols-[minmax(0,1fr)_12rem] items-center gap-2">
+          <label htmlFor="step-match-title" className="text-body text-fg-secondary">
+            Which window: its title has (optional)
+          </label>
+          <Input
+            id="step-match-title"
+            aria-label="Window title has"
+            placeholder="e.g. Character Map"
+            value={draft.matchTitle}
+            onChange={(e) => set({ matchTitle: e.target.value })}
+            disabled={pending}
+            spellCheck={false}
+          />
+          <label htmlFor="step-match-class" className="text-body text-fg-secondary">
+            Which window: its class is (optional)
+          </label>
+          <Input
+            id="step-match-class"
+            aria-label="Window class"
+            placeholder="e.g. CabinetWClass"
+            value={draft.matchClass}
+            onChange={(e) => set({ matchClass: e.target.value })}
+            disabled={pending}
+            spellCheck={false}
+          />
+        </div>
+        <p className="text-caption text-fg-tertiary">
+          A rule only ever picks a window that appeared after this step started — never one that was
+          already open.
+        </p>
+        {screens.length === 0 && (
+          <p className="text-caption text-caution">
+            No screen was found to offer. A step can still ask to be maximised or minimised.
+          </p>
+        )}
+      </fieldset>
 
       {earlier.length > 0 && (
         <fieldset className="flex flex-col gap-2 rounded-md border border-stroke-subtle p-3">
