@@ -98,6 +98,12 @@ export interface VmStep {
   kind: 'vm';
   hypervisor: Hypervisor;
   machine: string;
+  /**
+   * True when the machine is encrypted and needs a password to start (1.1,
+   * ADR-028). VMware only. The step carries the fact, never the password: the
+   * password is asked at each run and held for that run alone.
+   */
+  encrypted?: boolean;
 }
 
 export type StepConfig =
@@ -136,7 +142,7 @@ const FIELDS: Record<StepKind, ReadonlySet<string>> = {
   bookmarks: new Set(['kind', 'browser', 'folder']),
   terminal: new Set(['kind', 'profile', 'directory']),
   editor: new Set(['kind', 'path']),
-  vm: new Set(['kind', 'hypervisor', 'machine']),
+  vm: new Set(['kind', 'hypervisor', 'machine', 'encrypted']),
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -281,8 +287,24 @@ export function readStepConfig(value: unknown, path = 'step'): StepConfig | Prob
           problem: 'name the machine — or, for VMware, the path to its .vmx',
         });
       }
+      const encrypted = value.encrypted ?? false;
+      if (typeof encrypted !== 'boolean') {
+        problems.push({ path: `${path}.encrypted`, problem: 'encrypted is true or false' });
+      } else if (encrypted && hypervisor !== 'vmware') {
+        problems.push({
+          path: `${path}.encrypted`,
+          problem: 'only a VMware machine is started with a password here',
+        });
+      }
       if (problems.length > 0) return problems;
-      return { kind, hypervisor: hypervisor as Hypervisor, machine: machine as string };
+      // `encrypted` is written only when it is true, so a step that never had
+      // it reads, stores and exports exactly as it did before 1.1.
+      return {
+        kind,
+        hypervisor: hypervisor as Hypervisor,
+        machine: machine as string,
+        ...(encrypted === true ? { encrypted: true } : {}),
+      };
     }
   }
 }
@@ -431,6 +453,12 @@ export type Launch =
       /** What this is, in the log: "Windows Terminal", "3 pages from Work". */
       what: string;
       source: string | null;
+      /**
+       * The machine needs a password the host adds at start (ADR-028). The
+       * launch says so and nothing more: the password is never in it, so the
+       * launch the log records cannot leak it.
+       */
+      encrypted?: true;
     }
   /**
    * A bookmark folder, not yet read. The host never receives this: the loop
@@ -585,6 +613,7 @@ export function resolveStep(
               args: ['-T', 'ws', 'start', vmx.path, 'gui'],
               what: `VMware — ${lastSegment(vmx.path).replace(/\.vmx$/i, '')}`,
               source: sourceOf(config.machine, vmx.path),
+              ...(config.encrypted === true ? { encrypted: true as const } : {}),
             },
           };
         }
@@ -627,4 +656,15 @@ export function stepTitle(config: StepConfig): string {
 export function lastSegment(path: string): string {
   const trimmed = path.replace(/[\\/]+$/, '');
   return trimmed.split(/[\\/]/).pop() || path;
+}
+
+/**
+ * The steps whose machines need a password to start (ADR-028), in the order
+ * they run — what Run asks for before anything starts, so the run never stops
+ * halfway to ask.
+ */
+export function passwordSteps(steps: readonly Step[]): { id: string; title: string }[] {
+  return steps
+    .filter((step) => step.config.kind === 'vm' && step.config.encrypted === true)
+    .map((step) => ({ id: step.id, title: stepTitle(step.config) }));
 }

@@ -61,6 +61,12 @@ export type RunEvent =
   | { kind: 'step_failed'; stepId: string; reason: string; at: number }
   | { kind: 'step_closed'; stepId: string; at: number }
   | { kind: 'step_not_closed'; stepId: string; reason: string; at: number }
+  /**
+   * The current step cannot be started at all — an encrypted machine whose
+   * password was not given for this run (ADR-028). It is skipped with the
+   * reason, never failed: nothing was tried.
+   */
+  | { kind: 'step_unavailable'; stepId: string; reason: string; at: number }
   | { kind: 'probe_result'; stepId: string; ready: boolean; at: number }
   | { kind: 'time'; at: number }
   | { kind: 'stop_requested'; at: number };
@@ -247,6 +253,21 @@ export function reduce(state: RunState, event: RunEvent): Next {
         state: { ...state, phases: { ...state.phases, [step.id]: 'reopening' } },
         actions: [{ kind: 'execute', stepId: step.id }],
       };
+    }
+
+    case 'step_unavailable': {
+      if (state.phase !== 'running') return { state, actions: [] };
+      const step = stepOf(state, event.stepId);
+      if (step === null) return { state, actions: [] };
+      // Only the step about to start, and only before it ever opened: a step
+      // that is open, or done, is past being "not started".
+      const current = state.steps[state.index];
+      const phase = state.phases[step.id];
+      const untouched = (state.opened[step.id] ?? 0) === 0;
+      if (current?.id !== step.id || !untouched || phase === 'skipped' || phase === 'failed') {
+        return { state, actions: [] };
+      }
+      return skipStep(state, step, event.at, event.reason);
     }
 
     case 'probe_result': {

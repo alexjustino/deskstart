@@ -32,6 +32,8 @@ part that matters most later — the cost we accepted.
 | [024](#adr-024) | A trigger binds to a profile id; the window closes to the tray                           | Accepted |
 | [025](#adr-025) | A backup is the workspace file; a restore is staged and applied at the next start        | Accepted |
 | [026](#adr-026) | Content surfaces are opaque; Mica is the window backdrop, not behind text                | Accepted |
+| [027](#adr-027) | A hypervisor's inventory is discovered locally, each read its own way                    | Accepted |
+| [028](#adr-028) | An encrypted machine's password is asked each run and never stored                       | Accepted |
 
 ---
 
@@ -518,3 +520,73 @@ a wash behind the whole window. On a Mica machine the change is small — the op
 tuned to how the translucent ones composited — and it is a pure token change, reversible by
 anyone who disagrees. It touches the product's signature look, so it wants a person's eye on a
 real desktop (host proof), not only a passing gate.
+
+## ADR-027 — A hypervisor's inventory is discovered locally, each read its own way {#adr-027}
+
+**Context.** F8 starts a virtual machine you name by hand — a name for Hyper-V and VirtualBox, a
+`.vmx` path for VMware. The 1.1 line makes the machines pickable: show what each hypervisor
+already has, so "start two of these four" is a choice, not a remembered name. Something has to
+decide where that list comes from.
+
+**Decision.** Each hypervisor is asked, **on this machine**, for its own inventory — a local read,
+never a network call (the product's founding promise, ADR-006, holds). The host runs the list
+command or reads the inventory file; `domain/vminventory` decides what the output means, and never
+throws, because a hypervisor's output is somebody else's format. There is one reader per
+hypervisor, because each answers differently:
+
+- **VirtualBox** — `VBoxManage list vms` prints `"name" {uuid}` a line at a time, and `list
+runningvms` the same for the ones that are up. The name is what `startvm` wants, so it is the id.
+- **Hyper-V** — asked through PowerShell with a **constant** command
+  (`Get-VM | Select-Object Name, State | ConvertTo-Json`), nothing a person typed in it, and the
+  answer parsed as JSON — a machine name can hold characters a column-aligned table cannot be
+  parsed through.
+- **VMware Workstation** — has no clean "list all" on Workstation, so its registered machines are
+  read from `%APPDATA%\VMware\inventory.vmls`, a text file of `.vmx` paths, the way F7 reads a
+  browser's bookmarks file. The `.vmx` path is the id; the machine is called by its folder.
+
+A hypervisor that is not installed answers like any missing tool (ADR-022): the caller gets a
+"not found", and the editor says which, rather than an empty list that looks like "no machines".
+
+**Cost accepted.** VMware's inventory is read from a file the application writes, not asked of a
+running service, so a machine registered in this session but not yet flushed to `inventory.vmls`
+may be a beat late to appear; the typed `.vmx` path of F8 is always available as the fallback. And
+each reader is bound to its tool's output format, which a major version of that tool could change
+— held, as everywhere, by a parser that treats the output as untrusted and a test over real
+sample output.
+
+## ADR-028 — An encrypted machine's password is asked each run and never stored {#adr-028}
+
+**Context.** A VMware machine can be encrypted; starting it needs a password (`vmrun -vp
+<password> start`). Deskstart has to carry that password from the person to the hypervisor
+without betraying the trust the rest of the product earns.
+
+**Decision.** The password is **asked each time a run needs it, and stored nowhere** — not in the
+profile (ADR-010: a profile is data, never a secret, and a profile is a file people share), not on
+disk, not in the OS credential store. It is held in memory for the length of that run and
+discarded. The passwords a run needs are collected **before the run starts**, so the loop never
+pauses mid-sequence to ask; a step marked as needing a password that was not given is skipped with
+that reason, the way a step that does not resolve is, and the profile carries on.
+
+The secret never travels the path that is logged. The domain marks a VMware step as `encrypted`,
+a boolean — it never holds the password; the resolved launch the log records carries no password;
+the host builds the `vmrun` argument vector with `-vp <password>` at the moment of starting and
+the log line **redacts** it. A profile exported with F5 carries the `encrypted` flag and not the
+secret, so a shared profile asks its recipient for their own password and never leaks the author's.
+
+**Cost accepted.** Typing the password at every run, by design — the choice between convenience
+and a secret that cannot leak, made for the secret. A machine with several encrypted VMs asks for
+several passwords up front. Remembering them — in the session, or in the Windows Credential Manager
+— is a setting this decision deliberately does not add; it can be offered later without changing
+that the password is never in the profile.
+
+**As built (1.1).** A run started by a trigger (ADR-024) has nobody to ask, so its encrypted
+machines are skipped with the reason and the rest of the profile runs; a dry run starts nothing
+and asks for nothing. The interface hands the passwords to the run outside React Query's mutation
+variables, which outlive a run. The host holds the password in a type whose `Debug` prints
+nothing and whose own copy is overwritten on drop (best effort), refuses a password offered to any
+launch that is not an encrypted VMware start, and withholds whole — never redacts in place —
+anything `vmrun` says back that might hold any of it. One exposure remains
+and is the hypervisor's, not this product's: `-vp` is `vmrun`'s only way to take the password, so
+while `vmrun` runs (at most its one-minute budget), the same user's programs, elevated programs
+and security software can read it from the command line, and a machine that audits command lines
+(event 4688, Sysmon, endpoint protection) records it. `SECURITY.md` states it.

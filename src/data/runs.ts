@@ -127,8 +127,19 @@ export async function runBegin(
   return toRun(await invoke<RawRun>('run_begin', { profileId, mode, trigger }));
 }
 
-export async function stepExecute(runId: string, stepId: string, launch: Launch): Promise<LogLine> {
-  return toLogLine(await invoke<RawEvent>('step_execute', { runId, stepId, launch }));
+/**
+ * Start one step. `password` is for an encrypted machine and nothing else
+ * (ADR-028): it goes to the host with this one request and is not kept here.
+ */
+export async function stepExecute(
+  runId: string,
+  stepId: string,
+  launch: Launch,
+  password?: string,
+): Promise<LogLine> {
+  return toLogLine(
+    await invoke<RawEvent>('step_execute', { runId, stepId, launch, password: password ?? null }),
+  );
 }
 
 export async function stepClose(

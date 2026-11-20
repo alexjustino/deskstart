@@ -7,7 +7,7 @@ use tauri::{AppHandle, State};
 
 use crate::db::{backup, database_path, migrations, settings, Db, DATA_DIR_ENV};
 use crate::error::Result;
-use crate::os::{accent, files, tools, window};
+use crate::os::{accent, files, inventory, tools, window};
 
 /// What Diagnostics and About read. Never a hand-typed constant: the version
 /// comes from the running binary.
@@ -180,4 +180,12 @@ pub fn workspace_restore(app: AppHandle, path: String) -> Result<backup::BackupS
 #[tauri::command]
 pub fn restart(app: AppHandle) {
     app.restart();
+}
+
+/// The machines a hypervisor already has, as raw text for the domain to read
+/// (1.1). A hypervisor that is not installed here answers like any missing
+/// tool, so the editor can say which.
+#[tauri::command]
+pub fn vm_inventory(hypervisor: String) -> Result<inventory::Raw> {
+    inventory::read(&hypervisor).map_err(|failure| crate::error::Error::Scheduler(failure.reason()))
 }

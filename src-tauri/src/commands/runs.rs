@@ -22,6 +22,7 @@ use tauri::State;
 use crate::db::models::{Event, Launch, Run};
 use crate::db::{profiles, runs, Db};
 use crate::error::{Error, Result};
+use crate::os::secret::{self, Secret};
 use crate::os::{close, job, open, probe, process, tools, window};
 
 /// What the host holds for one run that has not finished.
@@ -113,7 +114,32 @@ pub fn step_execute(
     run_id: String,
     step_id: String,
     launch: Launch,
+    password: Option<Secret>,
 ) -> Result<Event> {
+    // A password is taken by an encrypted VMware machine and by nothing else,
+    // and such a machine is not started without one (ADR-028). Both are the
+    // loop's mistakes if they happen, and refused as such.
+    let password = password.filter(|given| !given.is_empty());
+    if let Launch::Tool {
+        tool, encrypted, ..
+    } = &launch
+    {
+        if *encrypted && tool != "vmware" {
+            return Err(Error::InvalidInput(
+                "only a VMware machine is started with a password",
+            ));
+        }
+        if !*encrypted && password.is_some() {
+            return Err(Error::InvalidInput(
+                "a password is taken only by an encrypted machine",
+            ));
+        }
+    } else if password.is_some() {
+        return Err(Error::InvalidInput(
+            "a password is taken only by an encrypted machine",
+        ));
+    }
+
     let mut conn = db.0.lock().expect("the database lock was poisoned");
     let run = runs::get_run(&conn, &run_id)?;
     if run.finished_at.is_some() {
@@ -173,39 +199,58 @@ pub fn step_execute(
             open::file(&PathBuf::from(path)).map(|opened| ("opened", opened.pid))
         }
         Launch::Url { url, .. } => open::url(url).map(|opened| ("opened", opened.pid)),
-        Launch::Tool { tool, args, .. } => match tools::invocation(tool, args) {
-            None => Err(process::LaunchFailure::ToolMissing(tools::name_of(tool))),
-            // A hypervisor's tool does one thing, says whether it could, and
-            // exits: it is waited for, within a budget, and what it said is
-            // the reason (F8, ADR-023). The console it opened is the
-            // hypervisor's, not a process this run holds.
-            Some(invocation) if tools::mode(tool) == tools::Mode::Command => {
-                process::run_bounded(&invocation, COMMAND_BUDGET).map(|finished| {
-                    if !finished.said.is_empty() {
-                        payload["said"] = serde_json::json!(finished.said);
-                    }
-                    ("opened", None)
-                })
+        Launch::Tool {
+            tool,
+            args,
+            encrypted,
+            ..
+        } => match with_password(*encrypted, args, password.as_ref()) {
+            // The loop skips an encrypted machine whose password was not given
+            // (ADR-028); being asked to start one anyway is its mistake.
+            Err(Unpassable::NoPassword) => {
+                return Err(Error::InvalidInput(
+                    "an encrypted machine is not started without its password",
+                ))
             }
-            Some(invocation) => process::spawn(&invocation).map(|spawned| {
-                // Held and put in the run's job like any other program this
-                // product starts: what a Stop reaches is what the run opened,
-                // whatever it was opened with (ADR-015).
-                let mut held = held.0.lock().expect("the held lock was poisoned");
-                let hold = held.entry(run_id.clone()).or_default();
-                if let Some(job) = &hold.job {
-                    if let Err(failure) = job.assign(&spawned.child) {
-                        log::warn!(
-                            "pid {} not assigned to the run's job: {}",
-                            spawned.pid,
-                            failure.0
-                        );
-                        payload["inJob"] = serde_json::json!(false);
-                    }
+            Err(Unpassable::NotVmrun) => {
+                return Err(Error::InvalidInput(
+                    "a password is given only to a VMware machine being started",
+                ))
+            }
+            Ok(args) => match tools::invocation(tool, &args) {
+                None => Err(process::LaunchFailure::ToolMissing(tools::name_of(tool))),
+                // A hypervisor's tool does one thing, says whether it could, and
+                // exits: it is waited for, within a budget, and what it said is
+                // the reason (F8, ADR-023). The console it opened is the
+                // hypervisor's, not a process this run holds.
+                Some(invocation) if tools::mode(tool) == tools::Mode::Command => {
+                    process::run_bounded(&invocation, COMMAND_BUDGET).map(|finished| {
+                        if !finished.said.is_empty() {
+                            payload["said"] = serde_json::json!(finished.said);
+                        }
+                        ("opened", None)
+                    })
                 }
-                hold.children.insert(step_id.clone(), spawned.child);
-                ("opened", Some(spawned.pid))
-            }),
+                Some(invocation) => process::spawn(&invocation).map(|spawned| {
+                    // Held and put in the run's job like any other program this
+                    // product starts: what a Stop reaches is what the run opened,
+                    // whatever it was opened with (ADR-015).
+                    let mut held = held.0.lock().expect("the held lock was poisoned");
+                    let hold = held.entry(run_id.clone()).or_default();
+                    if let Some(job) = &hold.job {
+                        if let Err(failure) = job.assign(&spawned.child) {
+                            log::warn!(
+                                "pid {} not assigned to the run's job: {}",
+                                spawned.pid,
+                                failure.0
+                            );
+                            payload["inJob"] = serde_json::json!(false);
+                        }
+                    }
+                    hold.children.insert(step_id.clone(), spawned.child);
+                    ("opened", Some(spawned.pid))
+                }),
+            },
         },
         // The loop resolves a bookmark folder into pages before it asks for
         // anything to be opened; arriving here means it did not.
@@ -216,16 +261,74 @@ pub fn step_execute(
         }
     };
 
+    // Whatever the hypervisor said goes into the log — unless a password was
+    // given and the text might hold any of it; then the whole text is
+    // withheld, never redacted in place (ADR-028).
+    let revealing = |text: &str| {
+        password
+            .as_ref()
+            .is_some_and(|given| secret::may_reveal(text, given))
+    };
+    if let Some(said) = payload.get("said").and_then(|said| said.as_str()) {
+        if revealing(said) {
+            payload["said"] = serde_json::json!(WITHHELD);
+        }
+    }
+    if password.is_some() {
+        payload["password"] = serde_json::json!("given for this run; not recorded");
+    }
+
     match outcome {
         Ok((kind, pid)) => {
             payload["pid"] = serde_json::json!(pid);
             runs::append_event(&mut conn, &run_id, Some(&step_id), kind, &payload)
         }
         Err(failure) => {
-            payload["reason"] = serde_json::json!(failure.reason());
+            let reason = failure.reason();
+            let reason = if revealing(&reason) {
+                match failure {
+                    process::LaunchFailure::Refused {
+                        code: Some(code), ..
+                    } => {
+                        format!(
+                            "VMware refused to start the machine (exit code {code}); {WITHHELD}"
+                        )
+                    }
+                    _ => format!("the machine was not started; {WITHHELD}"),
+                }
+            } else {
+                reason
+            };
+            payload["reason"] = serde_json::json!(reason);
             runs::append_event(&mut conn, &run_id, Some(&step_id), "failed", &payload)
         }
     }
+}
+
+/// The tool's argument vector as it will be started: the launch's own, or —
+/// for an encrypted machine with its password — `vmrun`'s with `-vp` among
+/// the flags. None when an encrypted machine has no password, or its vector is
+/// not the shape a VMware start resolves to.
+fn with_password(
+    encrypted: bool,
+    args: &[String],
+    password: Option<&Secret>,
+) -> std::result::Result<Vec<String>, Unpassable> {
+    match (encrypted, password) {
+        (false, _) => Ok(args.to_vec()),
+        (true, Some(given)) => secret::vmrun_with_password(args, given).ok_or(Unpassable::NotVmrun),
+        (true, None) => Err(Unpassable::NoPassword),
+    }
+}
+
+/// What the log says instead of a hypervisor's answer that might hold the password.
+const WITHHELD: &str = "what VMware said was not recorded, because it might hold the password";
+
+/// Why an encrypted machine's vector could not be given its password.
+#[derive(Debug, PartialEq, Eq)]
+enum Unpassable {
+    NoPassword,
+    NotVmrun,
 }
 
 /// Close the program a step started, its hold being over.
@@ -642,4 +745,64 @@ pub fn step_failed(
     let mut payload = launch.describe();
     payload["reason"] = serde_json::json!(reason);
     runs::append_event(&mut conn, &run_id, Some(&step_id), "failed", &payload)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn vmrun() -> Vec<String> {
+        ["-T", "ws", "start", "C:/VMs/vault/vault.vmx", "gui"]
+            .iter()
+            .map(|a| a.to_string())
+            .collect()
+    }
+
+    #[test]
+    fn a_machine_that_is_not_encrypted_starts_with_its_own_vector() {
+        assert_eq!(with_password(false, &vmrun(), None), Ok(vmrun()));
+    }
+
+    #[test]
+    fn an_encrypted_machine_gets_its_password_among_the_flags() {
+        let given = Secret::new("hunter2");
+        let args = with_password(true, &vmrun(), Some(&given)).unwrap();
+        assert_eq!(&args[..4], ["-T", "ws", "-vp", "hunter2"]);
+        assert_eq!(&args[4..], &vmrun()[2..]);
+    }
+
+    #[test]
+    fn an_encrypted_machine_without_its_password_is_not_started() {
+        assert_eq!(
+            with_password(true, &vmrun(), None),
+            Err(Unpassable::NoPassword)
+        );
+        let given = Secret::new("hunter2");
+        let other = vec!["startvm".to_string(), "dev".to_string()];
+        assert_eq!(
+            with_password(true, &other, Some(&given)),
+            Err(Unpassable::NotVmrun)
+        );
+    }
+
+    #[test]
+    fn the_launch_the_log_records_carries_the_flag_and_never_a_password() {
+        let launch: Launch = serde_json::from_value(serde_json::json!({
+            "kind": "tool",
+            "tool": "vmware",
+            "args": vmrun(),
+            "what": "VMware — vault",
+            "encrypted": true,
+        }))
+        .unwrap();
+        let described = launch.describe().to_string();
+        assert!(described.contains("\"encrypted\":true"));
+        assert!(!described.contains("-vp"));
+        // And a launch written before 1.1, with no flag, still reads.
+        let older: Launch = serde_json::from_value(serde_json::json!({
+            "kind": "tool", "tool": "vmware", "args": vmrun(), "what": "VMware — vault",
+        }))
+        .unwrap();
+        assert!(!older.describe().to_string().contains("encrypted"));
+    }
 }

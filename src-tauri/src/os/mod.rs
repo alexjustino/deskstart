@@ -9,10 +9,12 @@
 pub mod accent;
 pub mod close;
 pub mod files;
+pub mod inventory;
 pub mod job;
 pub mod open;
 pub mod probe;
 pub mod process;
 pub mod scheduler;
+pub mod secret;
 pub mod tools;
 pub mod window;
