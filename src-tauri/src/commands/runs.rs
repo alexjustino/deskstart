@@ -33,6 +33,9 @@ pub struct RunHold {
     pub job: Option<job::Job>,
     /// The processes started for each step, by step id.
     pub children: HashMap<String, Child>,
+    /// The windows that were open when each step began, by step id: what its
+    /// window rule may never touch (ADR-029).
+    pub before: HashMap<String, std::collections::HashSet<isize>>,
 }
 
 /// The runs in progress, by run id.
@@ -94,6 +97,7 @@ pub fn run_begin(
             RunHold {
                 job,
                 children: HashMap::new(),
+                before: HashMap::new(),
             },
         );
     }
@@ -160,6 +164,17 @@ pub fn step_execute(
             _ => "would_open",
         };
         return runs::append_event(&mut conn, &run_id, Some(&step_id), kind, &payload);
+    }
+
+    // The windows open now are not this step's, whatever a rule might match
+    // later: noted before anything is started (ADR-029).
+    {
+        let before = window::snapshot();
+        let mut held = held.0.lock().expect("the held lock was poisoned");
+        held.entry(run_id.clone())
+            .or_default()
+            .before
+            .insert(step_id.clone(), before);
     }
 
     let outcome: std::result::Result<(&str, Option<u32>), process::LaunchFailure> = match &launch {
@@ -688,24 +703,42 @@ pub fn step_place(
                 "rect": placement.rect.map(|r| serde_json::json!({
                     "x": r.x, "y": r.y, "width": r.width, "height": r.height
                 })),
+                "match": placement.rule.as_ref().map(|rule| serde_json::json!({
+                    "title": rule.title, "className": rule.class_name
+                })),
             }),
         );
     }
 
-    let pid = {
+    let (pid, before) = {
         let held = held.0.lock().expect("the held lock was poisoned");
-        held.get(&run_id)
-            .and_then(|hold| hold.children.get(&step_id))
-            .map(|child| child.id())
+        let hold = held.get(&run_id);
+        (
+            hold.and_then(|hold| hold.children.get(&step_id))
+                .map(|child| child.id()),
+            hold.and_then(|hold| hold.before.get(&step_id)).cloned(),
+        )
     };
-    let report = match pid {
-        // Only a program this run started has a window this product may touch.
-        None => window::Placed {
+    let report = match (&placement.rule, before, pid) {
+        // A rule looks only at windows that appeared after the step began.
+        (Some(rule), Some(before), _) => window::place(
+            window::Target::NewWindow {
+                before: &before,
+                rule,
+            },
+            &placement,
+            WINDOW_TIMEOUT,
+        ),
+        // Without a rule, only a program this run started has a window this
+        // product may touch.
+        (None, _, Some(pid)) => {
+            window::place(window::Target::Process(pid), &placement, WINDOW_TIMEOUT)
+        }
+        _ => window::Placed {
             placed: false,
             detail: String::new(),
-            note: Some("this run did not start a program for that step".to_string()),
+            note: Some("this run did not start that step".to_string()),
         },
-        Some(pid) => window::place(pid, &placement, WINDOW_TIMEOUT),
     };
 
     runs::append_event(
