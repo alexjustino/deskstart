@@ -11,7 +11,7 @@ use std::sync::Mutex;
 
 use serde::Serialize;
 use tauri::{AppHandle, Emitter, Manager, State};
-use tauri_plugin_global_shortcut::GlobalShortcutExt;
+use tauri_plugin_global_shortcut::{GlobalShortcutExt, Shortcut};
 
 use crate::db::models::Profile;
 use crate::db::{profiles, Db};
@@ -31,9 +31,12 @@ pub struct RunRequest {
 #[derive(Default)]
 pub struct Pending(pub Mutex<Option<RunRequest>>);
 
-/// Which profile each registered key combination belongs to.
+/// Which profile each registered key combination belongs to, by the
+/// combination's own identity — never its text, which the system spells its
+/// own way (`Ctrl+Alt+F9` comes back as `control+alt+F9`); keyed by text, a
+/// pressed shortcut never found its profile.
 #[derive(Default)]
-pub struct Shortcuts(pub Mutex<HashMap<String, String>>);
+pub struct Shortcuts(pub Mutex<HashMap<u32, String>>);
 
 /// The name of the event the interface listens for.
 pub const RUN_REQUESTED: &str = "run-requested";
@@ -119,10 +122,13 @@ pub fn register_all(app: &AppHandle) {
     let _ = manager.unregister_all();
     let mut map = HashMap::new();
     for (profile_id, shortcut) in stored {
-        let accel = accelerator(&shortcut);
-        match manager.register(accel.as_str()) {
+        let Some(parsed) = parse(&shortcut) else {
+            log::warn!("shortcut {shortcut} not registered: it could not be read");
+            continue;
+        };
+        match manager.register(parsed) {
             Ok(()) => {
-                map.insert(accel, profile_id);
+                map.insert(parsed.id(), profile_id);
             }
             Err(error) => log::warn!("shortcut {shortcut} not registered: {error}"),
         }
@@ -132,11 +138,16 @@ pub fn register_all(app: &AppHandle) {
     }
 }
 
+/// A stored shortcut as the system's own type.
+fn parse(shortcut: &str) -> Option<Shortcut> {
+    accelerator(shortcut).parse().ok()
+}
+
 /// The profile a key combination belongs to, when one is pressed.
-pub fn profile_for(app: &AppHandle, accel: &str) -> Option<String> {
+pub fn profile_for(app: &AppHandle, shortcut: &Shortcut) -> Option<String> {
     let shortcuts = app.try_state::<Shortcuts>()?;
     let map = shortcuts.0.lock().expect("the shortcuts lock was poisoned");
-    map.get(accel).cloned()
+    map.get(&shortcut.id()).cloned()
 }
 
 fn triggerable(profile: &Profile) -> Result<()> {
@@ -192,7 +203,12 @@ pub fn profile_shortcut_set(
         profiles::set_shortcut(&mut conn, &id, &shortcut)?
     };
     register_all(&app);
-    if !shortcut.is_empty() && profile_for(&app, &accelerator(&shortcut)).as_deref() != Some(&id) {
+    if !shortcut.is_empty()
+        && parse(&shortcut)
+            .and_then(|parsed| profile_for(&app, &parsed))
+            .as_deref()
+            != Some(&id)
+    {
         return Err(Error::Scheduler(format!(
             "{shortcut} could not be registered; another program may already have it"
         )));
@@ -243,5 +259,24 @@ mod tests {
     fn the_windows_key_is_super_to_the_system() {
         assert_eq!(accelerator("Ctrl+Win+D"), "Ctrl+Super+D");
         assert_eq!(accelerator("Ctrl+Alt+D"), "Ctrl+Alt+D");
+    }
+
+    #[test]
+    fn a_pressed_shortcut_is_found_by_what_it_is_not_how_it_is_spelled() {
+        // What is stored is "Ctrl+Alt+F9"; what the system hands the handler
+        // prints as "control+alt+F9". Keyed by text they never met.
+        for stored in ["Ctrl+Alt+F9", "Ctrl+Alt+D", "Ctrl+Win+1", "Alt+Shift+F12"] {
+            let registered = parse(stored).expect("a stored shortcut reads");
+            let pressed: Shortcut = registered
+                .to_string()
+                .parse()
+                .expect("the system's spelling reads");
+            assert_ne!(
+                registered.to_string(),
+                stored,
+                "the spellings differ for {stored}"
+            );
+            assert_eq!(pressed.id(), registered.id(), "{stored}");
+        }
     }
 }

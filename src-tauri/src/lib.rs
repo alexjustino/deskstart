@@ -98,8 +98,7 @@ pub fn run() {
                     if event.state != ShortcutState::Pressed {
                         return;
                     }
-                    let accel = shortcut.to_string();
-                    if let Some(profile_id) = triggers::profile_for(app, &accel) {
+                    if let Some(profile_id) = triggers::profile_for(app, shortcut) {
                         triggers::deliver(
                             app,
                             RunRequest {
