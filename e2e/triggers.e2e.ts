@@ -261,9 +261,12 @@ describe('what starts a run without the button', () => {
   it('starts with Windows only when asked, and stops when asked again', async () => {
     const { driver } = session;
     await (
-      await driver.findByXPath('//nav[@aria-label="Main"]//*[normalize-space(.)="Diagnostics"]')
+      await driver.findByXPath('//nav[@aria-label="Main"]//*[normalize-space(.)="Settings"]')
     ).click();
-    const box = await driver.waitForElement('input[aria-label="Start with Windows"]');
+    // Settings since F10. The box's own input is drawn over, invisible, so it
+    // is found once the card says where it stands, not waited for as shown.
+    await driver.waitForText('Deskstart starts only when you open it.');
+    const box = await driver.find('input[aria-label="Start with Windows"]');
     expect(runKey().toLowerCase()).not.toContain(path.dirname(APP).toLowerCase());
 
     await box.click();
