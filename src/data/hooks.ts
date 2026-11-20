@@ -12,7 +12,7 @@
  */
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useCallback, useRef } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 
 import type { StepImport } from '@/domain/portable';
 import type { Hypervisor, Step, StepConfig } from '@/domain/profile';
@@ -31,6 +31,7 @@ import {
   fetchSettings,
   fetchTools,
   fetchVmInventory,
+  onMonitorsChanged,
   setSetting,
 } from './system';
 
@@ -56,9 +57,26 @@ export function useEnvironment() {
   return useQuery({ queryKey: keys.environment, queryFn: fetchEnvironment });
 }
 
-/** The screens this machine has. Read once: the editor offers them by number. */
+/**
+ * The screens this machine has. Read once, then kept current by the host's
+ * watch (1.1): a screen plugged in or out replaces the list, and the caller
+ * is told, so it can say so.
+ */
 export function useMonitors() {
   return useQuery({ queryKey: keys.monitors, queryFn: fetchMonitors });
+}
+
+/** Keep the screens current while the window is open, and say when they change. */
+export function useScreenWatch(onChange: (count: number) => void) {
+  const client = useQueryClient();
+  useEffect(
+    () =>
+      onMonitorsChanged((monitors) => {
+        client.setQueryData(keys.monitors, monitors);
+        onChange(monitors.length);
+      }),
+    [client, onChange],
+  );
 }
 
 /** The tools this machine has, and the ones it has not (F7). */

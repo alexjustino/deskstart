@@ -2,8 +2,9 @@ import { useCallback, useEffect, useState } from 'react';
 
 import { applyAccent, applyTheme } from '@/app/theme';
 import { fetchAccentRamp, onRunRequested, pendingRun, type RunRequest } from '@/data/system';
-import { useSettings } from '@/data/hooks';
+import { useScreenWatch, useSettings } from '@/data/hooks';
 import { readSettings } from '@/domain/settings';
+import { announce } from '@/ui/announce';
 import { DiagnosticsPage } from '@/features/diagnostics/DiagnosticsPage';
 import { ProfilesPage } from '@/features/profiles/ProfilesPage';
 import { RunsPage } from '@/features/runs/RunsPage';
@@ -36,6 +37,15 @@ export function App() {
   }, [theme]);
 
   const go = useCallback((next: Destination) => setDestination(next), []);
+
+  // The screens, kept current while the window is open (1.1): plugging one in
+  // or out is said aloud, and every list and warning re-reads the new set.
+  const screensChanged = useCallback((count: number) => {
+    announce(
+      `Screens changed: this machine has ${count} ${count === 1 ? 'screen' : 'screens'} now`,
+    );
+  }, []);
+  useScreenWatch(screensChanged);
 
   // A run asked for by a trigger (F9): the request this process was started
   // with, or one made while the window was open. Each carries a serial so the
