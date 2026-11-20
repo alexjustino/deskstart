@@ -578,3 +578,15 @@ and a secret that cannot leak, made for the secret. A machine with several encry
 several passwords up front. Remembering them — in the session, or in the Windows Credential Manager
 — is a setting this decision deliberately does not add; it can be offered later without changing
 that the password is never in the profile.
+
+**As built (1.1).** A run started by a trigger (ADR-024) has nobody to ask, so its encrypted
+machines are skipped with the reason and the rest of the profile runs; a dry run starts nothing
+and asks for nothing. The interface hands the passwords to the run outside React Query's mutation
+variables, which outlive a run. The host holds the password in a type whose `Debug` prints
+nothing and whose own copy is overwritten on drop (best effort), refuses a password offered to any
+launch that is not an encrypted VMware start, and withholds whole — never redacts in place —
+anything `vmrun` says back that might hold any of it. One exposure remains
+and is the hypervisor's, not this product's: `-vp` is `vmrun`'s only way to take the password, so
+while `vmrun` runs (at most its one-minute budget), the same user's programs, elevated programs
+and security software can read it from the command line, and a machine that audits command lines
+(event 4688, Sysmon, endpoint protection) records it. `SECURITY.md` states it.

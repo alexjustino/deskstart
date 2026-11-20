@@ -5,6 +5,20 @@ All notable changes to this project are documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added — virtual machines, picked and encrypted
+
+- The VM step lists the machines each hypervisor already has on this computer — VirtualBox,
+  Hyper-V and VMware Workstation, the running ones marked — read locally and nothing more
+  (ADR-027). Adding, tick several and each becomes a step, in the order listed; editing, tick one
+  to replace the machine. Typing a machine by hand still works.
+- A VMware step can be marked **encrypted**. Run asks for its password before anything starts;
+  the password is used for that run and never stored — not in the profile, the workspace, the
+  log or an export (ADR-028). An empty field skips that machine with the reason, a dry run asks
+  nothing, and a trigger skips its encrypted machines with the reason. The step shows an
+  _Encrypted_ chip.
+
 ## [1.0.0] — 2026-09-08 — The button
 
 The first release. Deskstart is a profile of steps — applications, folders, files, web pages,

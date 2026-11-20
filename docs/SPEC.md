@@ -61,12 +61,12 @@ Firefox bookmarks · auto-update · AI.
 
 ### The release train
 
-| Release   | Theme               | Contents                                                                                                        |
-| --------- | ------------------- | --------------------------------------------------------------------------------------------------------------- |
-| **1.0.0** | The button          | the list above                                                                                                  |
-| 1.1.0     | The layout          | capture the current arrangement as a profile · window rules by title/class · monitor-change awareness · Firefox |
-| 1.2.0     | The day             | conditions (weekday, time, network, battery) · profile chaining · end-of-day teardown                           |
-| 2.0       | Only if it earns it | macOS and Linux                                                                                                 |
+| Release   | Theme               | Contents                                                                                                                                                                           |
+| --------- | ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **1.0.0** | The button          | the list above                                                                                                                                                                     |
+| 1.1.0     | The layout          | machines picked from each hypervisor · encrypted VMware machines · capture the current arrangement as a profile · window rules by title/class · monitor-change awareness · Firefox |
+| 1.2.0     | The day             | conditions (weekday, time, network, battery) · profile chaining · end-of-day teardown                                                                                              |
+| 2.0       | Only if it earns it | macOS and Linux                                                                                                                                                                    |
 
 ## 3. Architecture
 
@@ -376,7 +376,48 @@ off until a person turns it on.
 - **Which build a task starts.** The one that registered it, by absolute path; the Diagnostics
   page of F10 will list the tasks and say which executable each one names.
 
-### Delivered in F8
+### Delivered in 1.1 — machines picked, machines encrypted
+
+**Picked, not typed.** The VM step lists the machines each hypervisor already has on this
+computer — VirtualBox through `VBoxManage list vms`, Hyper-V through a constant `Get-VM` asked
+as JSON, VMware Workstation from its own `inventory.vmls` — with the ones already running marked
+(ADR-027). It is a local read and nothing more. Adding, several can be ticked: "start two of
+these four" is two ticks and one button, and each machine becomes a step of its own, in the order
+listed, with the same time, waiting and placement. Editing, ticking one replaces the machine. The
+typed field stays, because a profile is often written on one computer and run on another.
+
+**Encrypted, and the password never kept.** A VMware step can be marked _encrypted_. Run then
+asks for its password before anything starts — one field per encrypted machine, in run order —
+and the password is used for that run and stored nowhere: not in the profile, not on disk, not in
+the Windows credential store, not in the log (ADR-028). The step carries the flag, never the
+secret; the launch the log records carries the flag, never the secret; the host puts
+`-vp <password>` into `vmrun`'s vector at the moment of starting, and withholds whole anything
+the hypervisor says back that might hold any of it. While `vmrun` runs, the password is on its
+command line — VMware's only way to take it — which `SECURITY.md` spells out. A field left empty skips that machine with the reason, and the rest of the
+profile runs. A dry run asks for nothing. A trigger has nobody to ask, so its encrypted machines
+are skipped with the reason. An exported profile carries the flag, so whoever imports it is asked
+for their own password.
+
+The proof on the real binary: Run asks, Cancel starts nothing; an empty password is _Skipped —
+the machine is encrypted, and its password was not given for this run_ and the run completes; a
+password given reaches the host, and afterwards it is in neither the window's text nor a single
+byte of the workspace directory, read as UTF-8 and as UTF-16.
+
+### Deferred out of 1.1's machines, and why
+
+- **The picker, seen with machines in it.** This suite's machine has no hypervisor, so the list
+  shows nothing to pick; what is proved is each reader against the hypervisors' real formats
+  (unit tests) and the editor's behaviour when the hypervisor is absent. Ticking two of four on a
+  desk with VMware is a person's proof.
+- **VMware actually opening an encrypted machine.** Needs VMware Workstation and an encrypted
+  machine. The `-vp` placement is proved in Rust; the opening is a person's proof.
+- **Remembering a password** for the session or in the Windows Credential Manager. ADR-028 chose
+  the secret over the convenience; offering it later would not change that the profile never
+  holds one.
+- **Detecting that a machine is encrypted** from its `.vmx`. The flag is set by a person; reading
+  `encryption.*` keys out of a `.vmx` is a convenience for later, not a rule.
+- **Encrypted machines on VirtualBox.** VirtualBox encrypts disks, not machines, and takes their
+  passwords through a different command per disk; it is a different feature.
 
 ### Delivered in F8
 

@@ -78,7 +78,10 @@ twenty minutes, then close it" and "open, close, reopen" are first-class, not a 
 - **Virtual machines.** A machine on Hyper-V, VirtualBox or VMware Workstation, started with
   its console showing. The hypervisor is asked and waited for, up to a minute, and what it
   answered — a machine that is not there, a permission that is missing — is in the log. A
-  hypervisor this machine has not got is a reason within a second, never a hang.
+  hypervisor this machine has not got is a reason within a second, never a hang. The editor
+  lists the machines each hypervisor already has — tick two of four and two steps are added —
+  and an **encrypted** VMware machine has its password asked when you press Run, used for that
+  run, and never stored.
 - **Steps that call a tool.** A **bookmark folder** — Chrome's or Edge's — opened as one
   browser window; **Windows Terminal** on a named profile, in a directory; a folder opened in
   **VS Code**. Each tool is found where Windows installs it, never on `PATH`, and a tool this
@@ -97,11 +100,9 @@ twenty minutes, then close it" and "open, close, reopen" are first-class, not a 
 
 ## What is planned
 
-| Slice | What                                 |
-| ----- | ------------------------------------ |
-| F10   | Settings, Diagnostics, About, backup |
-| F11   | Fluent polish and accessibility      |
-| F12   | Release 1.0.0                        |
+| Release | What                                                                                     |
+| ------- | ---------------------------------------------------------------------------------------- |
+| 1.1.0   | machines picked and encrypted (in progress) · the layout: capture, window rules, Firefox |
 
 The specification, with a proof of done per slice, is [`docs/SPEC.md`](docs/SPEC.md).
 
@@ -183,12 +184,12 @@ npm run e2e
 
 ## Roadmap
 
-| Release   | Theme               | Contents                                                                                                        |
-| --------- | ------------------- | --------------------------------------------------------------------------------------------------------------- |
-| **1.0.0** | The button          | the slices above                                                                                                |
-| 1.1.0     | The layout          | capture the current arrangement as a profile · window rules by title/class · monitor-change awareness · Firefox |
-| 1.2.0     | The day             | conditions (weekday, time, network, battery) · profile chaining · end-of-day teardown                           |
-| 2.0       | Only if it earns it | macOS and Linux                                                                                                 |
+| Release   | Theme               | Contents                                                                                                                                                                           |
+| --------- | ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **1.0.0** | The button          | the slices above                                                                                                                                                                   |
+| 1.1.0     | The layout          | machines picked from each hypervisor · encrypted VMware machines · capture the current arrangement as a profile · window rules by title/class · monitor-change awareness · Firefox |
+| 1.2.0     | The day             | conditions (weekday, time, network, battery) · profile chaining · end-of-day teardown                                                                                              |
+| 2.0       | Only if it earns it | macOS and Linux                                                                                                                                                                    |
 
 ## Contributing
 

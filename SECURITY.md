@@ -102,6 +102,29 @@ The hypervisor's tool is waited for, up to a minute, and ended if it does not an
 machine may need rights this product does not have; when it does, the log says what the
 hypervisor said, and nothing is elevated on your behalf (ADR-014).
 
+### What an encrypted machine's password touches
+
+A VMware step marked _encrypted_ has its password asked when a person presses Run (ADR-028).
+The password is held in memory for that run and dropped when it ends; it is never in the profile,
+the workspace, the log, an export, or the Windows credential store. The host wraps it in a type
+whose `Debug` prints nothing, adds it to `vmrun`'s argument vector as one whole argument
+(`-vp <password>`) at the moment of starting, and **withholds whole** anything the hypervisor says
+back that might hold any of it — never a redaction in place, which would show where a short
+password matched. The wrapper overwrites its own copy when dropped; that is best effort and the
+host's copy only — the argument vector, the command line Windows builds, the message from the
+window, and the window's JavaScript memory hold copies this product cannot wipe.
+
+What this cannot protect, stated plainly: `-vp` on the command line is the only way VMware
+Workstation takes the password, so it is **in `vmrun`'s command line for as long as `vmrun` runs**
+— usually seconds, at most the one-minute budget a hypervisor command gets. While it is there,
+another program running as your Windows user, an elevated program, a system service, or security
+software can read it. **On a machine that records process command lines** — Windows process
+auditing with command lines included (Security event 4688), Sysmon, or an endpoint-protection
+product — the command line, password included, is **written to that log and may be sent off the
+machine.** If yours does, an encrypted machine's password should be treated as seen by whoever
+reads those logs. That is the hypervisor's interface, not something this product adds. A trigger
+never has a password to give: its encrypted machines are skipped with that reason.
+
 ### What a trigger can do
 
 Start one profile, by its id, through the same gate the button uses. A scheduled task is
@@ -145,7 +168,8 @@ name and PID, rather than silently left behind. Stop arrives with F3.
   a browser to open.
 - **Minimum capabilities.** Tauri 2 capabilities are declared explicitly, one by one.
   `tauri-plugin-shell` is not a dependency and stays absent.
-- **No secrets at rest.** The application stores no credentials and no tokens.
+- **No secrets at rest.** The application stores no credentials and no tokens. An encrypted
+  machine's password is asked at each run and never written (ADR-028).
 
 ### Out of the threat model, stated plainly
 
