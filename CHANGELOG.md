@@ -19,7 +19,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   nothing, and a trigger skips its encrypted machines with the reason. The step shows an
   _Encrypted_ chip.
 
-### Security
+### Fixed — triggers that 1.0.0 shipped broken
+
+- **A global shortcut never started its profile.** The host remembered each shortcut by its text
+  (`Ctrl+Alt+F9`), and the system reports a pressed one in its own spelling (`control+alt+F9`),
+  so the two never met. It is now found by the shortcut's identity.
+- **`deskstart.exe --run <id>` was refused by the database.** The run log's trigger CHECK, written
+  in 1.0.0's first migration, knew three triggers and not `command`. Migration 010 widens it,
+  rebuilding the `run` table the way SQLite documents for a table others refer to: the migration
+  runner now turns foreign keys off around each migration and refuses to commit one that leaves a
+  reference pointing at nothing. Every run and every line of an existing log is kept as written.
+- **A trigger's request could be lost** when the screen re-rendered between the request arriving
+  and the run starting; it now counts as served only when the run begins.
 
 - SQLite, which holds the workspace and the run log, moves to the release that fixes
   RUSTSEC-2026-0459 (`rusqlite` 0.43, `libsqlite3-sys` 0.40, bundled). Patch releases of `vite`,
