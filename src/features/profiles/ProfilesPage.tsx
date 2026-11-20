@@ -270,7 +270,10 @@ function ProfileDetail({ profile, request }: { profile: Profile; request: RunReq
       };
     });
   }, [steps.data, env]);
-  const runnable = judged.filter((j): j is Judged & { step: Step } => j.step !== null);
+  const runnable = useMemo(
+    () => judged.filter((j): j is Judged & { step: Step } => j.step !== null),
+    [judged],
+  );
   const blocked = judged.filter((j) => j.problems.length > 0).length;
 
   // Where this profile stands with review (ADR-013). While it is blocked the
@@ -353,12 +356,17 @@ function ProfileDetail({ profile, request }: { profile: Profile; request: RunReq
     if (request === null || request.profileId !== profile.id) return;
     if (served.current === request.serial) return;
     if (steps.data === undefined || environment.data === undefined) return;
-    served.current = request.serial;
     // After this render has committed: a run begun from inside an effect is a
-    // cascade of renders, and the log is in no hurry by a frame.
+    // cascade of renders, and the log is in no hurry by a frame. The request
+    // counts as served only when the timer fires: marking it before, a render
+    // in between cancelled the timer and the re-run saw "served" — the run
+    // was lost, and a shortcut pressed did nothing.
+    const serial = request.serial;
     const trigger = request.trigger;
     const runnableNow = canRun;
     const timer = setTimeout(() => {
+      if (served.current === serial) return;
+      served.current = serial;
       if (runnableNow) {
         start('real', trigger);
         announce(`${describeTrigger(trigger) ?? 'A trigger'} started ${profile.name}`);
