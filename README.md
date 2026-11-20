@@ -88,7 +88,9 @@ twenty minutes, then close it" and "open, close, reopen" are first-class, not a 
   machine has not got is a reason you can read rather than a step that quietly does nothing.
 - **Where the window goes.** A step can open its program on a chosen screen, at a chosen
   rectangle, normal, maximised or minimised. A screen this machine has not got lands the window
-  on the primary and says so; a program that shows no window of its own says that.
+  on the primary and says so; a program that shows no window of its own says that. The screens
+  are watched: plug one in or out and the editor's list follows, and a profile placed on a screen
+  that is not here says so before you press Run.
 - **Dry run.** The same run on a virtual clock: the whole timeline written at once, nothing
   started, nothing waited for.
 - **The log.** Append-only in the database — triggers refuse any update or delete — read on

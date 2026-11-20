@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added — screens that come and go
+
+- Deskstart watches the screens while it runs: plugging one in or out updates the list the editor
+  offers and is announced, and a profile with a step placed on a screen that is not here says so
+  before Run — which step, which screen, and that it will open on the primary.
+
 ### Added — virtual machines, picked and encrypted
 
 - The VM step lists the machines each hypervisor already has on this computer — VirtualBox,
