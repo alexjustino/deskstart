@@ -3,7 +3,7 @@
 use std::collections::BTreeMap;
 
 use serde::Serialize;
-use tauri::{AppHandle, State};
+use tauri::{AppHandle, Emitter, State};
 
 use crate::db::{backup, database_path, migrations, settings, Db, DATA_DIR_ENV};
 use crate::error::Result;
@@ -110,6 +110,46 @@ mod tests {
 /// a person picks and what the run does mean the same thing. A machine that
 /// answers with nothing — no screen the host could enumerate — is a list the
 /// editor shows as such rather than a silent empty dropdown.
+/// The event the interface listens for when the screens change (1.1).
+pub const MONITORS_CHANGED: &str = "monitors-changed";
+
+/// How often the screens are looked at. Plugging a screen in is a human-speed
+/// event; two seconds is soon enough to be "when it happened" and costs one
+/// enumeration of a handful of monitors.
+const SCREEN_POLL: std::time::Duration = std::time::Duration::from_secs(2);
+
+/// What changed between two readings of the screens, in words, or nothing.
+pub fn screens_change(before: &[window::Monitor], now: &[window::Monitor]) -> Option<String> {
+    if before == now {
+        return None;
+    }
+    let count = |n: usize| format!("{n} screen{}", if n == 1 { "" } else { "s" });
+    Some(if before.len() == now.len() {
+        format!("{} rearranged", count(now.len()))
+    } else {
+        format!("{} became {}", count(before.len()), count(now.len()))
+    })
+}
+
+/// Watch the screens for as long as the product runs, and tell the interface
+/// the moment they change — a screen plugged in, unplugged, moved or resized —
+/// so the list the editor offers and the warnings on a profile are about the
+/// screens that are here now, not the ones there were at start (1.1). A
+/// thread of its own, sleeping between looks: nothing to stop, it ends with
+/// the process.
+pub fn watch_screens(app: AppHandle) {
+    let mut last = window::monitors();
+    loop {
+        std::thread::sleep(SCREEN_POLL);
+        let now = window::monitors();
+        if let Some(change) = screens_change(&last, &now) {
+            log::info!("screens changed: {change}");
+            let _ = app.emit(MONITORS_CHANGED, &now);
+            last = now;
+        }
+    }
+}
+
 #[tauri::command]
 pub fn monitors() -> Vec<window::Monitor> {
     window::monitors()
