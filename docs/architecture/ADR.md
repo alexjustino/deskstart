@@ -34,6 +34,7 @@ part that matters most later — the cost we accepted.
 | [026](#adr-026) | Content surfaces are opaque; Mica is the window backdrop, not behind text                | Accepted |
 | [027](#adr-027) | A hypervisor's inventory is discovered locally, each read its own way                    | Accepted |
 | [028](#adr-028) | An encrypted machine's password is asked each run and never stored                       | Accepted |
+| [029](#adr-029) | A window rule places only a window that appeared after its step began                    | Accepted |
 
 ---
 
@@ -590,3 +591,26 @@ and is the hypervisor's, not this product's: `-vp` is `vmrun`'s only way to take
 while `vmrun` runs (at most its one-minute budget), the same user's programs, elevated programs
 and security software can read it from the command line, and a machine that audits command lines
 (event 4688, Sysmon, endpoint protection) records it. `SECURITY.md` states it.
+
+## ADR-029 — A window rule places only a window that appeared after its step began {#adr-029}
+
+**Context.** F6 places the window of the process a step started, and refuses everything else:
+a folder, a page, a terminal, an editor or a machine's console opens in a window another process
+owns (ADR-018, risk R2), and so does Notepad on Windows 11, whose stub hands off. "Matching
+windows by title" was deferred to 1.1 because a rule that matches by name will one day match the
+wrong window — the one a person was working in.
+
+**Decision.** A placement may carry a **window rule**: a piece of the title (ignoring case), a
+window class (whole, ignoring case), or both. A rule never searches the desktop. When a step
+begins, before anything is started, the host notes **every top-level window that exists**; a rule
+considers only a window **not** in that note — visible, top-level, not owned, not this product's
+own — and places the first that answers it, or says that none appeared in time. A window that was
+open before the step began cannot be moved by it, whatever the rule says. With a rule, every kind
+of step may be placed; without one, only an application, as before. A rule never makes a window
+closable: holding and closing stay an application's (ADR-015). The log names the window it placed.
+
+**Cost accepted.** A window that appears during the step and answers the rule but is not the
+step's — a notification, another program opening at the same moment — can be the one moved; a
+narrower rule (class and title) is the remedy, and the log says which window it was. A program
+that reuses a window already open (Explorer on a folder already shown) gets no new window, and
+the step says so instead of moving the old one.

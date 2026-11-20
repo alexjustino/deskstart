@@ -376,6 +376,28 @@ off until a person turns it on.
 - **Which build a task starts.** The one that registered it, by absolute path; the Diagnostics
   page of F10 will list the tasks and say which executable each one names.
 
+### Delivered in 1.1 — window rules
+
+A placement can say **which window**: a piece of its title, its class, or both (ADR-029). With a
+rule, a folder's Explorer window, a page's browser window, a terminal, an editor, a machine's
+console — and a program that hands its window to another process, like Notepad on Windows 11 —
+can be put on a screen, at a rectangle, maximised or minimised. A rule only ever matches a window
+that **appeared after its step began**: the host notes every window open at the step's start and
+never considers one of them. Without a rule, only an application is placed, by its own process,
+as in F6. A rule never makes a window closable.
+
+The proof on the real binary: a folder step whose rule is the folder's name places the new
+Explorer window at the rectangle asked, measured by Windows; a dry run says which new window it
+would place; and a rule that names a window already open — moved by hand beforehand — leaves it
+exactly where it was, with _no new window answering the rule appeared in time_ in the log.
+
+### Deferred out of 1.1's window rules, and why
+
+- **Placing a window that was already open.** That is "arrange my desktop", not "open my day",
+  and it is the risk ADR-029 exists to refuse.
+- **Rules by process name.** A stub's real process has a different name from the one started;
+  title and class are what a person can see and check.
+
 ### Delivered in 1.1 — machines picked, machines encrypted
 
 **Picked, not typed.** The VM step lists the machines each hypervisor already has on this

@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added — window rules
+
+- A placement can name **which window**: a piece of its title, its class, or both (ADR-029). With
+  a rule, a folder, a page, a terminal, an editor or a machine's console can be placed — and a
+  program whose stub hands off its window. A rule only matches a window that appeared after its
+  step began; a window already open is never moved. The log names the window it placed.
+
 ### Added — virtual machines, picked and encrypted
 
 - The VM step lists the machines each hypervisor already has on this computer — VirtualBox,
