@@ -171,4 +171,54 @@ describe('accessibility', () => {
     expect(outlined).toBe(true);
     await session.screenshot('a11y-keyboard');
   }, 60_000);
+
+  it('the machine editor and the password dialog (1.1) have no axe violations, in both themes', async () => {
+    const { driver } = session;
+    await go(session, 'Profiles');
+    const form = '//form[@aria-label="Add a step"]';
+    const fillMachine = async () => {
+      await (
+        await driver.findByXPath(
+          '//select[@aria-label="Kind"]/option[normalize-space(.)="Virtual machine"]',
+        )
+      ).click();
+      await (
+        await driver.findByXPath(`${form}//button[@role="radio" and normalize-space(.)="VMware"]`)
+      ).click();
+      await (
+        await driver.waitForElement('input[aria-label="Machine"]')
+      ).sendKeys('%USERPROFILE%\\VMs\\vault\\vault.vmx');
+      await driver.waitForText('This machine is encrypted');
+      await (
+        await driver.find('input[aria-label="Encrypted: ask for its password at each run"]')
+      ).click();
+    };
+
+    for (const theme of THEMES) {
+      await setTheme(session, theme);
+      await go(session, 'Profiles');
+      // Settings remounts the editor: the machine is filled in again each time.
+      await fillMachine();
+      await new Promise((resolve) => setTimeout(resolve, 150));
+      const editor = await violations(session);
+      expect(editor, report('Machine editor', theme, editor)).toEqual([]);
+    }
+
+    await (await driver.findByXPath(`${form}//button[normalize-space(.)="Add step"]`)).click();
+    await driver.waitForText('Encrypted');
+    for (const theme of THEMES) {
+      await setTheme(session, theme);
+      await go(session, 'Profiles');
+      await (await driver.findByXPath('//button[normalize-space(.)="Run"]')).click();
+      await driver.waitForText('Passwords for this run');
+      await new Promise((resolve) => setTimeout(resolve, 150));
+      const dialog = await violations(session);
+      expect(dialog, report('Password dialog', theme, dialog)).toEqual([]);
+      await session.screenshot(`a11y-password-${theme.toLowerCase()}`);
+      await (
+        await driver.findByXPath('//div[@role="dialog"]//button[normalize-space(.)="Cancel"]')
+      ).click();
+      await driver.waitForGone('Passwords for this run');
+    }
+  }, 120_000);
 });
