@@ -320,7 +320,7 @@ describe('where a window lands, in a file', () => {
     expect(result.ok).toBe(false);
     if (!result.ok)
       expect(result.problems.map((p) => p.path)).toEqual([
-        'steps[0].placement',
+        'steps[0].placement.match',
         'steps[1].timing.holdMs',
       ]);
   });

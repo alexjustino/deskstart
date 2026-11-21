@@ -124,7 +124,25 @@ describe('what a run may do to a window it did not open', () => {
       stepProblems(folder, { ...DEFAULT_TIMING, holdMs: 5000 }, placement({ monitor: 1 })).map(
         (p) => p.path,
       ),
-    ).toEqual(['timing.holdMs', 'placement']);
+    ).toEqual(['timing.holdMs', 'placement.match']);
+  });
+
+  it('places a folder when a window rule says which new window', () => {
+    expect(
+      stepProblems(
+        folder,
+        DEFAULT_TIMING,
+        placement({ monitor: 1, match: { title: 'src', className: null } }),
+      ),
+    ).toEqual([]);
+    // A rule never makes a folder holdable: closing is still not ours to do.
+    expect(
+      stepProblems(
+        folder,
+        { ...DEFAULT_TIMING, holdMs: 5000 },
+        placement({ monitor: 1, match: { title: 'src', className: null } }),
+      ).map((p) => p.path),
+    ).toEqual(['timing.holdMs']);
   });
 
   it('and says which kind it is talking about', () => {
@@ -144,6 +162,67 @@ describe('what a run may do to a window it did not open', () => {
 
   it('and leaves a folder alone when it asks for nothing', () => {
     expect(stepProblems(folder, DEFAULT_TIMING, DEFAULT_PLACEMENT)).toEqual([]);
+  });
+});
+
+describe('a window rule (ADR-029)', () => {
+  it('reads a title piece and a class, trimmed, and stores them', () => {
+    const read = readPlacement({
+      state: 'maximized',
+      match: { title: '  Character Map ', className: 'MyClass' },
+    });
+    expect(read).toEqual({
+      monitor: null,
+      rect: null,
+      state: 'maximized',
+      match: { title: 'Character Map', className: 'MyClass' },
+    });
+    if (Array.isArray(read)) return;
+    expect(JSON.parse(serializePlacement(read))).toEqual({
+      state: 'maximized',
+      match: { title: 'Character Map', className: 'MyClass' },
+    });
+  });
+
+  it('is no rule at all when both halves are empty', () => {
+    expect(readPlacement({ state: 'maximized', match: { title: ' ', className: '' } })).toEqual({
+      monitor: null,
+      rect: null,
+      state: 'maximized',
+    });
+  });
+
+  it('needs somewhere to put the window', () => {
+    expect(readPlacement({ match: { title: 'x' } })).toEqual([
+      {
+        path: 'placement.match',
+        problem:
+          'a window rule needs somewhere to put the window: a screen, a rectangle or a state',
+      },
+    ]);
+  });
+
+  it('refuses what is not text, a field it does not know, and a paragraph', () => {
+    const read = readPlacement({
+      state: 'maximized',
+      match: { title: 3, pid: 12, className: 'x'.repeat(201) },
+    });
+    expect(Array.isArray(read) ? read.map((p) => p.path) : read).toEqual([
+      'placement.match.pid',
+      'placement.match.title',
+      'placement.match.className',
+    ]);
+  });
+
+  it('is said in the sentence', () => {
+    expect(
+      describePlacement({
+        monitor: 2,
+        rect: null,
+        state: 'maximized',
+        match: { title: 'Notepad', className: null },
+      }),
+    ).toBe('the first new window whose title has “Notepad” opens maximised on screen 2');
   });
 });
 

@@ -90,6 +90,15 @@ A browser's bookmarks file is **read, never written**. What is opened from it ar
 `https` addresses in the one folder named — never its subfolders, never a `file:` or
 `javascript:` bookmark, and never more than fifty pages.
 
+### What a window rule can move
+
+A placement with a window rule (ADR-029) moves a window another process owns — that is its
+purpose. What bounds it: the host notes every top-level window open when the step begins, and the
+rule may only move a window that **was not** among them, is visible and top-level, and is not this
+product's own. A window you were already working in cannot be moved by a step, whatever its rule
+matches. A rule only moves, resizes, maximises or minimises; it never closes, types into or reads
+the contents of a window. An imported profile's rules are shown in review like everything else.
+
 ### What a virtual-machine step can do
 
 Ask one hypervisor to start one machine, and open its console. The machine's name is one
