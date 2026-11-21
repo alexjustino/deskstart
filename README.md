@@ -107,9 +107,9 @@ twenty minutes, then close it" and "open, close, reopen" are first-class, not a 
 
 ## What is planned
 
-| Release | What                                                                                     |
-| ------- | ---------------------------------------------------------------------------------------- |
-| 1.1.0   | machines picked and encrypted (in progress) · the layout: capture, window rules, Firefox |
+| Release | What                                                                                |
+| ------- | ----------------------------------------------------------------------------------- |
+| 1.2.0   | The day: conditions (weekday, time, network, battery) · profile chaining · teardown |
 
 The specification, with a proof of done per slice, is [`docs/SPEC.md`](docs/SPEC.md).
 
@@ -193,8 +193,8 @@ npm run e2e
 
 | Release   | Theme               | Contents                                                                                                                                                                           |
 | --------- | ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **1.0.0** | The button          | the slices above                                                                                                                                                                   |
-| 1.1.0     | The layout          | machines picked from each hypervisor · encrypted VMware machines · capture the current arrangement as a profile · window rules by title/class · monitor-change awareness · Firefox |
+| 1.0.0     | The button          | the slices above                                                                                                                                                                   |
+| **1.1.0** | The layout          | machines picked from each hypervisor · encrypted VMware machines · capture the current arrangement as a profile · window rules by title/class · monitor-change awareness · Firefox |
 | 1.2.0     | The day             | conditions (weekday, time, network, battery) · profile chaining · end-of-day teardown                                                                                              |
 | 2.0       | Only if it earns it | macOS and Linux                                                                                                                                                                    |
 

@@ -63,8 +63,8 @@ Firefox bookmarks · auto-update · AI.
 
 | Release   | Theme               | Contents                                                                                                                                                                           |
 | --------- | ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **1.0.0** | The button          | the list above                                                                                                                                                                     |
-| 1.1.0     | The layout          | machines picked from each hypervisor · encrypted VMware machines · capture the current arrangement as a profile · window rules by title/class · monitor-change awareness · Firefox |
+| 1.0.0     | The button          | the list above                                                                                                                                                                     |
+| **1.1.0** | The layout          | machines picked from each hypervisor · encrypted VMware machines · capture the current arrangement as a profile · window rules by title/class · monitor-change awareness · Firefox |
 | 1.2.0     | The day             | conditions (weekday, time, network, battery) · profile chaining · end-of-day teardown                                                                                              |
 | 2.0       | Only if it earns it | macOS and Linux                                                                                                                                                                    |
 
