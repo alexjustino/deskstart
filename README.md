@@ -101,6 +101,9 @@ twenty minutes, then close it" and "open, close, reopen" are first-class, not a 
 - **The log.** Append-only in the database — triggers refuse any update or delete — read on
   the profile screen and on the Runs screen, kept across restarts and after the profile is
   gone.
+- **Help.** The user manual, inside the product and offline, in English or Portuguese, with
+  search; a `?` on a card opens it at that card's section. The same text is
+  [`docs/MANUAL.md`](docs/MANUAL.md) ([Português](docs/MANUAL.pt-BR.md)).
 - **Diagnostics.** Version and schema from the running binary, where the workspace is, the
   Windows accent ramp, a theme choice.
 - **The shell.** Mica, the system accent followed live, a custom title bar, light and dark.
@@ -111,7 +114,10 @@ twenty minutes, then close it" and "open, close, reopen" are first-class, not a 
 | ------- | ---------------------------------------------------------------------------------------- |
 | 1.1.0   | machines picked and encrypted (in progress) · the layout: capture, window rules, Firefox |
 
-The specification, with a proof of done per slice, is [`docs/SPEC.md`](docs/SPEC.md).
+The specification, with a proof of done per slice, is [`docs/SPEC.md`](docs/SPEC.md). How the code
+is put together, and where a change goes, is [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md). How
+to use the product is the [manual](docs/MANUAL.md) ([Português](docs/MANUAL.pt-BR.md)) — also
+inside Deskstart, under Help.
 
 ## Security
 

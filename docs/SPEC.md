@@ -376,6 +376,21 @@ off until a person turns it on.
 - **Which build a task starts.** The one that registered it, by absolute path; the Diagnostics
   page of F10 will list the tasks and say which executable each one names.
 
+### Delivered in 1.1 — the manual, inside the product
+
+A **Help** destination on the rail holds the user manual — getting started, every kind of step,
+Run and the log, time, waiting, where windows go and window rules, virtual machines and their
+passwords, triggers, capture, sharing and review, settings and backup, troubleshooting, privacy and
+security — in **English or Portuguese (Brazil)**, chosen in Help or in Settings and kept as a
+setting. It works offline, searches ignoring case and accents, and a `?` on a card or a group of
+fields opens it at that section (ADR-031). The same text is `docs/MANUAL.md` and
+`docs/MANUAL.pt-BR.md`, generated, with a test that fails when they differ.
+
+Proved on the real binary: Help opens at _Getting started_; switching to Portuguese survives
+leaving the screen and shows in Settings; a search without accents finds _Máquinas virtuais_; the
+Triggers card's `?` opens the manual at the triggers section. axe-core finds nothing on Help in
+either theme.
+
 ### Delivered in 1.1 — capture this desktop
 
 **Capture this desktop** lists the windows open now — the program, the title to recognise it by,
