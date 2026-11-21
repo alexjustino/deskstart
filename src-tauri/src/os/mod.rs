@@ -7,6 +7,7 @@
 //! started says why rather than vanishing.
 
 pub mod accent;
+pub mod capture;
 pub mod close;
 pub mod files;
 pub mod firefox;

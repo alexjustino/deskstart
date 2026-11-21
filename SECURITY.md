@@ -107,6 +107,14 @@ product's own. A window you were already working in cannot be moved by a step, w
 matches. A rule only moves, resizes, maximises or minimises; it never closes, types into or reads
 the contents of a window. An imported profile's rules are shown in review like everything else.
 
+### What a capture reads, and keeps
+
+Capturing the desktop (ADR-030) **reads** every visible window: the program that owns it, where it
+is, its class and its title. It moves, focuses, types into and reads inside nothing. The titles go
+to the list a person picks from and **nowhere else**: the profile keeps the program, the screen,
+the rectangle, the state and the class — never a title, never a program's arguments. A program
+running with more rights than Deskstart is not named, and cannot be captured.
+
 ### What a virtual-machine step can do
 
 Ask one hypervisor to start one machine, and open its console. The machine's name is one

@@ -93,6 +93,9 @@ twenty minutes, then close it" and "open, close, reopen" are first-class, not a 
   terminal or an editor too, and only ever a window that appeared after the step began. The
   screens are watched: plug one in or out and the editor's list follows, and a profile placed on
   a screen that is not here says so before you press Run.
+- **Capture this desktop.** Arrange your windows, then make a profile of them: each window ticked
+  becomes a step that starts its program and puts it back where it is. Titles help you choose and
+  are not kept.
 - **Dry run.** The same run on a virtual clock: the whole timeline written at once, nothing
   started, nothing waited for.
 - **The log.** Append-only in the database — triggers refuse any update or delete — read on
