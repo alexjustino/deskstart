@@ -376,6 +376,24 @@ off until a person turns it on.
 - **Which build a task starts.** The one that registered it, by absolute path; the Diagnostics
   page of F10 will list the tasks and say which executable each one names.
 
+### Delivered in 1.1 — capture this desktop
+
+**Capture this desktop** lists the windows open now — the program, the title to recognise it by,
+and where it is — and makes a profile of the ones ticked: one application step each, started by
+its program and placed back where it is, found by its class unless that class is a generic dialog
+(ADR-030). Windows that cannot be steps say why and cannot be ticked: a program Windows will not
+name, a Store app, an Explorer window. The profile keeps no title and no arguments.
+
+The proof on the real binary is the round trip: charmap moved by hand to a known spot, the desktop
+captured with only it ticked, the step checked for the title (absent), charmap closed, the profile
+run — and a new charmap opens where the old one was, measured by Windows.
+
+### Deferred out of 1.1's capture, and why
+
+- **Arguments, and Explorer folders.** Both mean reading into another process (its command line,
+  its shell view); a person adds them in the editor.
+- **Store apps.** Started through their app identity, not a path — a step kind of their own.
+
 ### Delivered in 1.1 — window rules
 
 A placement can say **which window**: a piece of its title, its class, or both (ADR-029). With a

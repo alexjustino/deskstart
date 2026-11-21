@@ -35,6 +35,7 @@ part that matters most later — the cost we accepted.
 | [027](#adr-027) | A hypervisor's inventory is discovered locally, each read its own way                    | Accepted |
 | [028](#adr-028) | An encrypted machine's password is asked each run and never stored                       | Accepted |
 | [029](#adr-029) | A window rule places only a window that appeared after its step began                    | Accepted |
+| [030](#adr-030) | A capture keeps what starts and places a window, never its title                         | Accepted |
 
 ---
 
@@ -614,3 +615,28 @@ step's — a notification, another program opening at the same moment — can be
 narrower rule (class and title) is the remedy, and the log says which window it was. A program
 that reuses a window already open (Explorer on a folder already shown) gets no new window, and
 the step says so instead of moving the old one.
+
+## ADR-030 — A capture keeps what starts and places a window, never its title {#adr-030}
+
+**Context.** "Arrange it once, then capture it" is how most people would rather write a profile.
+Capturing means reading every window on the desktop — and a window's title is a document's name,
+a mail's subject, a chat. The profile a capture makes is a file people export and share (ADR-010).
+
+**Decision.** The host **reads** the desktop and changes nothing: each visible, top-level,
+unowned, uncloaked, non-tool window with a title, not this product's own, with the program that
+owns it, its screen, its rectangle on that screen (when shown normally), its state and its class.
+The domain decides what each becomes: an **application step** that starts its program — written
+under its known folder, `%LOCALAPPDATA%\…` — with a placement that puts the window back, and a
+window rule on its class (ADR-029) unless the class is generic (`#32770`, every dialog box), in
+which case the window is found by its own process. A window whose program Windows will not name, a
+Store app (not started by its path) and an Explorer window (its folder is not knowable from
+outside) are listed with that reason and cannot be ticked. **The title is shown to choose by and
+never stored. Arguments are not captured**: a window does not say how it was opened, and reading
+another process's command line is further into the machine than this product goes. A captured
+profile is made with the ordinary add-step path: it is the person's own, so it is not an import
+and needs no review (ADR-013).
+
+**Cost accepted.** A program opened with arguments — a browser profile, an editor's workspace —
+comes back without them; the person adds them in the editor. A class shared by many programs
+(`Chrome_WidgetWin_1` is Chrome, Edge and every Electron app) can pick another such window that
+appears during the step; the log names the window it placed.

@@ -91,6 +91,9 @@ twenty minutes, then close it" and "open, close, reopen" are first-class, not a 
   on the primary and says so; a program that shows no window of its own says that. A **window
   rule** — a piece of the title, or the class — places a folder's Explorer window, a browser, a
   terminal or an editor too, and only ever a window that appeared after the step began.
+- **Capture this desktop.** Arrange your windows, then make a profile of them: each window ticked
+  becomes a step that starts its program and puts it back where it is. Titles help you choose and
+  are not kept.
 - **Dry run.** The same run on a virtual clock: the whole timeline written at once, nothing
   started, nothing waited for.
 - **The log.** Append-only in the database — triggers refuse any update or delete — read on

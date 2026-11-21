@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added — capture this desktop
+
+- **Capture this desktop** makes a profile of the windows open now: each one ticked becomes a step
+  that starts its program and puts its window back where it is (ADR-030). Windows that cannot be
+  steps — a Store app, an Explorer window, a program Windows will not name — say why. The profile
+  keeps no window title and no program arguments.
+
 ### Added — window rules
 
 - A placement can name **which window**: a piece of its title, its class, or both (ADR-029). With
