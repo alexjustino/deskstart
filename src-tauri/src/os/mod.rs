@@ -10,6 +10,7 @@ pub mod accent;
 pub mod capture;
 pub mod close;
 pub mod files;
+pub mod firefox;
 pub mod inventory;
 pub mod job;
 pub mod open;

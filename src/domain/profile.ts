@@ -59,7 +59,7 @@ export interface UrlStep {
 }
 
 /** The browsers whose bookmarks this product knows how to read. */
-export const BROWSERS = ['chrome', 'edge'] as const;
+export const BROWSERS = ['chrome', 'edge', 'firefox'] as const;
 export type Browser = (typeof BROWSERS)[number];
 
 /** A folder of bookmarks, opened as one browser window (F7). */
@@ -232,7 +232,7 @@ export function readStepConfig(value: unknown, path = 'step'): StepConfig | Prob
       if (!(BROWSERS as readonly unknown[]).includes(browser)) {
         problems.push({
           path: `${path}.browser`,
-          problem: `bookmarks are read from ${BROWSERS.join(' or ')}`,
+          problem: `bookmarks are read from ${BROWSERS.join(', ')}`,
         });
       }
       const folder = requiredText(value.folder);
@@ -426,6 +426,7 @@ export function readUrl(raw: string): UrlResult {
 export const TOOLS = [
   'chrome',
   'edge',
+  'firefox',
   'terminal',
   'editor',
   'hyperv',

@@ -416,6 +416,23 @@ exactly where it was, with _no new window answering the rule appeared in time_ i
 - **Rules by process name.** A stub's real process has a different name from the one started;
   title and class are what a person can see and check.
 
+### Delivered in 1.1 — Firefox
+
+A bookmark folder can come from **Firefox**, as it can from Chrome and Edge, and opens as one
+Firefox window — the first page in a new window, the rest as its tabs. Firefox keeps bookmarks in
+`places.sqlite`, which it holds open and whose newest rows sit in its write-ahead log, so the host
+never opens Firefox's file: it finds the default profile through `profiles.ini`, copies the
+database and its log into a folder of its own, reads the bookmark rows from the copy and deletes
+it. The domain turns the rows into the same tree Chrome's file is, with the names Firefox shows —
+_Bookmarks Toolbar_, _Bookmarks Menu_, _Other Bookmarks_ — so finding a folder, the page limit
+and what is left out are one reader for all three browsers. Firefox is found where it installs,
+never on `PATH`, like every tool (ADR-022).
+
+Proved on the real binary against a Firefox folder of the suite's own: the folder is found by the
+names Firefox shows and a dry run names its two pages; a folder that is not there names the ones
+that are. **Deferred:** a real run on this machine — it would start Firefox, which creates a
+Firefox profile on first start; the argument shape is unit-tested.
+
 ### Delivered in 1.1 — screens that come and go
 
 The host watches the screens while Deskstart runs — every two seconds, one enumeration — and when

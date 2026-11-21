@@ -212,9 +212,14 @@ describe('the steps that call a tool', () => {
   });
 
   it('refuses a browser it does not read, and a folder with no name', () => {
-    expect(readStepConfig({ kind: 'bookmarks', browser: 'firefox', folder: 'Work' })).toEqual([
-      { path: 'step.browser', problem: 'bookmarks are read from chrome or edge' },
+    expect(readStepConfig({ kind: 'bookmarks', browser: 'opera', folder: 'Work' })).toEqual([
+      { path: 'step.browser', problem: 'bookmarks are read from chrome, edge, firefox' },
     ]);
+    expect(readStepConfig({ kind: 'bookmarks', browser: 'firefox', folder: 'Work' })).toEqual({
+      kind: 'bookmarks',
+      browser: 'firefox',
+      folder: 'Work',
+    });
     expect(readStepConfig({ kind: 'bookmarks', folder: '  ' })).toEqual([
       { path: 'step.folder', problem: 'name the bookmark folder to open' },
     ]);

@@ -82,7 +82,7 @@ twenty minutes, then close it" and "open, close, reopen" are first-class, not a 
   lists the machines each hypervisor already has — tick two of four and two steps are added —
   and an **encrypted** VMware machine has its password asked when you press Run, used for that
   run, and never stored.
-- **Steps that call a tool.** A **bookmark folder** — Chrome's or Edge's — opened as one
+- **Steps that call a tool.** A **bookmark folder** — Chrome's, Edge's or Firefox's — opened as one
   browser window; **Windows Terminal** on a named profile, in a directory; a folder opened in
   **VS Code**. Each tool is found where Windows installs it, never on `PATH`, and a tool this
   machine has not got is a reason you can read rather than a step that quietly does nothing.

@@ -22,7 +22,7 @@
  *   `javascript:` address is left out and said, not opened.
  */
 
-import { readUrl, type Problem } from './profile';
+import { readUrl, type Browser, type Problem } from './profile';
 
 /** How many pages one step will open. More than this is not a setup. */
 export const MAX_PAGES = 50;
@@ -125,6 +125,9 @@ export function readBookmarkFolder(json: string, wanted: string): FolderResult {
   } catch {
     return { ok: false, problem: 'that bookmarks file could not be read', folders: [] };
   }
+  // Firefox keeps its bookmarks in a database, not a file like this one; the
+  // host hands its rows over as a list, and they become the same tree (1.1).
+  if (Array.isArray(parsed)) parsed = firefoxTree(parsed);
 
   const found = roots(parsed);
   if (found.size === 0) {
@@ -180,4 +183,83 @@ export function pagesToOpen(folder: BookmarkFolder): { urls: string[]; note: str
     urls: folder.urls.slice(0, MAX_PAGES),
     note: `the first ${MAX_PAGES} of ${folder.urls.length} pages`,
   };
+}
+
+/** What Firefox calls its root folders, by the fixed id it gives each. */
+const FIREFOX_ROOTS: Record<string, string> = {
+  toolbar_____: 'Bookmarks Toolbar',
+  menu________: 'Bookmarks Menu',
+  unfiled_____: 'Other Bookmarks',
+  mobile______: 'Mobile Bookmarks',
+};
+
+interface FirefoxRow {
+  id: number;
+  type: number;
+  parent: number;
+  position: number;
+  title: string;
+  url: string | null;
+  guid: string;
+}
+
+function readFirefoxRow(value: unknown): FirefoxRow | null {
+  if (!isRecord(value)) return null;
+  const { id, type, parent, position, title, url, guid } = value;
+  if (typeof id !== 'number' || typeof type !== 'number' || typeof parent !== 'number') return null;
+  return {
+    id,
+    type,
+    parent,
+    position: typeof position === 'number' ? position : 0,
+    title: typeof title === 'string' ? title : '',
+    url: typeof url === 'string' ? url : null,
+    guid: typeof guid === 'string' ? guid : '',
+  };
+}
+
+/**
+ * Firefox's bookmark rows — `moz_bookmarks` joined to its pages, as the host
+ * read them from a copy of `places.sqlite` — as the tree Chrome's file holds,
+ * so one reader finds the folder in either (1.1). Type 1 is a page, 2 a
+ * folder, 3 a separator (left out). The roots take the names Firefox shows.
+ */
+export function firefoxTree(rows: readonly unknown[]): { roots: Record<string, Node> } {
+  const read = rows.map(readFirefoxRow).filter((row): row is FirefoxRow => row !== null);
+  const byParent = new Map<number, FirefoxRow[]>();
+  for (const row of read) {
+    const siblings = byParent.get(row.parent) ?? [];
+    siblings.push(row);
+    byParent.set(row.parent, siblings);
+  }
+  const build = (row: FirefoxRow, depth: number): Node => {
+    if (row.type === 1) return { type: 'url', name: row.title, url: row.url ?? '' };
+    const children =
+      depth > 64
+        ? []
+        : (byParent.get(row.id) ?? [])
+            .filter((child) => child.type === 1 || child.type === 2)
+            .sort((a, b) => a.position - b.position)
+            .map((child) => build(child, depth + 1));
+    return { type: 'folder', name: row.title, children };
+  };
+  const roots: Record<string, Node> = {};
+  for (const row of read) {
+    const name = FIREFOX_ROOTS[row.guid];
+    if (name === undefined || row.type !== 2) continue;
+    roots[row.guid] = { ...build(row, 0), name };
+  }
+  return { roots };
+}
+
+/**
+ * How each browser is asked for one new window with every page in it: Chrome
+ * and Edge take the pages after `--new-window`; Firefox opens the first in a
+ * new window and each of the rest as a tab of it.
+ */
+export function browserArgs(browser: Browser, urls: readonly string[]): string[] {
+  if (browser !== 'firefox') return ['--new-window', ...urls];
+  const [first, ...rest] = urls;
+  if (first === undefined) return [];
+  return ['-new-window', first, ...rest.flatMap((url) => ['-new-tab', url])];
 }

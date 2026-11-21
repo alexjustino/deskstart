@@ -30,7 +30,7 @@ import { InfoBar } from '@/ui/InfoBar';
 import { Input } from '@/ui/Input';
 import { Select } from '@/ui/Select';
 
-import { KIND_LABELS } from './kinds';
+import { BROWSER_LABELS, KIND_LABELS } from './kinds';
 import { MachinePicker } from './MachinePicker';
 
 /**
@@ -532,7 +532,7 @@ export function StepForm({
       case 'tool':
         return `Will open ${launch.what}${launch.source !== null ? ` — from ${launch.source}` : ''}`;
       case 'bookmarks':
-        return `Will open every page in ${launch.folder}, from ${launch.browser === 'chrome' ? 'Chrome' : 'Edge'}, as one window`;
+        return `Will open every page in ${launch.folder}, from ${BROWSER_LABELS[launch.browser]}, as one window`;
     }
   })();
 
@@ -671,7 +671,7 @@ export function StepForm({
             options={BROWSERS}
             value={draft.browser}
             onChange={(browser) => set({ browser })}
-            labels={{ chrome: 'Chrome', edge: 'Edge' }}
+            labels={BROWSER_LABELS}
             disabled={pending}
           />
           <Input

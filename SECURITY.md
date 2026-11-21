@@ -90,6 +90,14 @@ A browser's bookmarks file is **read, never written**. What is opened from it ar
 `https` addresses in the one folder named — never its subfolders, never a `file:` or
 `javascript:` bookmark, and never more than fifty pages.
 
+### What reading Firefox's bookmarks touches
+
+Firefox keeps bookmarks in `places.sqlite`, alongside its history. The host never opens that
+file: it copies it (and its write-ahead log) into a folder of its own under the system's temporary
+directory, reads **only the bookmark rows** — folders, titles, addresses — from the copy, and
+deletes the copy. History is in the copy for the moment it exists and is never queried. Firefox is
+not locked, written or started by reading.
+
 ### What a window rule can move
 
 A placement with a window rule (ADR-029) moves a window another process owns — that is its

@@ -7,7 +7,7 @@ use tauri::{AppHandle, Emitter, State};
 
 use crate::db::{backup, database_path, migrations, settings, Db, DATA_DIR_ENV};
 use crate::error::Result;
-use crate::os::{accent, capture, files, inventory, tools, window};
+use crate::os::{accent, capture, files, firefox, inventory, tools, window};
 
 /// What Diagnostics and About read. Never a hand-typed constant: the version
 /// comes from the running binary.
@@ -180,6 +180,10 @@ pub fn tools_list() -> Vec<tools::Tool> {
 /// everything a person ever kept — so it has a cap of its own.
 #[tauri::command]
 pub fn bookmarks_read(browser: String) -> Result<String> {
+    // Firefox keeps a database, not a file: its rows, read from a copy (1.1).
+    if browser == "firefox" {
+        return firefox::bookmarks_json().map_err(crate::error::Error::File);
+    }
     let path = tools::bookmarks_file(&browser).ok_or(crate::error::Error::File(
         "that browser is not one this product reads",
     ))?;
