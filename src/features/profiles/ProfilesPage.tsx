@@ -2,6 +2,7 @@ import {
   Add20Regular,
   Apps20Regular,
   ArrowImport20Regular,
+  WindowMultiple20Regular,
   ArrowDown20Regular,
   ArrowUp20Regular,
   Bookmark20Regular,
@@ -75,6 +76,7 @@ import { announce } from '@/ui/announce';
 
 import { LogLines, RunHeading } from '../runs/LogLines';
 import { ExportProfile } from './ExportProfile';
+import { CaptureProfile } from './CaptureProfile';
 import { ImportProfile } from './ImportProfile';
 import { PasswordDialog } from './PasswordDialog';
 import { ReviewSteps } from './ReviewSteps';
@@ -149,6 +151,7 @@ function ProfileList({
   const create = useCreateProfile();
   const [name, setName] = useState('');
   const [importing, setImporting] = useState(false);
+  const [capturing, setCapturing] = useState(false);
 
   const submit = (event: FormEvent) => {
     event.preventDefault();
@@ -195,7 +198,20 @@ function ProfileList({
         >
           Import a profile
         </Button>
+        <Button
+          className="mt-2 w-full"
+          icon={<WindowMultiple20Regular />}
+          onClick={() => setCapturing(true)}
+        >
+          Capture this desktop
+        </Button>
       </div>
+      {capturing && (
+        <CaptureProfile
+          onClose={() => setCapturing(false)}
+          onCreated={(profile) => onSelect(profile.id)}
+        />
+      )}
       <ImportProfile
         open={importing}
         onClose={() => setImporting(false)}

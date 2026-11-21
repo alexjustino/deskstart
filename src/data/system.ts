@@ -8,6 +8,7 @@
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 
+import type { CapturedWindow } from '@/domain/capture';
 import type { Hypervisor } from '@/domain/profile';
 import {
   readHyperVList,
@@ -137,6 +138,14 @@ export async function fetchVmInventory(hypervisor: Hypervisor): Promise<Inventor
     case 'vmware':
       return readVmwareInventory(raw.primary);
   }
+}
+
+/**
+ * The windows on the desktop now, read so they can become a profile (1.1,
+ * ADR-030). What each can become is the domain's (`domain/capture`).
+ */
+export async function fetchCapture(): Promise<CapturedWindow[]> {
+  return invoke<CapturedWindow[]>('windows_capture');
 }
 
 /** One tool this product can call, and whether this machine has it (F7). */
