@@ -19,7 +19,7 @@
  * run is finished with that outcome.
  */
 
-import { pagesToOpen, readBookmarkFolder } from '@/domain/bookmarks';
+import { browserArgs, pagesToOpen, readBookmarkFolder } from '@/domain/bookmarks';
 import { resolveStep, type Launch, type Step } from '@/domain/profile';
 import { whyNotRunnable } from '@/domain/review';
 import { plan, reduce, type Action, type Mode, type RunEvent, type RunState } from '@/domain/run';
@@ -86,8 +86,8 @@ async function pagesOf(
     launch: {
       kind: 'tool',
       tool: launch.browser,
-      // One window, every page in it: the browser takes the rest as tabs.
-      args: ['--new-window', ...urls],
+      // One window, every page in it, the way this browser is asked for one.
+      args: browserArgs(launch.browser, urls),
       what: note === null ? pages : `${pages} (${note})`,
       source: null,
     },

@@ -1,4 +1,11 @@
-import type { Hypervisor, StepKind } from '@/domain/profile';
+import type { Browser, Hypervisor, StepKind } from '@/domain/profile';
+
+/** What each browser is called on screen. */
+export const BROWSER_LABELS: Record<Browser, string> = {
+  chrome: 'Chrome',
+  edge: 'Edge',
+  firefox: 'Firefox',
+};
 
 /** What each hypervisor is called on screen. */
 export const HYPERVISOR_LABELS: Record<Hypervisor, string> = {

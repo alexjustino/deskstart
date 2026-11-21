@@ -79,7 +79,7 @@ import { ImportProfile } from './ImportProfile';
 import { PasswordDialog } from './PasswordDialog';
 import { ReviewSteps } from './ReviewSteps';
 import { TriggersCard } from './TriggersCard';
-import { HYPERVISOR_LABELS, KIND_LABELS } from './kinds';
+import { BROWSER_LABELS, HYPERVISOR_LABELS, KIND_LABELS } from './kinds';
 import { StepForm, type EarlierStep, type Screen, type ToolState } from './StepForm';
 
 /**
@@ -601,7 +601,7 @@ function summary(config: StepConfig, env: Readonly<Record<string, string>>): str
       case 'url':
         return config.url;
       case 'bookmarks':
-        return `${config.folder} — ${config.browser === 'chrome' ? 'Chrome' : 'Edge'}`;
+        return `${config.folder} — ${BROWSER_LABELS[config.browser]}`;
       case 'terminal':
         return (
           [config.profile, config.directory].filter((part) => part !== null).join(' · ') ||
