@@ -190,6 +190,7 @@ pub fn run() {
             commands::system::accent_ramp,
             commands::system::environment,
             commands::system::monitors,
+            commands::system::windows_capture,
             commands::system::tools_list,
             commands::system::vm_inventory,
             commands::system::bookmarks_read,
