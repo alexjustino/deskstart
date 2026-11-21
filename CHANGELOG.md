@@ -61,6 +61,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   rebuilding the `run` table the way SQLite documents for a table others refer to: the migration
   runner now turns foreign keys off around each migration and refuses to commit one that leaves a
   reference pointing at nothing. Every run and every line of an existing log is kept as written.
+- **The installed (release) build stalled** whenever it asked Windows a question by a console tool
+  — whether a profile's task is registered, a hypervisor's machines: the tool was given a console
+  window, whose creation waited on Deskstart's own window, which was waiting on the tool. Every
+  command behind it queued until it timed out. Tools Deskstart waits on now run with no console,
+  and those two questions are asked off the window's thread. The debug build never showed it.
 - **A trigger's request could be lost** when the screen re-rendered between the request arriving
   and the run starting; it now counts as served only when the run begins.
 
