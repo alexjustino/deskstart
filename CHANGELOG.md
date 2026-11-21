@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.1.0] — 2026-11-20 — The layout
+
+Deskstart 1.0 opened your working day from one button. 1.1 is about **where it all lands**, and
+about making a profile without writing it field by field: arrange your windows once and **capture**
+them; place a folder's, a browser's or a terminal's window with a **window rule**; start **virtual
+machines** picked from each hypervisor's own list, including **encrypted** VMware machines whose
+password is asked at each run and never stored; read **Firefox** bookmarks; and know before you
+press Run when a screen the profile uses is not plugged in. And the manual is now inside the
+product, under **Help**, in English or Portuguese. It also fixes two triggers 1.0.0 shipped broken —
+a global shortcut that never started its profile, and `--run`.
+
+**Schema.** This release adds migration **010**, applied automatically the first time 1.1 opens a
+workspace: it widens what the run log accepts as a reason a run started, keeping every run and
+every line of the log as written (proved by a test that migrates a 1.0 workspace). Nothing is
+asked of you. Migrations are forward-only; because 010 only widens what is accepted, 1.0 still
+opens a workspace 1.1 has migrated, but 1.0 refuses to restore a backup made by 1.1, as it refuses
+any backup from a newer version.
+
 ### Added — the manual, inside the product
 
 - **Help** on the rail: the user manual, offline, in **English or Portuguese (Brazil)** — chosen
