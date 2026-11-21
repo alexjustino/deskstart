@@ -143,6 +143,32 @@ fn command(launch: &Launch) -> Command {
     command
 }
 
+/// Windows' `CREATE_NO_WINDOW`: a console program started with it gets no
+/// console of its own.
+pub const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+
+/// The command for a tool this product **waits on** — `schtasks`, `vmrun`,
+/// `VBoxManage`, PowerShell — built with no console of its own.
+///
+/// The released build is a windowed program with no console, so a console
+/// tool it starts would be given a new console window. Creating one sends
+/// messages to the desktop's windows and waits for each to answer — this
+/// product's included, whose thread is the one waiting for the tool. In 1.0.0
+/// that stalled every command behind a Task Scheduler query until it timed
+/// out, only in the release build: a debug build has a console to share.
+/// Programs a step starts (`spawn`) are not built this way: a console program
+/// a person put in a profile is meant to show its window.
+fn bounded_command(launch: &Launch) -> Command {
+    #[allow(unused_mut)]
+    let mut command = command(launch);
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        command.creation_flags(CREATE_NO_WINDOW);
+    }
+    command
+}
+
 /// Start the program. The child is returned running; the caller decides how
 /// long to hold the handle.
 pub fn spawn(launch: &Launch) -> Result<Spawned, LaunchFailure> {
@@ -179,7 +205,7 @@ pub fn run_bounded(
     use std::time::Instant;
 
     check(launch)?;
-    let mut command = command(launch);
+    let mut command = bounded_command(launch);
     command.stderr(Stdio::piped());
     let mut child = command
         .spawn()
@@ -253,7 +279,7 @@ pub fn capture_stdout(
     use std::time::Instant;
 
     check(launch)?;
-    let mut command = command(launch);
+    let mut command = bounded_command(launch);
     command.stdout(Stdio::piped());
     command.stderr(Stdio::piped());
     let mut child = command
@@ -337,6 +363,30 @@ fn classify(error: std::io::Error, program: &Path) -> LaunchFailure {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_tool_that_is_waited_on_gets_no_console_of_its_own() {
+        // The flag Windows documents for CREATE_NO_WINDOW. A tool run with it
+        // cannot make the released, console-less build wait on itself.
+        assert_eq!(CREATE_NO_WINDOW, 0x0800_0000);
+    }
+
+    #[test]
+    #[cfg(windows)]
+    fn a_console_tool_run_to_its_end_answers_promptly() {
+        // cmd /c exit 0 — a console program, run the way schtasks is.
+        let system = std::env::var_os("SYSTEMROOT").expect("SYSTEMROOT");
+        let launch = Launch {
+            program: std::path::PathBuf::from(system).join(r"System32\cmd.exe"),
+            args: vec!["/c".into(), "exit".into(), "0".into()],
+            working_dir: None,
+            env: Vec::new(),
+        };
+        let started = std::time::Instant::now();
+        let finished = run_bounded(&launch, std::time::Duration::from_secs(10)).expect("runs");
+        assert_eq!(finished.code, Some(0));
+        assert!(started.elapsed() < std::time::Duration::from_secs(5));
+    }
 
     fn launch(program: &str, args: &[&str]) -> Launch {
         Launch {
