@@ -51,18 +51,27 @@ fn count(conn: &Connection, sql: &str) -> i64 {
 }
 
 /// Apply migrations one at a time, up to and including `version`, the way the
-/// runner would have at that point in the product's history.
+/// runner does: foreign keys off around each one (010 rebuilds `run`, which
+/// `event` refers to), and nothing left pointing at nothing before it commits.
 fn migrate_to(conn: &Connection, version: i64) {
+    conn.pragma_update(None, "foreign_keys", "OFF").unwrap();
     for (index, (name, sql)) in migrations::sources().iter().enumerate() {
         let this = index as i64 + 1;
         if this > version || this <= migrations::current_version(conn) {
             continue;
         }
         conn.execute_batch(&format!(
-            "BEGIN; {sql} UPDATE workspace SET schema_version = {this} WHERE id = 1; COMMIT;"
+            "BEGIN; {sql} UPDATE workspace SET schema_version = {this} WHERE id = 1;"
         ))
         .unwrap_or_else(|error| panic!("migration {name} failed: {error}"));
+        assert_eq!(
+            count(conn, "SELECT count(*) FROM pragma_foreign_key_check"),
+            0,
+            "migration {name} left a reference pointing at nothing"
+        );
+        conn.execute_batch("COMMIT;").unwrap();
     }
+    conn.pragma_update(None, "foreign_keys", "ON").unwrap();
 }
 
 #[test]

@@ -7,7 +7,7 @@
 
 use rusqlite::Connection;
 
-use crate::error::Result;
+use crate::error::{Error, Result};
 
 /// Every migration, in order. The index plus one is the schema version it
 /// produces, so a migration can never be reordered without the compiler and the
@@ -42,6 +42,10 @@ const MIGRATIONS: &[(&str, &str)] = &[
     (
         "009_settings",
         include_str!("../../migrations/009_settings.sql"),
+    ),
+    (
+        "010_command_trigger",
+        include_str!("../../migrations/010_command_trigger.sql"),
     ),
 ];
 
@@ -80,20 +84,51 @@ pub fn apply(conn: &Connection) -> Result<()> {
         return Ok(());
     }
 
-    for (index, (name, sql)) in MIGRATIONS.iter().enumerate() {
-        let version = index as i64 + 1;
-        if version <= from {
-            continue;
-        }
+    // Foreign keys are off while a migration runs and checked before it
+    // commits — the procedure SQLite documents for rebuilding a table others
+    // refer to (010 rebuilds `run`, which `event` refers to). The setting
+    // cannot change inside a transaction, so it is set around each one, and
+    // put back as it was found.
+    let enforced: i64 = conn.pragma_query_value(None, "foreign_keys", |row| row.get(0))?;
+    conn.pragma_update(None, "foreign_keys", "OFF")?;
+    let applied = (|| -> Result<()> {
+        for (index, (name, sql)) in MIGRATIONS.iter().enumerate() {
+            let version = index as i64 + 1;
+            if version <= from {
+                continue;
+            }
 
-        log::info!("applying migration {name}");
-        conn.execute_batch(&format!(
-            "BEGIN;
-             {sql}
-             UPDATE workspace SET schema_version = {version} WHERE id = 1;
-             COMMIT;"
-        ))?;
+            log::info!("applying migration {name}");
+            let step = (|| -> Result<()> {
+                conn.execute_batch(&format!(
+                    "BEGIN;
+                     {sql}
+                     UPDATE workspace SET schema_version = {version} WHERE id = 1;"
+                ))?;
+                let dangling: i64 =
+                    conn.query_row("SELECT count(*) FROM pragma_foreign_key_check", [], |row| {
+                        row.get(0)
+                    })?;
+                if dangling > 0 {
+                    return Err(Error::InvalidInput(
+                        "a migration would have left a reference pointing at nothing",
+                    ));
+                }
+                conn.execute_batch("COMMIT;")?;
+                Ok(())
+            })();
+            if let Err(error) = step {
+                // Nothing half-done stays: the workspace is as it was before.
+                let _ = conn.execute_batch("ROLLBACK;");
+                return Err(error);
+            }
+        }
+        Ok(())
+    })();
+    if enforced == 1 {
+        conn.pragma_update(None, "foreign_keys", "ON")?;
     }
+    applied?;
 
     log::info!("schema migrated from version {from} to {to}");
     Ok(())
@@ -117,6 +152,91 @@ mod tests {
         apply(&conn).expect("migrate");
 
         assert_eq!(current_version(&conn), target_version());
+    }
+
+    /// Apply the first `count` migrations only, as an older build would have.
+    fn apply_up_to(conn: &Connection, count: usize) {
+        for (index, (_, sql)) in MIGRATIONS.iter().take(count).enumerate() {
+            conn.execute_batch(&format!(
+                "BEGIN; {sql} UPDATE workspace SET schema_version = {} WHERE id = 1; COMMIT;",
+                index + 1
+            ))
+            .expect("an older migration");
+        }
+    }
+
+    #[test]
+    fn every_trigger_the_host_knows_can_be_logged() {
+        // 001 wrote three; F9 added "command" everywhere but the CHECK, and a
+        // run asked for by `--run` was refused by the database (010).
+        let conn = memory();
+        apply(&conn).expect("migrate");
+        for trigger in crate::db::runs::TRIGGERS {
+            conn.execute(
+                "INSERT INTO run (id, profile_name, mode, trigger, started_at)
+                 VALUES (?1, 'P', 'real', ?2, '2026-11-20T00:00:00Z')",
+                rusqlite::params![format!("run-{trigger}"), trigger],
+            )
+            .unwrap_or_else(|e| panic!("trigger {trigger} refused: {e}"));
+        }
+    }
+
+    #[test]
+    fn widening_the_trigger_keeps_every_run_and_every_line_of_the_log() {
+        // A workspace as 1.0.0 left it: runs with their events.
+        let conn = memory();
+        apply_up_to(&conn, 9);
+        conn.execute_batch(
+            "INSERT INTO run (id, profile_name, mode, trigger, started_at, finished_at, outcome)
+             VALUES ('r1', 'Morning', 'real', 'schedule', '2026-11-01T07:30:00Z',
+                     '2026-11-01T07:31:00Z', 'completed');
+             INSERT INTO event (run_id, seq, at, step_id, kind, payload_json)
+             VALUES ('r1', 1, '2026-11-01T07:30:00Z', NULL, 'started', '{}'),
+                    ('r1', 2, '2026-11-01T07:31:00Z', NULL, 'finished', '{}');",
+        )
+        .expect("a 1.0.0 log");
+
+        apply(&conn).expect("migrate to the current schema");
+
+        let (runs, events): (i64, i64) = conn
+            .query_row(
+                "SELECT (SELECT count(*) FROM run), (SELECT count(*) FROM event e JOIN run r ON r.id = e.run_id)",
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .unwrap();
+        assert_eq!((runs, events), (1, 2));
+        let outcome: String = conn
+            .query_row("SELECT outcome FROM run WHERE id = 'r1'", [], |row| {
+                row.get(0)
+            })
+            .unwrap();
+        assert_eq!(outcome, "completed");
+        // The log still refers to `run`, and nothing dangles.
+        let broken: i64 = conn
+            .query_row("SELECT count(*) FROM pragma_foreign_key_check", [], |row| {
+                row.get(0)
+            })
+            .unwrap();
+        assert_eq!(broken, 0);
+        // The log is still append-only, and a run still cannot be deleted under it.
+        assert!(conn.execute("DELETE FROM event", []).is_err());
+        assert!(conn.execute("DELETE FROM run WHERE id = 'r1'", []).is_err());
+        // And a command-line run is welcome now.
+        conn.execute(
+            "INSERT INTO run (id, profile_name, mode, trigger, started_at)
+             VALUES ('r2', 'Morning', 'real', 'command', '2026-11-20T00:00:00Z')",
+            [],
+        )
+        .expect("a command-line run");
+        let old_table: i64 = conn
+            .query_row(
+                "SELECT count(*) FROM sqlite_master WHERE name = 'run_new'",
+                [],
+                |row| row.get(0),
+            )
+            .unwrap();
+        assert_eq!(old_table, 0);
     }
 
     #[test]
