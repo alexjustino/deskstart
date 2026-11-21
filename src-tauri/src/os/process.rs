@@ -143,6 +143,32 @@ fn command(launch: &Launch) -> Command {
     command
 }
 
+/// Windows' `CREATE_NO_WINDOW`: a console program started with it gets no
+/// console of its own.
+pub const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+
+/// The command for a tool this product **waits on** — `schtasks`, `vmrun`,
+/// `VBoxManage`, PowerShell — built with no console of its own.
+///
+/// The released build is a windowed program with no console, so a console
+/// tool it starts would be given a new console window. Creating one sends
+/// messages to the desktop's windows and waits for each to answer — this
+/// product's included, whose thread is the one waiting for the tool. In 1.0.0
+/// that stalled every command behind a Task Scheduler query until it timed
+/// out, only in the release build: a debug build has a console to share.
+/// Programs a step starts (`spawn`) are not built this way: a console program
+/// a person put in a profile is meant to show its window.
+fn bounded_command(launch: &Launch) -> Command {
+    #[allow(unused_mut)]
+    let mut command = command(launch);
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        command.creation_flags(CREATE_NO_WINDOW);
+    }
+    command
+}
+
 /// Start the program. The child is returned running; the caller decides how
 /// long to hold the handle.
 pub fn spawn(launch: &Launch) -> Result<Spawned, LaunchFailure> {
@@ -179,7 +205,7 @@ pub fn run_bounded(
     use std::time::Instant;
 
     check(launch)?;
-    let mut command = command(launch);
+    let mut command = bounded_command(launch);
     command.stderr(Stdio::piped());
     let mut child = command
         .spawn()
@@ -238,6 +264,76 @@ pub fn run_bounded(
     }
 }
 
+/// Run a program to its end within a budget and return what it wrote to
+/// stdout — the list a hypervisor prints when asked its inventory (1.1).
+///
+/// The sibling of `run_bounded`: same bounded wait and drain, but it keeps
+/// stdout rather than the first line of stderr, and a non-zero exit is a
+/// failure carrying stderr as the reason. Nothing it runs is a long-lived
+/// program; it is a question a tool answers and exits.
+pub fn capture_stdout(
+    launch: &Launch,
+    budget: std::time::Duration,
+) -> Result<String, LaunchFailure> {
+    use std::io::Read;
+    use std::time::Instant;
+
+    check(launch)?;
+    let mut command = bounded_command(launch);
+    command.stdout(Stdio::piped());
+    command.stderr(Stdio::piped());
+    let mut child = command
+        .spawn()
+        .map_err(|error| classify(error, &launch.program))?;
+
+    let mut out_pipe = child.stdout.take();
+    let mut err_pipe = child.stderr.take();
+    let (sender, receiver) = std::sync::mpsc::channel::<(String, String)>();
+    std::thread::spawn(move || {
+        let mut out = String::new();
+        let mut err = String::new();
+        if let Some(pipe) = out_pipe.as_mut() {
+            let _ = pipe.read_to_string(&mut out);
+        }
+        if let Some(pipe) = err_pipe.as_mut() {
+            let _ = pipe.read_to_string(&mut err);
+        }
+        let _ = sender.send((out, err));
+    });
+
+    let deadline = Instant::now() + budget;
+    let status = loop {
+        match child.try_wait() {
+            Ok(Some(status)) => break Some(status),
+            Ok(None) if Instant::now() < deadline => {
+                std::thread::sleep(std::time::Duration::from_millis(50));
+            }
+            Ok(None) => {
+                let _ = child.kill();
+                let _ = child.wait();
+                break None;
+            }
+            Err(error) => {
+                log::warn!("waiting for {}: {error}", launch.program.display());
+                let _ = child.kill();
+                break None;
+            }
+        }
+    };
+    let (out, err) = receiver
+        .recv_timeout(std::time::Duration::from_millis(500))
+        .unwrap_or_default();
+
+    match status {
+        None => Err(LaunchFailure::TimedOut(budget.as_secs())),
+        Some(status) if status.success() => Ok(out),
+        Some(status) => Err(LaunchFailure::Refused {
+            code: status.code(),
+            said: first_line(&err),
+        }),
+    }
+}
+
 /// The first line that says anything, cut to a sentence's length.
 fn first_line(text: &str) -> String {
     let line = text
@@ -267,6 +363,30 @@ fn classify(error: std::io::Error, program: &Path) -> LaunchFailure {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_tool_that_is_waited_on_gets_no_console_of_its_own() {
+        // The flag Windows documents for CREATE_NO_WINDOW. A tool run with it
+        // cannot make the released, console-less build wait on itself.
+        assert_eq!(CREATE_NO_WINDOW, 0x0800_0000);
+    }
+
+    #[test]
+    #[cfg(windows)]
+    fn a_console_tool_run_to_its_end_answers_promptly() {
+        // cmd /c exit 0 — a console program, run the way schtasks is.
+        let system = std::env::var_os("SYSTEMROOT").expect("SYSTEMROOT");
+        let launch = Launch {
+            program: std::path::PathBuf::from(system).join(r"System32\cmd.exe"),
+            args: vec!["/c".into(), "exit".into(), "0".into()],
+            working_dir: None,
+            env: Vec::new(),
+        };
+        let started = std::time::Instant::now();
+        let finished = run_bounded(&launch, std::time::Duration::from_secs(10)).expect("runs");
+        assert_eq!(finished.code, Some(0));
+        assert!(started.elapsed() < std::time::Duration::from_secs(5));
+    }
 
     fn launch(program: &str, args: &[&str]) -> Launch {
         Launch {

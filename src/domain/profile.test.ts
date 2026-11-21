@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   lastSegment,
   parseStoredStep,
+  passwordSteps,
   readStepConfig,
   readUrl,
   resolvePath,
@@ -211,9 +212,14 @@ describe('the steps that call a tool', () => {
   });
 
   it('refuses a browser it does not read, and a folder with no name', () => {
-    expect(readStepConfig({ kind: 'bookmarks', browser: 'firefox', folder: 'Work' })).toEqual([
-      { path: 'step.browser', problem: 'bookmarks are read from chrome or edge' },
+    expect(readStepConfig({ kind: 'bookmarks', browser: 'opera', folder: 'Work' })).toEqual([
+      { path: 'step.browser', problem: 'bookmarks are read from chrome, edge, firefox' },
     ]);
+    expect(readStepConfig({ kind: 'bookmarks', browser: 'firefox', folder: 'Work' })).toEqual({
+      kind: 'bookmarks',
+      browser: 'firefox',
+      folder: 'Work',
+    });
     expect(readStepConfig({ kind: 'bookmarks', folder: '  ' })).toEqual([
       { path: 'step.folder', problem: 'name the bookmark folder to open' },
     ]);
@@ -334,5 +340,98 @@ describe('a virtual machine', () => {
       problems: [{ path: 'machine', problem: 'VMware knows a machine by its .vmx file' }],
     });
     expect(stepTitle(vmware)).toBe('dev');
+  });
+});
+
+describe('an encrypted VMware machine (ADR-028)', () => {
+  const VMX = 'C:\\VMs\\vault\\vault.vmx';
+
+  it('carries the fact it is encrypted, never a password, to the launch', () => {
+    const config = readStepConfig({
+      kind: 'vm',
+      hypervisor: 'vmware',
+      machine: VMX,
+      encrypted: true,
+    });
+    if (Array.isArray(config)) throw new Error('the step reads');
+    expect(config).toEqual({ kind: 'vm', hypervisor: 'vmware', machine: VMX, encrypted: true });
+    const resolved = resolveStep(config, ENV);
+    if (!resolved.ok || resolved.launch.kind !== 'tool') throw new Error('resolves to a tool');
+    expect(resolved.launch.encrypted).toBe(true);
+    // The arguments are the same as an unencrypted machine's: the host adds
+    // the password at the moment of starting, and only there.
+    expect(resolved.launch.args).toEqual(['-T', 'ws', 'start', VMX, 'gui']);
+    expect(JSON.stringify(resolved.launch)).not.toMatch(/-vp|password/i);
+  });
+
+  it('reads and stores a machine that is not encrypted exactly as before', () => {
+    const plain = readStepConfig({
+      kind: 'vm',
+      hypervisor: 'vmware',
+      machine: VMX,
+      encrypted: false,
+    });
+    expect(plain).toEqual({ kind: 'vm', hypervisor: 'vmware', machine: VMX });
+    if (Array.isArray(plain)) return;
+    expect(serializeStepConfig(plain)).toBe(JSON.stringify({ hypervisor: 'vmware', machine: VMX }));
+    const resolved = resolveStep(plain, ENV);
+    if (resolved.ok && resolved.launch.kind === 'tool') {
+      expect('encrypted' in resolved.launch).toBe(false);
+    }
+  });
+
+  it('round-trips the flag through the stored form', () => {
+    const config = readStepConfig({
+      kind: 'vm',
+      hypervisor: 'vmware',
+      machine: VMX,
+      encrypted: true,
+    });
+    if (Array.isArray(config)) throw new Error('the step reads');
+    const back = parseStoredStep('vm', serializeStepConfig(config));
+    expect(back).toEqual({ ok: true, config });
+  });
+
+  it('refuses the flag on a hypervisor it does not apply to, and anything not a boolean', () => {
+    expect(
+      readStepConfig({ kind: 'vm', hypervisor: 'hyperv', machine: 'dev', encrypted: true }),
+    ).toEqual([
+      { path: 'step.encrypted', problem: 'only a VMware machine is started with a password here' },
+    ]);
+    expect(
+      readStepConfig({ kind: 'vm', hypervisor: 'vmware', machine: VMX, encrypted: 'yes' }),
+    ).toEqual([{ path: 'step.encrypted', problem: 'encrypted is true or false' }]);
+  });
+
+  it('refuses a password written into the step: the field is not part of a vm step', () => {
+    const smuggled = readStepConfig({
+      kind: 'vm',
+      hypervisor: 'vmware',
+      machine: VMX,
+      encrypted: true,
+      password: 'hunter2',
+    });
+    expect(smuggled).toEqual([
+      { path: 'step.password', problem: 'this field is not part of a vm step' },
+    ]);
+  });
+
+  it('lists the steps that need a password, in run order', () => {
+    const vm = (machine: string, encrypted: boolean) => ({
+      kind: 'vm' as const,
+      hypervisor: 'vmware' as const,
+      machine,
+      ...(encrypted ? { encrypted: true } : {}),
+    });
+    const steps = [
+      { id: 's1', config: vm('C:\\A\\a.vmx', true) },
+      { id: 's2', config: vm('C:\\B\\b.vmx', false) },
+      { id: 's3', config: { kind: 'url' as const, url: 'https://example.com' } },
+      { id: 's4', config: vm('C:\\C\\c.vmx', true) },
+    ] as unknown as Parameters<typeof passwordSteps>[0];
+    expect(passwordSteps(steps)).toEqual([
+      { id: 's1', title: 'a' },
+      { id: 's4', title: 'c' },
+    ]);
   });
 });

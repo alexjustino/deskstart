@@ -30,7 +30,9 @@ import { InfoBar } from '@/ui/InfoBar';
 import { Input } from '@/ui/Input';
 import { Select } from '@/ui/Select';
 
-import { KIND_LABELS } from './kinds';
+import { BROWSER_LABELS, KIND_LABELS } from './kinds';
+import { MachinePicker } from './MachinePicker';
+import { HelpLink } from '@/features/help/HelpLink';
 
 /**
  * The step editor: one form for adding and for editing, one kind at a time.
@@ -62,6 +64,10 @@ interface Draft {
   /** A virtual machine: which hypervisor, and the machine's name or .vmx. */
   hypervisor: Hypervisor;
   machine: string;
+  /** VMware: the machine is encrypted, its password asked at each run (ADR-028). */
+  encrypted: boolean;
+  /** Adding: the machines ticked in the hypervisor's list, one step each. */
+  picked: string[];
   pauseAfterS: string;
   holdS: string;
   repeat: string;
@@ -78,6 +84,9 @@ interface Draft {
   width: string;
   height: string;
   windowState: WindowState;
+  /** Which new window to place (ADR-029): a piece of its title, its class. */
+  matchTitle: string;
+  matchClass: string;
 }
 
 /** An earlier step, as the "waits for" list offers it. */
@@ -114,6 +123,8 @@ const EMPTY: Draft = {
   directory: '',
   hypervisor: 'hyperv',
   machine: '',
+  encrypted: false,
+  picked: [],
   pauseAfterS: '',
   holdS: '',
   repeat: '1',
@@ -128,6 +139,8 @@ const EMPTY: Draft = {
   width: '',
   height: '',
   windowState: 'normal',
+  matchTitle: '',
+  matchClass: '',
 };
 
 function seconds(ms: number): string {
@@ -159,6 +172,8 @@ function draftOf(
     width: placement.rect === null ? '' : String(placement.rect.width),
     height: placement.rect === null ? '' : String(placement.rect.height),
     windowState: placement.state,
+    matchTitle: placement.match?.title ?? '',
+    matchClass: placement.match?.className ?? '',
   };
   switch (config.kind) {
     case 'app':
@@ -200,6 +215,7 @@ function draftOf(
         kind: 'vm',
         hypervisor: config.hypervisor,
         machine: config.machine,
+        encrypted: config.encrypted === true,
       };
   }
 }
@@ -230,7 +246,14 @@ function documentOf(draft: Draft): Record<string, unknown> {
     case 'editor':
       return { kind: 'editor', path: draft.path };
     case 'vm':
-      return { kind: 'vm', hypervisor: draft.hypervisor, machine: draft.machine };
+      return {
+        kind: 'vm',
+        hypervisor: draft.hypervisor,
+        machine: draft.machine,
+        // Only VMware takes a password; the box is not shown for the others,
+        // and a tick left over from switching does not follow them.
+        ...(draft.hypervisor === 'vmware' && draft.encrypted ? { encrypted: true } : {}),
+      };
   }
 }
 
@@ -315,6 +338,14 @@ function placementOf(draft: Draft): Record<string, unknown> | Problem[] {
         }
       : {}),
     state: draft.windowState,
+    ...(draft.matchTitle.trim() !== '' || draft.matchClass.trim() !== ''
+      ? {
+          match: {
+            title: draft.matchTitle.trim() === '' ? null : draft.matchTitle,
+            className: draft.matchClass.trim() === '' ? null : draft.matchClass,
+          },
+        }
+      : {}),
   };
 }
 
@@ -327,6 +358,7 @@ export function StepForm({
   pending,
   hostError,
   onSubmit,
+  onSubmitMany,
   onCancel,
 }: {
   /** The step being edited, or null to add one. */
@@ -348,6 +380,16 @@ export function StepForm({
   hostError: string | null;
   onSubmit: (
     config: StepConfig,
+    timing: Timing,
+    waitFor: WaitFor | null,
+    placement: Placement,
+  ) => void;
+  /**
+   * Adding several machines picked from a hypervisor's list: one step each,
+   * with the same time, waiting and placement, in the order given.
+   */
+  onSubmitMany?: (
+    configs: StepConfig[],
     timing: Timing,
     waitFor: WaitFor | null,
     placement: Placement,
@@ -393,8 +435,53 @@ export function StepForm({
     setArgument('');
   };
 
+  // Adding machines ticked in the list: each is read and resolved as its own
+  // step, exactly as one typed by hand would be.
+  const many = !editing && draft.kind === 'vm' && draft.picked.length > 0;
+
+  const submitMany = () => {
+    if (Array.isArray(timing)) {
+      setProblems(timing);
+      return;
+    }
+    if (Array.isArray(placement)) {
+      setProblems(placement);
+      return;
+    }
+    if (Array.isArray(waitFor)) {
+      setProblems(waitFor);
+      return;
+    }
+    const configs: StepConfig[] = [];
+    const found: Problem[] = [];
+    for (const machine of draft.picked) {
+      const config = readStepConfig(documentOf({ ...draft, machine }));
+      if (Array.isArray(config)) {
+        found.push(...config);
+        continue;
+      }
+      const resolved = resolveStep(config, env);
+      if (!resolved.ok) {
+        found.push(...resolved.problems);
+        continue;
+      }
+      found.push(...stepProblems(config, timing, placement));
+      configs.push(config);
+    }
+    if (found.length > 0) {
+      setProblems(found);
+      return;
+    }
+    setProblems([]);
+    onSubmitMany?.(configs, timing, waitFor, placement);
+  };
+
   const submit = (event: FormEvent) => {
     event.preventDefault();
+    if (many) {
+      submitMany();
+      return;
+    }
     const config = readStepConfig(documentOf(draft));
     if (Array.isArray(config)) {
       setProblems(config);
@@ -429,6 +516,9 @@ export function StepForm({
   };
 
   const target = (() => {
+    if (many) {
+      return `Will start ${draft.picked.length} ${draft.picked.length === 1 ? 'machine' : 'machines'}, one step each`;
+    }
     if (preview === null || !preview.ok) return null;
     const launch = preview.launch;
     switch (launch.kind) {
@@ -443,7 +533,7 @@ export function StepForm({
       case 'tool':
         return `Will open ${launch.what}${launch.source !== null ? ` — from ${launch.source}` : ''}`;
       case 'bookmarks':
-        return `Will open every page in ${launch.folder}, from ${launch.browser === 'chrome' ? 'Chrome' : 'Edge'}, as one window`;
+        return `Will open every page in ${launch.folder}, from ${BROWSER_LABELS[launch.browser]}, as one window`;
     }
   })();
 
@@ -487,6 +577,7 @@ export function StepForm({
             ))}
           </Select>
         </span>
+        <HelpLink section={draft.kind === 'vm' ? 'machines' : 'kinds'} />
       </div>
 
       {draft.kind === 'app' && (
@@ -582,7 +673,7 @@ export function StepForm({
             options={BROWSERS}
             value={draft.browser}
             onChange={(browser) => set({ browser })}
-            labels={{ chrome: 'Chrome', edge: 'Edge' }}
+            labels={BROWSER_LABELS}
             disabled={pending}
           />
           <Input
@@ -634,8 +725,18 @@ export function StepForm({
             label="Started by"
             options={HYPERVISORS}
             value={draft.hypervisor}
-            onChange={(hypervisor) => set({ hypervisor })}
+            onChange={(hypervisor) => set({ hypervisor, picked: [] })}
             labels={{ hyperv: 'Hyper-V', virtualbox: 'VirtualBox', vmware: 'VMware' }}
+            disabled={pending}
+          />
+          <MachinePicker
+            hypervisor={draft.hypervisor}
+            installed={tool?.found === true}
+            multiple={!editing}
+            picked={editing ? [draft.machine] : draft.picked}
+            onPick={(ids) =>
+              editing ? set({ machine: ids[0] ?? draft.machine }) : set({ picked: ids })
+            }
             disabled={pending}
           />
           <Input
@@ -647,8 +748,31 @@ export function StepForm({
             }
             value={draft.machine}
             onChange={(e) => set({ machine: e.target.value })}
-            disabled={pending}
+            disabled={pending || many}
+            title={
+              many ? 'The machines ticked above are added; untick them to type one' : undefined
+            }
           />
+          {draft.hypervisor === 'vmware' && (
+            <div className="flex flex-col gap-1">
+              <label className="flex items-center gap-3 text-body text-fg">
+                <Checkbox
+                  label="Encrypted: ask for its password at each run"
+                  checked={draft.encrypted}
+                  onChange={(encrypted) => set({ encrypted })}
+                  disabled={pending}
+                />
+                <span>
+                  {many && draft.picked.length > 1 ? 'These machines are' : 'This machine is'}{' '}
+                  encrypted — ask for the password at each run
+                </span>
+              </label>
+              <p className="pl-8 text-caption text-fg-tertiary">
+                The password is asked when you press Run, used for that run, and never stored — not
+                in the profile, not on disk, not in the log.
+              </p>
+            </div>
+          )}
           <p className="text-caption text-fg-tertiary">
             The machine is started and its console opened. Starting it is asked of the hypervisor
             and waited for, up to a minute; what the hypervisor answers is in the log.
@@ -675,7 +799,9 @@ export function StepForm({
       )}
 
       <fieldset className="flex flex-col gap-2 rounded-md border border-stroke-subtle p-3">
-        <legend className="px-1 text-caption font-semibold text-fg-tertiary uppercase">Time</legend>
+        <legend className="flex items-center gap-1 px-1 text-caption font-semibold text-fg-tertiary uppercase">
+          Time <HelpLink section="time" />
+        </legend>
         <div className="grid grid-cols-[minmax(0,1fr)_8rem] items-center gap-2">
           <label htmlFor="step-pause" className="text-body text-fg-secondary">
             Wait after this step, before the next (seconds)
@@ -747,92 +873,126 @@ export function StepForm({
         </p>
       </fieldset>
 
-      {holdable && (
-        <fieldset className="flex flex-col gap-2 rounded-md border border-stroke-subtle p-3">
-          <legend className="px-1 text-caption font-semibold text-fg-tertiary uppercase">
-            Where
-          </legend>
-          <ChoiceGroup
-            label="Opens"
-            options={['normal', 'maximized', 'minimized'] as const}
-            value={draft.windowState}
-            onChange={(windowState) => set({ windowState })}
-            labels={{ normal: 'Normal', maximized: 'Maximised', minimized: 'Minimised' }}
-            disabled={pending}
-          />
-          <div className="grid grid-cols-[minmax(0,1fr)_12rem] items-center gap-2">
-            <label htmlFor="step-monitor" className="text-body text-fg-secondary">
-              Screen
-            </label>
-            <Select
-              id="step-monitor"
-              aria-label="Screen"
-              value={draft.monitor}
-              onChange={(e) => set({ monitor: e.target.value })}
-              disabled={pending}
-            >
-              <option value="">Wherever it opens</option>
-              {screens.map((screen) => (
-                <option key={screen.number} value={String(screen.number)}>
-                  {screen.number}
-                  {screen.primary ? ' — primary' : ''} ({screen.width}×{screen.height})
-                </option>
-              ))}
-            </Select>
-            <label htmlFor="step-x" className="text-body text-fg-secondary">
-              Position and size on that screen (pixels; all four, or none)
-            </label>
-            <div className="grid grid-cols-2 gap-2">
-              <Input
-                id="step-x"
-                aria-label="X"
-                inputMode="numeric"
-                placeholder="x"
-                value={draft.x}
-                onChange={(e) => set({ x: e.target.value })}
-                disabled={pending}
-              />
-              <Input
-                aria-label="Y"
-                inputMode="numeric"
-                placeholder="y"
-                value={draft.y}
-                onChange={(e) => set({ y: e.target.value })}
-                disabled={pending}
-              />
-              <Input
-                aria-label="Width"
-                inputMode="numeric"
-                placeholder="width"
-                value={draft.width}
-                onChange={(e) => set({ width: e.target.value })}
-                disabled={pending}
-              />
-              <Input
-                aria-label="Height"
-                inputMode="numeric"
-                placeholder="height"
-                value={draft.height}
-                onChange={(e) => set({ height: e.target.value })}
-                disabled={pending}
-              />
-            </div>
-          </div>
+      <fieldset className="flex flex-col gap-2 rounded-md border border-stroke-subtle p-3">
+        <legend className="flex items-center gap-1 px-1 text-caption font-semibold text-fg-tertiary uppercase">
+          Where <HelpLink section="where" />
+        </legend>
+        {!holdable && (
           <p className="text-caption text-fg-secondary">
-            {placeSentence ?? 'Opens wherever the program would have opened it.'}
+            This opens in a window another program owns, so placing it needs a window rule below:
+            which new window to move.
           </p>
-          {screens.length === 0 && (
-            <p className="text-caption text-caution">
-              No screen was found to offer. A step can still ask to be maximised or minimised.
-            </p>
-          )}
-        </fieldset>
-      )}
+        )}
+        <ChoiceGroup
+          label="Opens"
+          options={['normal', 'maximized', 'minimized'] as const}
+          value={draft.windowState}
+          onChange={(windowState) => set({ windowState })}
+          labels={{ normal: 'Normal', maximized: 'Maximised', minimized: 'Minimised' }}
+          disabled={pending}
+        />
+        <div className="grid grid-cols-[minmax(0,1fr)_12rem] items-center gap-2">
+          <label htmlFor="step-monitor" className="text-body text-fg-secondary">
+            Screen
+          </label>
+          <Select
+            id="step-monitor"
+            aria-label="Screen"
+            value={draft.monitor}
+            onChange={(e) => set({ monitor: e.target.value })}
+            disabled={pending}
+          >
+            <option value="">Wherever it opens</option>
+            {screens.map((screen) => (
+              <option key={screen.number} value={String(screen.number)}>
+                {screen.number}
+                {screen.primary ? ' — primary' : ''} ({screen.width}×{screen.height})
+              </option>
+            ))}
+          </Select>
+          <label htmlFor="step-x" className="text-body text-fg-secondary">
+            Position and size on that screen (pixels; all four, or none)
+          </label>
+          <div className="grid grid-cols-2 gap-2">
+            <Input
+              id="step-x"
+              aria-label="X"
+              inputMode="numeric"
+              placeholder="x"
+              value={draft.x}
+              onChange={(e) => set({ x: e.target.value })}
+              disabled={pending}
+            />
+            <Input
+              aria-label="Y"
+              inputMode="numeric"
+              placeholder="y"
+              value={draft.y}
+              onChange={(e) => set({ y: e.target.value })}
+              disabled={pending}
+            />
+            <Input
+              aria-label="Width"
+              inputMode="numeric"
+              placeholder="width"
+              value={draft.width}
+              onChange={(e) => set({ width: e.target.value })}
+              disabled={pending}
+            />
+            <Input
+              aria-label="Height"
+              inputMode="numeric"
+              placeholder="height"
+              value={draft.height}
+              onChange={(e) => set({ height: e.target.value })}
+              disabled={pending}
+            />
+          </div>
+        </div>
+        <p className="text-caption text-fg-secondary">
+          {placeSentence ?? 'Opens wherever the program would have opened it.'}
+        </p>
+        <div className="grid grid-cols-[minmax(0,1fr)_12rem] items-center gap-2">
+          <label htmlFor="step-match-title" className="text-body text-fg-secondary">
+            Which window: its title has (optional)
+          </label>
+          <Input
+            id="step-match-title"
+            aria-label="Window title has"
+            placeholder="e.g. Character Map"
+            value={draft.matchTitle}
+            onChange={(e) => set({ matchTitle: e.target.value })}
+            disabled={pending}
+            spellCheck={false}
+          />
+          <label htmlFor="step-match-class" className="text-body text-fg-secondary">
+            Which window: its class is (optional)
+          </label>
+          <Input
+            id="step-match-class"
+            aria-label="Window class"
+            placeholder="e.g. CabinetWClass"
+            value={draft.matchClass}
+            onChange={(e) => set({ matchClass: e.target.value })}
+            disabled={pending}
+            spellCheck={false}
+          />
+        </div>
+        <p className="text-caption text-fg-tertiary">
+          A rule only ever picks a window that appeared after this step started — never one that was
+          already open.
+        </p>
+        {screens.length === 0 && (
+          <p className="text-caption text-caution">
+            No screen was found to offer. A step can still ask to be maximised or minimised.
+          </p>
+        )}
+      </fieldset>
 
       {earlier.length > 0 && (
         <fieldset className="flex flex-col gap-2 rounded-md border border-stroke-subtle p-3">
-          <legend className="px-1 text-caption font-semibold text-fg-tertiary uppercase">
-            Waits for
+          <legend className="flex items-center gap-1 px-1 text-caption font-semibold text-fg-tertiary uppercase">
+            Waits for <HelpLink section="waiting" />
           </legend>
           <div className="grid grid-cols-[minmax(0,1fr)_12rem] items-center gap-2">
             <label htmlFor="step-wait" className="text-body text-fg-secondary">
@@ -934,7 +1094,11 @@ export function StepForm({
           icon={editing ? undefined : <Add20Regular />}
           disabled={pending}
         >
-          {editing ? 'Save step' : 'Add step'}
+          {editing
+            ? 'Save step'
+            : many && draft.picked.length > 1
+              ? `Add ${draft.picked.length} steps`
+              : 'Add step'}
         </Button>
         {onCancel && (
           <Button onClick={onCancel} disabled={pending}>

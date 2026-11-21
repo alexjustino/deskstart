@@ -1,7 +1,7 @@
 {
   "name": "deskstart",
   "private": true,
-  "version": "1.0.0",
+  "version": "1.1.0",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -20,6 +20,7 @@
     "e2e:build": "tauri build --debug --no-bundle",
     "e2e:only": "tsc -p tsconfig.e2e.json --noEmit && vitest run --config vitest.e2e.config.ts",
     "check:version": "node scripts/check-version.mjs",
+    "docs:manual": "node scripts/docs-manual.mjs",
     "check:bundle": "node scripts/check-bundle.mjs",
     "release:check": "npm run gates && npm run tauri build && npm run check:bundle"
   },

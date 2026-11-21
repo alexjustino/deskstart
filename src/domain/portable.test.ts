@@ -320,7 +320,7 @@ describe('where a window lands, in a file', () => {
     expect(result.ok).toBe(false);
     if (!result.ok)
       expect(result.problems.map((p) => p.path)).toEqual([
-        'steps[0].placement',
+        'steps[0].placement.match',
         'steps[1].timing.holdMs',
       ]);
   });
@@ -369,5 +369,36 @@ describe('what the file is called', () => {
     expect(fileNameFor('Dev: work/home')).toBe('Dev-work-home.deskstart.json');
     expect(fileNameFor('  ..  ')).toBe('profile.deskstart.json');
     expect(fileNameFor('a'.repeat(200)).length).toBeLessThan(90);
+  });
+});
+
+describe('an encrypted machine in a shared profile (ADR-028)', () => {
+  it('carries the flag and nothing else: the recipient is asked for their own password', () => {
+    const written = writePortableProfile('Lab', [
+      {
+        id: 's1',
+        config: {
+          kind: 'vm',
+          hypervisor: 'vmware',
+          machine: 'C:\\VMs\\vault\\vault.vmx',
+          encrypted: true,
+        },
+        timing: DEFAULT_TIMING,
+        waitFor: null,
+        placement: DEFAULT_PLACEMENT,
+      },
+    ]);
+    expect(written).toContain('"encrypted": true');
+    expect(written).not.toMatch(/password|-vp/i);
+    const read = readPortableProfile(written);
+    expect(read.ok).toBe(true);
+    if (read.ok) {
+      expect(read.profile.steps[0]?.config).toEqual({
+        kind: 'vm',
+        hypervisor: 'vmware',
+        machine: 'C:\\VMs\\vault\\vault.vmx',
+        encrypted: true,
+      });
+    }
   });
 });

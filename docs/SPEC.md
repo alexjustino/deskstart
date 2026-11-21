@@ -61,12 +61,12 @@ Firefox bookmarks · auto-update · AI.
 
 ### The release train
 
-| Release   | Theme               | Contents                                                                                                        |
-| --------- | ------------------- | --------------------------------------------------------------------------------------------------------------- |
-| **1.0.0** | The button          | the list above                                                                                                  |
-| 1.1.0     | The layout          | capture the current arrangement as a profile · window rules by title/class · monitor-change awareness · Firefox |
-| 1.2.0     | The day             | conditions (weekday, time, network, battery) · profile chaining · end-of-day teardown                           |
-| 2.0       | Only if it earns it | macOS and Linux                                                                                                 |
+| Release   | Theme               | Contents                                                                                                                                                                           |
+| --------- | ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1.0.0     | The button          | the list above                                                                                                                                                                     |
+| **1.1.0** | The layout          | machines picked from each hypervisor · encrypted VMware machines · capture the current arrangement as a profile · window rules by title/class · monitor-change awareness · Firefox |
+| 1.2.0     | The day             | conditions (weekday, time, network, battery) · profile chaining · end-of-day teardown                                                                                              |
+| 2.0       | Only if it earns it | macOS and Linux                                                                                                                                                                    |
 
 ## 3. Architecture
 
@@ -376,7 +376,134 @@ off until a person turns it on.
 - **Which build a task starts.** The one that registered it, by absolute path; the Diagnostics
   page of F10 will list the tasks and say which executable each one names.
 
-### Delivered in F8
+### Delivered in 1.1 — the manual, inside the product
+
+A **Help** destination on the rail holds the user manual — getting started, every kind of step,
+Run and the log, time, waiting, where windows go and window rules, virtual machines and their
+passwords, triggers, capture, sharing and review, settings and backup, troubleshooting, privacy and
+security — in **English or Portuguese (Brazil)**, chosen in Help or in Settings and kept as a
+setting. It works offline, searches ignoring case and accents, and a `?` on a card or a group of
+fields opens it at that section (ADR-031). The same text is `docs/MANUAL.md` and
+`docs/MANUAL.pt-BR.md`, generated, with a test that fails when they differ.
+
+Proved on the real binary: Help opens at _Getting started_; switching to Portuguese survives
+leaving the screen and shows in Settings; a search without accents finds _Máquinas virtuais_; the
+Triggers card's `?` opens the manual at the triggers section. axe-core finds nothing on Help in
+either theme.
+
+### Delivered in 1.1 — capture this desktop
+
+**Capture this desktop** lists the windows open now — the program, the title to recognise it by,
+and where it is — and makes a profile of the ones ticked: one application step each, started by
+its program and placed back where it is, found by its class unless that class is a generic dialog
+(ADR-030). Windows that cannot be steps say why and cannot be ticked: a program Windows will not
+name, a Store app, an Explorer window. The profile keeps no title and no arguments.
+
+The proof on the real binary is the round trip: charmap moved by hand to a known spot, the desktop
+captured with only it ticked, the step checked for the title (absent), charmap closed, the profile
+run — and a new charmap opens where the old one was, measured by Windows.
+
+### Deferred out of 1.1's capture, and why
+
+- **Arguments, and Explorer folders.** Both mean reading into another process (its command line,
+  its shell view); a person adds them in the editor.
+- **Store apps.** Started through their app identity, not a path — a step kind of their own.
+
+### Delivered in 1.1 — window rules
+
+A placement can say **which window**: a piece of its title, its class, or both (ADR-029). With a
+rule, a folder's Explorer window, a page's browser window, a terminal, an editor, a machine's
+console — and a program that hands its window to another process, like Notepad on Windows 11 —
+can be put on a screen, at a rectangle, maximised or minimised. A rule only ever matches a window
+that **appeared after its step began**: the host notes every window open at the step's start and
+never considers one of them. Without a rule, only an application is placed, by its own process,
+as in F6. A rule never makes a window closable.
+
+The proof on the real binary: a folder step whose rule is the folder's name places the new
+Explorer window at the rectangle asked, measured by Windows; a dry run says which new window it
+would place; and a rule that names a window already open — moved by hand beforehand — leaves it
+exactly where it was, with _no new window answering the rule appeared in time_ in the log.
+
+### Deferred out of 1.1's window rules, and why
+
+- **Placing a window that was already open.** That is "arrange my desktop", not "open my day",
+  and it is the risk ADR-029 exists to refuse.
+- **Rules by process name.** A stub's real process has a different name from the one started;
+  title and class are what a person can see and check.
+
+### Delivered in 1.1 — Firefox
+
+A bookmark folder can come from **Firefox**, as it can from Chrome and Edge, and opens as one
+Firefox window — the first page in a new window, the rest as its tabs. Firefox keeps bookmarks in
+`places.sqlite`, which it holds open and whose newest rows sit in its write-ahead log, so the host
+never opens Firefox's file: it finds the default profile through `profiles.ini`, copies the
+database and its log into a folder of its own, reads the bookmark rows from the copy and deletes
+it. The domain turns the rows into the same tree Chrome's file is, with the names Firefox shows —
+_Bookmarks Toolbar_, _Bookmarks Menu_, _Other Bookmarks_ — so finding a folder, the page limit
+and what is left out are one reader for all three browsers. Firefox is found where it installs,
+never on `PATH`, like every tool (ADR-022).
+
+Proved on the real binary against a Firefox folder of the suite's own: the folder is found by the
+names Firefox shows and a dry run names its two pages; a folder that is not there names the ones
+that are. **Deferred:** a real run on this machine — it would start Firefox, which creates a
+Firefox profile on first start; the argument shape is unit-tested.
+
+### Delivered in 1.1 — screens that come and go
+
+The host watches the screens while Deskstart runs — every two seconds, one enumeration — and when
+they change (plugged in, unplugged, moved, resized) it logs the change and tells the window, which
+replaces the list the editor offers and says it aloud. A profile with a step placed on a screen
+that is not here now says so **before Run**: which step, which screen, and that its window will
+open on the primary, as the log will record. Proved on the real binary: an imported profile placed
+on screen 9 is warned about on a one-screen machine, and the warning follows a host
+`monitors-changed` event without a reload.
+
+Deferred: re-placing windows already open when a screen comes back — that moves windows the run
+may no longer own, and is the "arrange my desktop" ADR-029 declines; and plugging a real screen in
+during a run, a person's proof.
+
+### Delivered in 1.1 — machines picked, machines encrypted
+
+**Picked, not typed.** The VM step lists the machines each hypervisor already has on this
+computer — VirtualBox through `VBoxManage list vms`, Hyper-V through a constant `Get-VM` asked
+as JSON, VMware Workstation from its own `inventory.vmls` — with the ones already running marked
+(ADR-027). It is a local read and nothing more. Adding, several can be ticked: "start two of
+these four" is two ticks and one button, and each machine becomes a step of its own, in the order
+listed, with the same time, waiting and placement. Editing, ticking one replaces the machine. The
+typed field stays, because a profile is often written on one computer and run on another.
+
+**Encrypted, and the password never kept.** A VMware step can be marked _encrypted_. Run then
+asks for its password before anything starts — one field per encrypted machine, in run order —
+and the password is used for that run and stored nowhere: not in the profile, not on disk, not in
+the Windows credential store, not in the log (ADR-028). The step carries the flag, never the
+secret; the launch the log records carries the flag, never the secret; the host puts
+`-vp <password>` into `vmrun`'s vector at the moment of starting, and withholds whole anything
+the hypervisor says back that might hold any of it. While `vmrun` runs, the password is on its
+command line — VMware's only way to take it — which `SECURITY.md` spells out. A field left empty skips that machine with the reason, and the rest of the
+profile runs. A dry run asks for nothing. A trigger has nobody to ask, so its encrypted machines
+are skipped with the reason. An exported profile carries the flag, so whoever imports it is asked
+for their own password.
+
+The proof on the real binary: Run asks, Cancel starts nothing; an empty password is _Skipped —
+the machine is encrypted, and its password was not given for this run_ and the run completes; a
+password given reaches the host, and afterwards it is in neither the window's text nor a single
+byte of the workspace directory, read as UTF-8 and as UTF-16.
+
+### Deferred out of 1.1's machines, and why
+
+- **The picker, seen with machines in it.** This suite's machine has no hypervisor, so the list
+  shows nothing to pick; what is proved is each reader against the hypervisors' real formats
+  (unit tests) and the editor's behaviour when the hypervisor is absent. Ticking two of four on a
+  desk with VMware is a person's proof.
+- **VMware actually opening an encrypted machine.** Needs VMware Workstation and an encrypted
+  machine. The `-vp` placement is proved in Rust; the opening is a person's proof.
+- **Remembering a password** for the session or in the Windows Credential Manager. ADR-028 chose
+  the secret over the convenience; offering it later would not change that the profile never
+  holds one.
+- **Detecting that a machine is encrypted** from its `.vmx`. The flag is set by a person; reading
+  `encryption.*` keys out of a `.vmx` is a convenience for later, not a rule.
+- **Encrypted machines on VirtualBox.** VirtualBox encrypts disks, not machines, and takes their
+  passwords through a different command per disk; it is a different feature.
 
 ### Delivered in F8
 

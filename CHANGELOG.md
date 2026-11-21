@@ -5,6 +5,93 @@ All notable changes to this project are documented in this file.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+## [1.1.0] — 2026-11-20 — The layout
+
+Deskstart 1.0 opened your working day from one button. 1.1 is about **where it all lands**, and
+about making a profile without writing it field by field: arrange your windows once and **capture**
+them; place a folder's, a browser's or a terminal's window with a **window rule**; start **virtual
+machines** picked from each hypervisor's own list, including **encrypted** VMware machines whose
+password is asked at each run and never stored; read **Firefox** bookmarks; and know before you
+press Run when a screen the profile uses is not plugged in. And the manual is now inside the
+product, under **Help**, in English or Portuguese. It also fixes two triggers 1.0.0 shipped broken —
+a global shortcut that never started its profile, and `--run`.
+
+**Schema.** This release adds migration **010**, applied automatically the first time 1.1 opens a
+workspace: it widens what the run log accepts as a reason a run started, keeping every run and
+every line of the log as written (proved by a test that migrates a 1.0 workspace). Nothing is
+asked of you. Migrations are forward-only; because 010 only widens what is accepted, 1.0 still
+opens a workspace 1.1 has migrated, but 1.0 refuses to restore a backup made by 1.1, as it refuses
+any backup from a newer version.
+
+### Added — the manual, inside the product
+
+- **Help** on the rail: the user manual, offline, in **English or Portuguese (Brazil)** — chosen
+  in Help or in Settings — with search, and a `?` on each card that opens it at that card's
+  section (ADR-031). The same text is `docs/MANUAL.md` and `docs/MANUAL.pt-BR.md`.
+- `docs/ARCHITECTURE.md`: how the code is put together and where a change goes.
+
+### Added — capture this desktop
+
+- **Capture this desktop** makes a profile of the windows open now: each one ticked becomes a step
+  that starts its program and puts its window back where it is (ADR-030). Windows that cannot be
+  steps — a Store app, an Explorer window, a program Windows will not name — say why. The profile
+  keeps no window title and no program arguments.
+
+### Added — window rules
+
+- A placement can name **which window**: a piece of its title, its class, or both (ADR-029). With
+  a rule, a folder, a page, a terminal, an editor or a machine's console can be placed — and a
+  program whose stub hands off its window. A rule only matches a window that appeared after its
+  step began; a window already open is never moved. The log names the window it placed.
+
+### Added — Firefox
+
+- A bookmark folder can come from **Firefox**, and opens as one Firefox window. Firefox's database
+  is never opened in place: the host reads a copy of it, and deletes the copy.
+
+### Added — screens that come and go
+
+- Deskstart watches the screens while it runs: plugging one in or out updates the list the editor
+  offers and is announced, and a profile with a step placed on a screen that is not here says so
+  before Run — which step, which screen, and that it will open on the primary.
+
+### Added — virtual machines, picked and encrypted
+
+- The VM step lists the machines each hypervisor already has on this computer — VirtualBox,
+  Hyper-V and VMware Workstation, the running ones marked — read locally and nothing more
+  (ADR-027). Adding, tick several and each becomes a step, in the order listed; editing, tick one
+  to replace the machine. Typing a machine by hand still works.
+- A VMware step can be marked **encrypted**. Run asks for its password before anything starts;
+  the password is used for that run and never stored — not in the profile, the workspace, the
+  log or an export (ADR-028). An empty field skips that machine with the reason, a dry run asks
+  nothing, and a trigger skips its encrypted machines with the reason. The step shows an
+  _Encrypted_ chip.
+
+### Fixed — triggers that 1.0.0 shipped broken
+
+- **A global shortcut never started its profile.** The host remembered each shortcut by its text
+  (`Ctrl+Alt+F9`), and the system reports a pressed one in its own spelling (`control+alt+F9`),
+  so the two never met. It is now found by the shortcut's identity.
+- **`deskstart.exe --run <id>` was refused by the database.** The run log's trigger CHECK, written
+  in 1.0.0's first migration, knew three triggers and not `command`. Migration 010 widens it,
+  rebuilding the `run` table the way SQLite documents for a table others refer to: the migration
+  runner now turns foreign keys off around each migration and refuses to commit one that leaves a
+  reference pointing at nothing. Every run and every line of an existing log is kept as written.
+- **The installed (release) build stalled** whenever it asked Windows a question by a console tool
+  — whether a profile's task is registered, a hypervisor's machines: the tool was given a console
+  window, whose creation waited on Deskstart's own window, which was waiting on the tool. Every
+  command behind it queued until it timed out. Tools Deskstart waits on now run with no console,
+  and those two questions are asked off the window's thread. The debug build never showed it.
+- **A trigger's request could be lost** when the screen re-rendered between the request arriving
+  and the run starting; it now counts as served only when the run begins.
+
+- SQLite, which holds the workspace and the run log, moves to the release that fixes
+  RUSTSEC-2026-0459 (`rusqlite` 0.43, `libsqlite3-sys` 0.40, bundled). Patch releases of `vite`,
+  `sharp`, `source-map-js`, `zod` and `minimatch` clear the high-severity npm advisories; all
+  are build-time tools that run while the page is built; none of them is in the installed application.
+
 ## [1.0.0] — 2026-09-08 — The button
 
 The first release. Deskstart is a profile of steps — applications, folders, files, web pages,

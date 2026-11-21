@@ -8,6 +8,15 @@
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 
+import type { CapturedWindow } from '@/domain/capture';
+import type { Hypervisor } from '@/domain/profile';
+import {
+  readHyperVList,
+  readVirtualBoxList,
+  readVmwareInventory,
+  type InventoryResult,
+} from '@/domain/vminventory';
+
 export interface SystemInfo {
   name: string;
   version: string;
@@ -111,6 +120,43 @@ export interface Monitor {
  */
 export async function fetchMonitors(): Promise<Monitor[]> {
   return invoke<Monitor[]>('monitors');
+}
+
+/**
+ * Be told when the screens change — plugged in, unplugged, moved (1.1). The
+ * host watches; this hands over the new list. Returns the way to stop.
+ */
+export function onMonitorsChanged(handler: (monitors: Monitor[]) => void): () => void {
+  const stop = listen<Monitor[]>('monitors-changed', (event) => handler(event.payload));
+  return () => {
+    void stop.then((unlisten) => unlisten());
+  };
+}
+
+/**
+ * The machines a hypervisor already has, read on this machine (1.1, ADR-027).
+ * The host fetches the raw listing; what it means is the domain's. A
+ * hypervisor that is not installed is an error with that sentence, which the
+ * editor shows instead of a list.
+ */
+export async function fetchVmInventory(hypervisor: Hypervisor): Promise<InventoryResult> {
+  const raw = await invoke<{ primary: string; running: string }>('vm_inventory', { hypervisor });
+  switch (hypervisor) {
+    case 'virtualbox':
+      return readVirtualBoxList(raw.primary, raw.running);
+    case 'hyperv':
+      return readHyperVList(raw.primary);
+    case 'vmware':
+      return readVmwareInventory(raw.primary);
+  }
+}
+
+/**
+ * The windows on the desktop now, read so they can become a profile (1.1,
+ * ADR-030). What each can become is the domain's (`domain/capture`).
+ */
+export async function fetchCapture(): Promise<CapturedWindow[]> {
+  return invoke<CapturedWindow[]>('windows_capture');
 }
 
 /** One tool this product can call, and whether this machine has it (F7). */

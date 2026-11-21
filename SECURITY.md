@@ -90,6 +90,31 @@ A browser's bookmarks file is **read, never written**. What is opened from it ar
 `https` addresses in the one folder named — never its subfolders, never a `file:` or
 `javascript:` bookmark, and never more than fifty pages.
 
+### What reading Firefox's bookmarks touches
+
+Firefox keeps bookmarks in `places.sqlite`, alongside its history. The host never opens that
+file: it copies it (and its write-ahead log) into a folder of its own under the system's temporary
+directory, reads **only the bookmark rows** — folders, titles, addresses — from the copy, and
+deletes the copy. History is in the copy for the moment it exists and is never queried. Firefox is
+not locked, written or started by reading.
+
+### What a window rule can move
+
+A placement with a window rule (ADR-029) moves a window another process owns — that is its
+purpose. What bounds it: the host notes every top-level window open when the step begins, and the
+rule may only move a window that **was not** among them, is visible and top-level, and is not this
+product's own. A window you were already working in cannot be moved by a step, whatever its rule
+matches. A rule only moves, resizes, maximises or minimises; it never closes, types into or reads
+the contents of a window. An imported profile's rules are shown in review like everything else.
+
+### What a capture reads, and keeps
+
+Capturing the desktop (ADR-030) **reads** every visible window: the program that owns it, where it
+is, its class and its title. It moves, focuses, types into and reads inside nothing. The titles go
+to the list a person picks from and **nowhere else**: the profile keeps the program, the screen,
+the rectangle, the state and the class — never a title, never a program's arguments. A program
+running with more rights than Deskstart is not named, and cannot be captured.
+
 ### What a virtual-machine step can do
 
 Ask one hypervisor to start one machine, and open its console. The machine's name is one
@@ -101,6 +126,29 @@ PowerShell, the command is a **constant** and the name travels in the child's en
 The hypervisor's tool is waited for, up to a minute, and ended if it does not answer. Starting a
 machine may need rights this product does not have; when it does, the log says what the
 hypervisor said, and nothing is elevated on your behalf (ADR-014).
+
+### What an encrypted machine's password touches
+
+A VMware step marked _encrypted_ has its password asked when a person presses Run (ADR-028).
+The password is held in memory for that run and dropped when it ends; it is never in the profile,
+the workspace, the log, an export, or the Windows credential store. The host wraps it in a type
+whose `Debug` prints nothing, adds it to `vmrun`'s argument vector as one whole argument
+(`-vp <password>`) at the moment of starting, and **withholds whole** anything the hypervisor says
+back that might hold any of it — never a redaction in place, which would show where a short
+password matched. The wrapper overwrites its own copy when dropped; that is best effort and the
+host's copy only — the argument vector, the command line Windows builds, the message from the
+window, and the window's JavaScript memory hold copies this product cannot wipe.
+
+What this cannot protect, stated plainly: `-vp` on the command line is the only way VMware
+Workstation takes the password, so it is **in `vmrun`'s command line for as long as `vmrun` runs**
+— usually seconds, at most the one-minute budget a hypervisor command gets. While it is there,
+another program running as your Windows user, an elevated program, a system service, or security
+software can read it. **On a machine that records process command lines** — Windows process
+auditing with command lines included (Security event 4688), Sysmon, or an endpoint-protection
+product — the command line, password included, is **written to that log and may be sent off the
+machine.** If yours does, an encrypted machine's password should be treated as seen by whoever
+reads those logs. That is the hypervisor's interface, not something this product adds. A trigger
+never has a password to give: its encrypted machines are skipped with that reason.
 
 ### What a trigger can do
 
@@ -145,7 +193,8 @@ name and PID, rather than silently left behind. Stop arrives with F3.
   a browser to open.
 - **Minimum capabilities.** Tauri 2 capabilities are declared explicitly, one by one.
   `tauri-plugin-shell` is not a dependency and stays absent.
-- **No secrets at rest.** The application stores no credentials and no tokens.
+- **No secrets at rest.** The application stores no credentials and no tokens. An encrypted
+  machine's password is asked at each run and never written (ADR-028).
 
 ### Out of the threat model, stated plainly
 

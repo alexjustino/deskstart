@@ -12,10 +12,10 @@
  */
 
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useCallback, useRef } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 
 import type { StepImport } from '@/domain/portable';
-import type { Step, StepConfig } from '@/domain/profile';
+import type { Hypervisor, Step, StepConfig } from '@/domain/profile';
 import type { Mode } from '@/domain/run';
 import type { WaitFor } from '@/domain/readiness';
 import type { Placement } from '@/domain/placement';
@@ -25,7 +25,15 @@ import type { Schedule, Shortcut, Trigger } from '@/domain/triggers';
 import { executeProfile, Stopper, type Runnable } from './execute';
 import * as profileApi from './profiles';
 import * as runApi from './runs';
-import { fetchEnvironment, fetchMonitors, fetchSettings, fetchTools, setSetting } from './system';
+import {
+  fetchEnvironment,
+  fetchMonitors,
+  fetchSettings,
+  fetchTools,
+  fetchVmInventory,
+  onMonitorsChanged,
+  setSetting,
+} from './system';
 
 export const keys = {
   profiles: ['profiles'] as const,
@@ -35,6 +43,7 @@ export const keys = {
   environment: ['environment'] as const,
   monitors: ['monitors'] as const,
   tools: ['tools'] as const,
+  vmInventory: (hypervisor: string) => ['vm-inventory', hypervisor] as const,
   settings: ['settings'] as const,
   scheduled: (profileId: string) => ['scheduled', profileId] as const,
 };
@@ -48,14 +57,46 @@ export function useEnvironment() {
   return useQuery({ queryKey: keys.environment, queryFn: fetchEnvironment });
 }
 
-/** The screens this machine has. Read once: the editor offers them by number. */
+/**
+ * The screens this machine has. Read once, then kept current by the host's
+ * watch (1.1): a screen plugged in or out replaces the list, and the caller
+ * is told, so it can say so.
+ */
 export function useMonitors() {
   return useQuery({ queryKey: keys.monitors, queryFn: fetchMonitors });
+}
+
+/** Keep the screens current while the window is open, and say when they change. */
+export function useScreenWatch(onChange: (count: number) => void) {
+  const client = useQueryClient();
+  useEffect(
+    () =>
+      onMonitorsChanged((monitors) => {
+        client.setQueryData(keys.monitors, monitors);
+        onChange(monitors.length);
+      }),
+    [client, onChange],
+  );
 }
 
 /** The tools this machine has, and the ones it has not (F7). */
 export function useTools() {
   return useQuery({ queryKey: keys.tools, queryFn: fetchTools });
+}
+
+/**
+ * The machines a hypervisor already has (1.1). Asked only when the editor is
+ * showing a VM step for a hypervisor that is installed; asked again on demand,
+ * since a machine can be added or started while the window is open.
+ */
+export function useVmInventory(hypervisor: Hypervisor, enabled: boolean) {
+  return useQuery({
+    queryKey: keys.vmInventory(hypervisor),
+    queryFn: () => fetchVmInventory(hypervisor),
+    enabled,
+    staleTime: 30_000,
+    retry: false,
+  });
 }
 
 /** The settings a person has chosen, read once at start (F10). */
@@ -258,6 +299,13 @@ export function useExecuteProfile() {
   // One stopper per execution: Stop reaches the run in progress and nothing else.
   const stopper = useRef<Stopper | null>(null);
   const stop = useCallback(() => stopper.current?.stop(), []);
+  // Passwords for the next run, never the mutation's variables: React Query
+  // keeps variables after a mutation settles, and a password must not outlive
+  // the run it was given for.
+  const secrets = useRef<ReadonlyMap<string, string> | null>(null);
+  const givePasswords = useCallback((passwords: ReadonlyMap<string, string>) => {
+    secrets.current = passwords;
+  }, []);
   const mutation = useMutation({
     mutationFn: ({
       profile,
@@ -278,6 +326,10 @@ export function useExecuteProfile() {
       trigger?: Trigger;
     }) => {
       stopper.current = new Stopper();
+      // Taken once, by this run, and the hook's hold on them dropped at once:
+      // the run keeps them for as long as it lasts and no longer (ADR-028).
+      const passwords = secrets.current ?? new Map<string, string>();
+      secrets.current = null;
       return executeProfile(
         profile,
         steps,
@@ -296,6 +348,7 @@ export function useExecuteProfile() {
         },
         stopper.current,
         trigger ?? 'button',
+        passwords,
       );
     },
     // The last line — `run_finished` — is written by the host without an
@@ -308,7 +361,8 @@ export function useExecuteProfile() {
       void client.invalidateQueries({ queryKey: ['runs'] });
       void client.invalidateQueries({ queryKey: ['events'] });
       stopper.current = null;
+      secrets.current = null;
     },
   });
-  return { ...mutation, stop };
+  return { ...mutation, stop, givePasswords };
 }

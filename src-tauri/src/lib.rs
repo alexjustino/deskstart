@@ -98,8 +98,7 @@ pub fn run() {
                     if event.state != ShortcutState::Pressed {
                         return;
                     }
-                    let accel = shortcut.to_string();
-                    if let Some(profile_id) = triggers::profile_for(app, &accel) {
+                    if let Some(profile_id) = triggers::profile_for(app, shortcut) {
                         triggers::deliver(
                             app,
                             RunRequest {
@@ -140,6 +139,12 @@ pub fn run() {
             app.manage(Pending(Mutex::new(initial)));
             app.manage(Shortcuts::default());
             triggers::register_all(app.handle());
+
+            // The screens, watched: plugged in, unplugged, moved (1.1).
+            let watcher = app.handle().clone();
+            std::thread::Builder::new()
+                .name("screens".into())
+                .spawn(move || commands::system::watch_screens(watcher))?;
 
             // The tray: closing the window hides it, so a schedule or a
             // shortcut still has a Deskstart to reach; Quit is here, in words.
@@ -191,7 +196,9 @@ pub fn run() {
             commands::system::accent_ramp,
             commands::system::environment,
             commands::system::monitors,
+            commands::system::windows_capture,
             commands::system::tools_list,
+            commands::system::vm_inventory,
             commands::system::bookmarks_read,
             commands::system::settings_all,
             commands::system::setting_set,

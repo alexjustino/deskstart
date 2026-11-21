@@ -583,3 +583,36 @@ describe('placing the window a step opened', () => {
     expect(failed.actions.some((action) => action.kind === 'place')).toBe(false);
   });
 });
+
+describe('a step that cannot be started at all (ADR-028)', () => {
+  it('is skipped with the reason, and the run goes on to the next step', () => {
+    const { state, actions } = drive(plan(STEPS, 'real'), [
+      { kind: 'begun', at: 1000 },
+      { kind: 'step_done', stepId: 'a', at: 1100 },
+      { kind: 'step_unavailable', stepId: 'b', reason: 'no password was given', at: 1200 },
+      { kind: 'step_done', stepId: 'c', at: 1300 },
+    ]);
+    expect(actions).toEqual([
+      { kind: 'execute', stepId: 'a' },
+      { kind: 'execute', stepId: 'b' },
+      { kind: 'skip', stepId: 'b', reason: 'no password was given' },
+      { kind: 'execute', stepId: 'c' },
+      // A skip is not a failure: nothing was tried, and the log says why.
+      { kind: 'finish', outcome: 'completed' },
+    ]);
+    expect(state.results.b).toBe('skipped');
+  });
+
+  it('means nothing for a step that is not the one about to start, or already open', () => {
+    const begun = drive(plan(STEPS, 'real'), [{ kind: 'begun', at: 1000 }]).state;
+    // Not the current step.
+    expect(
+      reduce(begun, { kind: 'step_unavailable', stepId: 'c', reason: 'x', at: 1100 }).actions,
+    ).toEqual([]);
+    // Already open.
+    const opened = reduce(begun, { kind: 'step_done', stepId: 'a', at: 1100 }).state;
+    expect(
+      reduce(opened, { kind: 'step_unavailable', stepId: 'a', reason: 'x', at: 1200 }).actions,
+    ).toEqual([]);
+  });
+});

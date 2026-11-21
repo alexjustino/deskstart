@@ -154,8 +154,22 @@ export function describe(line: LogLine): { text: string; detail: string | null }
         parts.push(`${String(r.width)}×${String(r.height)} at ${String(r.x)}, ${String(r.y)}`);
       }
       if (typeof p.monitor === 'number') parts.push(`on screen ${p.monitor}`);
+      const rule =
+        typeof p.match === 'object' && p.match !== null
+          ? (p.match as Record<string, unknown>)
+          : null;
+      const which =
+        rule === null
+          ? 'the window'
+          : [
+              'the first new window',
+              typeof rule.title === 'string' ? `whose title has \u201c${rule.title}\u201d` : null,
+              typeof rule.className === 'string' ? `of class ${rule.className}` : null,
+            ]
+              .filter((part) => part !== null)
+              .join(' ');
       return {
-        text: `Would place the window — ${parts.length > 0 ? parts.join(' ') : 'as asked'}`,
+        text: `Would place ${which} — ${parts.length > 0 ? parts.join(' ') : 'as asked'}`,
         detail: null,
       };
     }

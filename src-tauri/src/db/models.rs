@@ -117,6 +117,10 @@ pub enum Launch {
         what: String,
         #[serde(default)]
         source: Option<String>,
+        /// The machine needs a password the host adds at start (ADR-028).
+        /// The flag travels; the password never does — it is not a field here.
+        #[serde(default)]
+        encrypted: bool,
     },
     /// A bookmark folder that has not been read yet.
     ///
@@ -178,13 +182,20 @@ impl Launch {
                 args,
                 what,
                 source,
-            } => serde_json::json!({
-                "kind": self.kind(),
-                "tool": tool,
-                "target": what,
-                "args": args,
-                "source": source,
-            }),
+                encrypted,
+            } => {
+                let mut described = serde_json::json!({
+                    "kind": self.kind(),
+                    "tool": tool,
+                    "target": what,
+                    "args": args,
+                    "source": source,
+                });
+                if *encrypted {
+                    described["encrypted"] = serde_json::json!(true);
+                }
+                described
+            }
             Launch::Bookmarks {
                 browser,
                 folder,

@@ -2,9 +2,13 @@ import { useCallback, useEffect, useState } from 'react';
 
 import { applyAccent, applyTheme } from '@/app/theme';
 import { fetchAccentRamp, onRunRequested, pendingRun, type RunRequest } from '@/data/system';
-import { useSettings } from '@/data/hooks';
+import { useScreenWatch, useSettings } from '@/data/hooks';
 import { readSettings } from '@/domain/settings';
+import { announce } from '@/ui/announce';
 import { DiagnosticsPage } from '@/features/diagnostics/DiagnosticsPage';
+import { HelpProvider } from '@/features/help/HelpLink';
+import { HelpPage } from '@/features/help/HelpPage';
+import type { SectionId } from '@/features/help/manual/types';
 import { ProfilesPage } from '@/features/profiles/ProfilesPage';
 import { RunsPage } from '@/features/runs/RunsPage';
 import { SettingsPage } from '@/features/settings/SettingsPage';
@@ -37,6 +41,23 @@ export function App() {
 
   const go = useCallback((next: Destination) => setDestination(next), []);
 
+  // The manual (1.1): the rail opens it where it was left; a "?" on a card
+  // opens it at that card's section.
+  const [helpSection, setHelpSection] = useState<SectionId>('start');
+  const openHelp = useCallback((section: SectionId) => {
+    setHelpSection(section);
+    setDestination('help');
+  }, []);
+
+  // The screens, kept current while the window is open (1.1): plugging one in
+  // or out is said aloud, and every list and warning re-reads the new set.
+  const screensChanged = useCallback((count: number) => {
+    announce(
+      `Screens changed: this machine has ${count} ${count === 1 ? 'screen' : 'screens'} now`,
+    );
+  }, []);
+  useScreenWatch(screensChanged);
+
   // A run asked for by a trigger (F9): the request this process was started
   // with, or one made while the window was open. Each carries a serial so the
   // profile screen runs it once, and the screen is brought to Profiles so what
@@ -58,20 +79,25 @@ export function App() {
   }, []);
 
   return (
-    <div className="flex h-full flex-col overflow-hidden rounded-lg">
-      <TitleBar />
-      <div className="flex min-h-0 flex-1">
-        <Sidebar active={destination} onNavigate={go} />
-        <main
-          tabIndex={0}
-          className="min-w-0 flex-1 overflow-y-auto bg-layer focus-visible:outline-none"
-        >
-          {destination === 'profiles' && <ProfilesPage request={request} />}
-          {destination === 'runs' && <RunsPage />}
-          {destination === 'diagnostics' && <DiagnosticsPage />}
-          {destination === 'settings' && <SettingsPage />}
-        </main>
+    <HelpProvider open={openHelp}>
+      <div className="flex h-full flex-col overflow-hidden rounded-lg">
+        <TitleBar />
+        <div className="flex min-h-0 flex-1">
+          <Sidebar active={destination} onNavigate={go} />
+          <main
+            tabIndex={0}
+            className="min-w-0 flex-1 overflow-y-auto bg-layer focus-visible:outline-none"
+          >
+            {destination === 'profiles' && <ProfilesPage request={request} />}
+            {destination === 'runs' && <RunsPage />}
+            {destination === 'diagnostics' && <DiagnosticsPage />}
+            {destination === 'settings' && <SettingsPage />}
+            {destination === 'help' && (
+              <HelpPage section={helpSection} onSection={setHelpSection} />
+            )}
+          </main>
+        </div>
       </div>
-    </div>
+    </HelpProvider>
   );
 }

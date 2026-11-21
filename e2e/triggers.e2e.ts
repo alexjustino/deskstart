@@ -261,9 +261,28 @@ describe('what starts a run without the button', () => {
   it('starts with Windows only when asked, and stops when asked again', async () => {
     const { driver } = session;
     await (
-      await driver.findByXPath('//nav[@aria-label="Main"]//*[normalize-space(.)="Diagnostics"]')
+      await driver.findByXPath('//nav[@aria-label="Main"]//*[normalize-space(.)="Settings"]')
     ).click();
-    const box = await driver.waitForElement('input[aria-label="Start with Windows"]');
+    // Settings since F10. The box's own input is drawn over, invisible, so it
+    // is found once the card says where it stands, not waited for as shown.
+    // A run of this suite that stopped half way can leave it on: it is turned
+    // off first, through the product, so the test starts from "off" and never
+    // leaves this build in the person's Run key.
+    const where = await driver.waitFor('the card to say where it stands', async () => {
+      const on = await driver.findAllByXPath(
+        '//*[normalize-space(.)="Deskstart starts when you sign in."]',
+      );
+      if (on.length > 0) return 'on';
+      const off = await driver.findAllByXPath(
+        '//*[normalize-space(.)="Deskstart starts only when you open it."]',
+      );
+      return off.length > 0 ? 'off' : null;
+    });
+    if (where === 'on') {
+      await (await driver.find('input[aria-label="Start with Windows"]')).click();
+      await driver.waitForText('Deskstart starts only when you open it.');
+    }
+    const box = await driver.find('input[aria-label="Start with Windows"]');
     expect(runKey().toLowerCase()).not.toContain(path.dirname(APP).toLowerCase());
 
     await box.click();

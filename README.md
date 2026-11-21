@@ -78,32 +78,46 @@ twenty minutes, then close it" and "open, close, reopen" are first-class, not a 
 - **Virtual machines.** A machine on Hyper-V, VirtualBox or VMware Workstation, started with
   its console showing. The hypervisor is asked and waited for, up to a minute, and what it
   answered — a machine that is not there, a permission that is missing — is in the log. A
-  hypervisor this machine has not got is a reason within a second, never a hang.
-- **Steps that call a tool.** A **bookmark folder** — Chrome's or Edge's — opened as one
+  hypervisor this machine has not got is a reason within a second, never a hang. The editor
+  lists the machines each hypervisor already has — tick two of four and two steps are added —
+  and an **encrypted** VMware machine has its password asked when you press Run, used for that
+  run, and never stored.
+- **Steps that call a tool.** A **bookmark folder** — Chrome's, Edge's or Firefox's — opened as one
   browser window; **Windows Terminal** on a named profile, in a directory; a folder opened in
   **VS Code**. Each tool is found where Windows installs it, never on `PATH`, and a tool this
   machine has not got is a reason you can read rather than a step that quietly does nothing.
 - **Where the window goes.** A step can open its program on a chosen screen, at a chosen
   rectangle, normal, maximised or minimised. A screen this machine has not got lands the window
-  on the primary and says so; a program that shows no window of its own says that.
+  on the primary and says so; a program that shows no window of its own says that. A **window
+  rule** — a piece of the title, or the class — places a folder's Explorer window, a browser, a
+  terminal or an editor too, and only ever a window that appeared after the step began. The
+  screens are watched: plug one in or out and the editor's list follows, and a profile placed on
+  a screen that is not here says so before you press Run.
+- **Capture this desktop.** Arrange your windows, then make a profile of them: each window ticked
+  becomes a step that starts its program and puts it back where it is. Titles help you choose and
+  are not kept.
 - **Dry run.** The same run on a virtual clock: the whole timeline written at once, nothing
   started, nothing waited for.
 - **The log.** Append-only in the database — triggers refuse any update or delete — read on
   the profile screen and on the Runs screen, kept across restarts and after the profile is
   gone.
+- **Help.** The user manual, inside the product and offline, in English or Portuguese, with
+  search; a `?` on a card opens it at that card's section. The same text is
+  [`docs/MANUAL.md`](docs/MANUAL.md) ([Português](docs/MANUAL.pt-BR.md)).
 - **Diagnostics.** Version and schema from the running binary, where the workspace is, the
   Windows accent ramp, a theme choice.
 - **The shell.** Mica, the system accent followed live, a custom title bar, light and dark.
 
 ## What is planned
 
-| Slice | What                                 |
-| ----- | ------------------------------------ |
-| F10   | Settings, Diagnostics, About, backup |
-| F11   | Fluent polish and accessibility      |
-| F12   | Release 1.0.0                        |
+| Release | What                                                                                |
+| ------- | ----------------------------------------------------------------------------------- |
+| 1.2.0   | The day: conditions (weekday, time, network, battery) · profile chaining · teardown |
 
-The specification, with a proof of done per slice, is [`docs/SPEC.md`](docs/SPEC.md).
+The specification, with a proof of done per slice, is [`docs/SPEC.md`](docs/SPEC.md). How the code
+is put together, and where a change goes, is [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md). How
+to use the product is the [manual](docs/MANUAL.md) ([Português](docs/MANUAL.pt-BR.md)) — also
+inside Deskstart, under Help.
 
 ## Security
 
@@ -183,12 +197,12 @@ npm run e2e
 
 ## Roadmap
 
-| Release   | Theme               | Contents                                                                                                        |
-| --------- | ------------------- | --------------------------------------------------------------------------------------------------------------- |
-| **1.0.0** | The button          | the slices above                                                                                                |
-| 1.1.0     | The layout          | capture the current arrangement as a profile · window rules by title/class · monitor-change awareness · Firefox |
-| 1.2.0     | The day             | conditions (weekday, time, network, battery) · profile chaining · end-of-day teardown                           |
-| 2.0       | Only if it earns it | macOS and Linux                                                                                                 |
+| Release   | Theme               | Contents                                                                                                                                                                           |
+| --------- | ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| 1.0.0     | The button          | the slices above                                                                                                                                                                   |
+| **1.1.0** | The layout          | machines picked from each hypervisor · encrypted VMware machines · capture the current arrangement as a profile · window rules by title/class · monitor-change awareness · Firefox |
+| 1.2.0     | The day             | conditions (weekday, time, network, battery) · profile chaining · end-of-day teardown                                                                                              |
+| 2.0       | Only if it earns it | macOS and Linux                                                                                                                                                                    |
 
 ## Contributing
 

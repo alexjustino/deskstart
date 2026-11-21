@@ -2,6 +2,7 @@ import {
   Add20Regular,
   Apps20Regular,
   ArrowImport20Regular,
+  WindowMultiple20Regular,
   ArrowDown20Regular,
   ArrowUp20Regular,
   Bookmark20Regular,
@@ -48,6 +49,7 @@ import {
 } from '@/data/hooks';
 import type { Profile, StoredStep } from '@/data/profiles';
 import {
+  passwordSteps,
   resolveStep,
   stepTitle,
   type Problem,
@@ -56,14 +58,15 @@ import {
   type StepKind,
 } from '@/domain/profile';
 import type { Mode } from '@/domain/run';
-import { describePlacement } from '@/domain/placement';
-import { describeWaitFor, waitForProblems } from '@/domain/readiness';
+import { describePlacement, placedOffScreen, type Placement } from '@/domain/placement';
+import { describeWaitFor, waitForProblems, type WaitFor } from '@/domain/readiness';
 import { reviewState } from '@/domain/review';
-import { describeTiming } from '@/domain/timing';
+import { describeTiming, type Timing } from '@/domain/timing';
 import { describeTrigger, type Trigger } from '@/domain/triggers';
 import type { RunRequest } from '@/data/system';
 import { Button } from '@/ui/Button';
 import { Card } from '@/ui/Card';
+import { Chip } from '@/ui/Chip';
 import { ConfirmDialog } from '@/ui/ConfirmDialog';
 import { EmptyState } from '@/ui/EmptyState';
 import { IconButton } from '@/ui/IconButton';
@@ -73,11 +76,14 @@ import { announce } from '@/ui/announce';
 
 import { LogLines, RunHeading } from '../runs/LogLines';
 import { ExportProfile } from './ExportProfile';
+import { CaptureProfile } from './CaptureProfile';
 import { ImportProfile } from './ImportProfile';
+import { PasswordDialog } from './PasswordDialog';
 import { ReviewSteps } from './ReviewSteps';
 import { TriggersCard } from './TriggersCard';
-import { HYPERVISOR_LABELS, KIND_LABELS } from './kinds';
+import { BROWSER_LABELS, HYPERVISOR_LABELS, KIND_LABELS } from './kinds';
 import { StepForm, type EarlierStep, type Screen, type ToolState } from './StepForm';
+import { HelpLink } from '@/features/help/HelpLink';
 
 /**
  * Profiles: the list on the left, the selected profile on the right, and the
@@ -146,6 +152,7 @@ function ProfileList({
   const create = useCreateProfile();
   const [name, setName] = useState('');
   const [importing, setImporting] = useState(false);
+  const [capturing, setCapturing] = useState(false);
 
   const submit = (event: FormEvent) => {
     event.preventDefault();
@@ -192,7 +199,20 @@ function ProfileList({
         >
           Import a profile
         </Button>
+        <Button
+          className="mt-2 w-full"
+          icon={<WindowMultiple20Regular />}
+          onClick={() => setCapturing(true)}
+        >
+          Capture this desktop
+        </Button>
       </div>
+      {capturing && (
+        <CaptureProfile
+          onClose={() => setCapturing(false)}
+          onCreated={(profile) => onSelect(profile.id)}
+        />
+      )}
       <ImportProfile
         open={importing}
         onClose={() => setImporting(false)}
@@ -267,7 +287,26 @@ function ProfileDetail({ profile, request }: { profile: Profile; request: RunReq
       };
     });
   }, [steps.data, env]);
-  const runnable = judged.filter((j): j is Judged & { step: Step } => j.step !== null);
+  const runnable = useMemo(
+    () => judged.filter((j): j is Judged & { step: Step } => j.step !== null),
+    [judged],
+  );
+
+  // Steps placed on a screen that is not here now (1.1): said before Run, not
+  // only in the log after it. The list follows the host's watch of the screens.
+  const screenNumbers = useMemo(() => (screens.data ?? []).map((m) => m.number), [screens.data]);
+  const offScreen = useMemo(
+    () =>
+      placedOffScreen(
+        runnable.map((j) => ({
+          id: j.step.id,
+          title: titleOf(j.step.config, env),
+          placement: j.step.placement,
+        })),
+        screenNumbers,
+      ),
+    [runnable, env, screenNumbers],
+  );
   const blocked = judged.filter((j) => j.problems.length > 0).length;
 
   // Where this profile stands with review (ADR-013). While it is blocked the
@@ -291,7 +330,12 @@ function ProfileDetail({ profile, request }: { profile: Profile; request: RunReq
   const shownRun = runs.data?.find((r) => r.id === shownRunId) ?? null;
   const events = useEvents(shownRunId);
 
-  const start = useCallback(
+  // The encrypted machines this profile starts, whose passwords Run asks for
+  // first (ADR-028). Null while the dialog is closed.
+  const needPasswords = useMemo(() => passwordSteps(runnable.map((j) => j.step)), [runnable]);
+  const [asking, setAsking] = useState(false);
+
+  const begin = useCallback(
     (mode: Mode, trigger: Trigger = 'button') => {
       setActiveRunId(null);
       execute.mutate(
@@ -316,6 +360,20 @@ function ProfileDetail({ profile, request }: { profile: Profile; request: RunReq
     [execute, profile, runnable, env],
   );
 
+  // A person pressing Run is asked for the passwords before anything starts.
+  // A dry run starts nothing and needs none; a trigger has nobody to ask, so
+  // its encrypted machines are skipped with that reason and the rest runs.
+  const start = useCallback(
+    (mode: Mode, trigger: Trigger = 'button') => {
+      if (mode === 'real' && trigger === 'button' && needPasswords.length > 0) {
+        setAsking(true);
+        return;
+      }
+      begin(mode, trigger);
+    },
+    [begin, needPasswords.length],
+  );
+
   const canRun =
     runnable.length > 0 &&
     blocked === 0 &&
@@ -331,12 +389,17 @@ function ProfileDetail({ profile, request }: { profile: Profile; request: RunReq
     if (request === null || request.profileId !== profile.id) return;
     if (served.current === request.serial) return;
     if (steps.data === undefined || environment.data === undefined) return;
-    served.current = request.serial;
     // After this render has committed: a run begun from inside an effect is a
-    // cascade of renders, and the log is in no hurry by a frame.
+    // cascade of renders, and the log is in no hurry by a frame. The request
+    // counts as served only when the timer fires: marking it before, a render
+    // in between cancelled the timer and the re-run saw "served" — the run
+    // was lost, and a shortcut pressed did nothing.
+    const serial = request.serial;
     const trigger = request.trigger;
     const runnableNow = canRun;
     const timer = setTimeout(() => {
+      if (served.current === serial) return;
+      served.current = serial;
       if (runnableNow) {
         start('real', trigger);
         announce(`${describeTrigger(trigger) ?? 'A trigger'} started ${profile.name}`);
@@ -412,6 +475,13 @@ function ProfileDetail({ profile, request }: { profile: Profile; request: RunReq
           {describeError(environment.error)} Paths with %NAMES% cannot be resolved until it can.
         </InfoBar>
       )}
+      {offScreen.length > 0 && (
+        <InfoBar severity="caution" title="A screen this profile uses is not here">
+          {offScreen.map((o) => `${o.title} is placed on screen ${o.monitor}`).join('; ')}. This
+          machine has {screenNumbers.length} {screenNumbers.length === 1 ? 'screen' : 'screens'}{' '}
+          now: those windows open on the primary, and the log says so.
+        </InfoBar>
+      )}
       {review.blocked && (
         <InfoBar severity="caution" title="This profile has not been reviewed">
           It came from a file, and {review.reason}. Read each step below and accept it; until then
@@ -428,7 +498,11 @@ function ProfileDetail({ profile, request }: { profile: Profile; request: RunReq
       {review.blocked ? (
         <ReviewSteps profile={profile} steps={steps.data ?? []} env={env} review={review} />
       ) : (
-        <Card title="Steps" description="What this profile opens, in this order.">
+        <Card
+          title="Steps"
+          description="What this profile opens, in this order."
+          actions={<HelpLink section="profiles" />}
+        >
           <StepList
             profileId={profile.id}
             judged={judged}
@@ -452,6 +526,7 @@ function ProfileDetail({ profile, request }: { profile: Profile; request: RunReq
       <Card
         title={activeRunId !== null && execute.isPending ? 'Run in progress' : 'Latest run'}
         description="Every line was written to the log before it reached this screen."
+        actions={<HelpLink section="run" />}
       >
         {shownRun ? (
           <div className="flex flex-col gap-3">
@@ -470,6 +545,18 @@ function ProfileDetail({ profile, request }: { profile: Profile; request: RunReq
         omitted={judged.length - runnable.length}
         onClose={() => setExporting(false)}
       />
+
+      {asking && (
+        <PasswordDialog
+          machines={needPasswords}
+          onCancel={() => setAsking(false)}
+          onRun={(passwords) => {
+            setAsking(false);
+            execute.givePasswords(passwords);
+            begin('real');
+          }}
+        />
+      )}
 
       <ConfirmDialog
         open={confirmDelete}
@@ -536,7 +623,7 @@ function summary(config: StepConfig, env: Readonly<Record<string, string>>): str
       case 'url':
         return config.url;
       case 'bookmarks':
-        return `${config.folder} — ${config.browser === 'chrome' ? 'Chrome' : 'Edge'}`;
+        return `${config.folder} — ${BROWSER_LABELS[config.browser]}`;
       case 'terminal':
         return (
           [config.profile, config.directory].filter((part) => part !== null).join(' · ') ||
@@ -624,6 +711,16 @@ function StepList({
                     <span className="ml-2 text-caption text-fg-tertiary">
                       {KIND_LABELS[step.config.kind]}
                     </span>
+                    {step.config.kind === 'vm' && step.config.encrypted === true && (
+                      <span className="ml-2 inline-flex align-middle">
+                        <Chip
+                          tone="info"
+                          title="Its password is asked each time you press Run, and never stored"
+                        >
+                          Encrypted
+                        </Chip>
+                      </span>
+                    )}
                   </span>
                   <span
                     data-selectable
@@ -756,6 +853,31 @@ function AddStep({
   const add = useAddStep();
   // A new key after every success gives the form a clean slate.
   const [generation, setGeneration] = useState(0);
+  const [adding, setAdding] = useState(false);
+
+  // Several machines ticked at once: added one at a time, in the order listed,
+  // so each lands after the one before it. A refusal stops there and says so;
+  // the ones already added stay, and the list shows them.
+  const addMany = async (
+    configs: StepConfig[],
+    timing: Timing,
+    waitFor: WaitFor | null,
+    placement: Placement,
+  ) => {
+    setAdding(true);
+    try {
+      for (const config of configs) {
+        await add.mutateAsync({ profileId, config, timing, waitFor, placement });
+      }
+      setGeneration((g) => g + 1);
+      announce(`Added ${configs.length} ${configs.length === 1 ? 'machine' : 'machines'}`);
+    } catch {
+      // `add.error` holds the reason; the form shows it.
+    } finally {
+      setAdding(false);
+    }
+  };
+
   return (
     <StepForm
       key={generation}
@@ -764,8 +886,11 @@ function AddStep({
       screens={screens}
       tools={tools}
       env={env}
-      pending={add.isPending}
+      pending={add.isPending || adding}
       hostError={add.isError ? describeError(add.error) : null}
+      onSubmitMany={(configs, timing, waitFor, placement) =>
+        void addMany(configs, timing, waitFor, placement)
+      }
       onSubmit={(config, timing, waitFor, placement) =>
         add.mutate(
           { profileId, config, timing, waitFor, placement },

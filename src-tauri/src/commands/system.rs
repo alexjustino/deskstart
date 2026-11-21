@@ -3,11 +3,11 @@
 use std::collections::BTreeMap;
 
 use serde::Serialize;
-use tauri::{AppHandle, State};
+use tauri::{AppHandle, Emitter, State};
 
 use crate::db::{backup, database_path, migrations, settings, Db, DATA_DIR_ENV};
 use crate::error::Result;
-use crate::os::{accent, files, tools, window};
+use crate::os::{accent, capture, files, firefox, inventory, tools, window};
 
 /// What Diagnostics and About read. Never a hand-typed constant: the version
 /// comes from the running binary.
@@ -110,6 +110,54 @@ mod tests {
 /// a person picks and what the run does mean the same thing. A machine that
 /// answers with nothing — no screen the host could enumerate — is a list the
 /// editor shows as such rather than a silent empty dropdown.
+/// The windows on the desktop now, to capture as a profile (1.1, ADR-030). A
+/// read: nothing is moved or focused, and the titles it returns are for the
+/// list a person picks from — the profile does not keep them.
+#[tauri::command]
+pub fn windows_capture() -> Vec<capture::Captured> {
+    capture::windows()
+}
+
+/// The event the interface listens for when the screens change (1.1).
+pub const MONITORS_CHANGED: &str = "monitors-changed";
+
+/// How often the screens are looked at. Plugging a screen in is a human-speed
+/// event; two seconds is soon enough to be "when it happened" and costs one
+/// enumeration of a handful of monitors.
+const SCREEN_POLL: std::time::Duration = std::time::Duration::from_secs(2);
+
+/// What changed between two readings of the screens, in words, or nothing.
+pub fn screens_change(before: &[window::Monitor], now: &[window::Monitor]) -> Option<String> {
+    if before == now {
+        return None;
+    }
+    let count = |n: usize| format!("{n} screen{}", if n == 1 { "" } else { "s" });
+    Some(if before.len() == now.len() {
+        format!("{} rearranged", count(now.len()))
+    } else {
+        format!("{} became {}", count(before.len()), count(now.len()))
+    })
+}
+
+/// Watch the screens for as long as the product runs, and tell the interface
+/// the moment they change — a screen plugged in, unplugged, moved or resized —
+/// so the list the editor offers and the warnings on a profile are about the
+/// screens that are here now, not the ones there were at start (1.1). A
+/// thread of its own, sleeping between looks: nothing to stop, it ends with
+/// the process.
+pub fn watch_screens(app: AppHandle) {
+    let mut last = window::monitors();
+    loop {
+        std::thread::sleep(SCREEN_POLL);
+        let now = window::monitors();
+        if let Some(change) = screens_change(&last, &now) {
+            log::info!("screens changed: {change}");
+            let _ = app.emit(MONITORS_CHANGED, &now);
+            last = now;
+        }
+    }
+}
+
 #[tauri::command]
 pub fn monitors() -> Vec<window::Monitor> {
     window::monitors()
@@ -132,6 +180,10 @@ pub fn tools_list() -> Vec<tools::Tool> {
 /// everything a person ever kept — so it has a cap of its own.
 #[tauri::command]
 pub fn bookmarks_read(browser: String) -> Result<String> {
+    // Firefox keeps a database, not a file: its rows, read from a copy (1.1).
+    if browser == "firefox" {
+        return firefox::bookmarks_json().map_err(crate::error::Error::File);
+    }
     let path = tools::bookmarks_file(&browser).ok_or(crate::error::Error::File(
         "that browser is not one this product reads",
     ))?;
@@ -180,4 +232,17 @@ pub fn workspace_restore(app: AppHandle, path: String) -> Result<backup::BackupS
 #[tauri::command]
 pub fn restart(app: AppHandle) {
     app.restart();
+}
+
+/// The machines a hypervisor already has, as raw text for the domain to read
+/// (1.1). A hypervisor that is not installed here answers like any missing
+/// tool, so the editor can say which.
+/// Asked off the window's thread, like `schedule_registered`: it waits on a
+/// hypervisor's tool, which can take seconds.
+#[tauri::command]
+pub async fn vm_inventory(hypervisor: String) -> Result<inventory::Raw> {
+    tauri::async_runtime::spawn_blocking(move || inventory::read(&hypervisor))
+        .await
+        .map_err(|_| crate::error::Error::Scheduler("the hypervisor was not asked".to_string()))?
+        .map_err(|failure| crate::error::Error::Scheduler(failure.reason()))
 }

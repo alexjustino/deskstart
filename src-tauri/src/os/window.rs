@@ -16,8 +16,12 @@
 //! side. Without a screen, a rectangle is in the desktop's own coordinates,
 //! which on a single-screen machine is the same thing.
 //!
-//! Nothing here reaches into a window this product did not open: the caller
-//! passes the process id of a program the run started.
+//! Nothing here reaches into a window this product did not open. The caller
+//! passes either the process id of a program the run started, or — for a
+//! window rule (1.1, ADR-029) — the windows that were already open when the
+//! step began, and only a window **not** among them is ever considered.
+
+use std::collections::HashSet;
 
 use serde::{Deserialize, Serialize};
 
@@ -47,6 +51,47 @@ pub struct Placement {
     pub rect: Option<Rect>,
     #[serde(default = "normal")]
     pub state: String,
+    /// Which new window to place, when it is not the started process's own.
+    #[serde(default, rename = "match")]
+    pub rule: Option<WindowMatch>,
+}
+
+/// A window rule (ADR-029): a piece of the title, a class, or both.
+#[derive(Debug, Clone, Deserialize, PartialEq, Eq, Default)]
+#[serde(rename_all = "camelCase")]
+pub struct WindowMatch {
+    #[serde(default)]
+    pub title: Option<String>,
+    #[serde(default)]
+    pub class_name: Option<String>,
+}
+
+impl WindowMatch {
+    /// Does a window with this title and class answer the rule? Every half that
+    /// is given must hold; the title is a piece, the class is whole, and case
+    /// does not count in either.
+    pub fn matches(&self, title: &str, class: &str) -> bool {
+        let title_ok = match &self.title {
+            Some(piece) => title.to_lowercase().contains(&piece.to_lowercase()),
+            None => true,
+        };
+        let class_ok = match &self.class_name {
+            Some(name) => class.eq_ignore_ascii_case(name),
+            None => true,
+        };
+        (self.title.is_some() || self.class_name.is_some()) && title_ok && class_ok
+    }
+}
+
+/// Which window a placement is for.
+pub enum Target<'a> {
+    /// The window of a process this run started.
+    Process(u32),
+    /// The first window that appeared after the step began and answers the rule.
+    NewWindow {
+        before: &'a HashSet<isize>,
+        rule: &'a WindowMatch,
+    },
 }
 
 fn normal() -> String {
@@ -190,14 +235,114 @@ pub fn main_window(pid: u32) -> Option<windows::Win32::Foundation::HWND> {
     search.found
 }
 
-/// Put this process's window where the placement says, and report what happened.
+/// Every top-level window there is now, shown or not — what a step's rule may
+/// never touch, noted the moment the step begins (ADR-029).
+#[cfg(windows)]
+pub fn snapshot() -> HashSet<isize> {
+    use windows::Win32::Foundation::{BOOL, HWND, LPARAM};
+    use windows::Win32::UI::WindowsAndMessaging::EnumWindows;
+
+    unsafe extern "system" fn visit(hwnd: HWND, lparam: LPARAM) -> BOOL {
+        // SAFETY: lparam is the pointer to the set passed below, alive for the call.
+        let seen = &mut *(lparam.0 as *mut HashSet<isize>);
+        seen.insert(hwnd.0 as isize);
+        BOOL(1)
+    }
+
+    let mut seen = HashSet::new();
+    // SAFETY: the callback only writes into the set this stack owns.
+    let _ = unsafe {
+        EnumWindows(
+            Some(visit),
+            LPARAM(&mut seen as *mut HashSet<isize> as isize),
+        )
+    };
+    seen
+}
+
+#[cfg(not(windows))]
+pub fn snapshot() -> HashSet<isize> {
+    HashSet::new()
+}
+
+/// A window's title and class, as Windows reports them.
+#[cfg(windows)]
+pub fn title_and_class(hwnd: windows::Win32::Foundation::HWND) -> (String, String) {
+    use windows::Win32::UI::WindowsAndMessaging::{GetClassNameW, GetWindowTextW};
+    let mut title = [0u16; 512];
+    let mut class = [0u16; 256];
+    // SAFETY: the buffers are ours and their lengths are passed with them.
+    let title_len = unsafe { GetWindowTextW(hwnd, &mut title) }.max(0) as usize;
+    // SAFETY: as above.
+    let class_len = unsafe { GetClassNameW(hwnd, &mut class) }.max(0) as usize;
+    (
+        String::from_utf16_lossy(&title[..title_len]),
+        String::from_utf16_lossy(&class[..class_len]),
+    )
+}
+
+/// The first visible top-level window, not this product's own and not among
+/// `before`, that answers the rule — with its title, for the log.
+#[cfg(windows)]
+fn new_window(
+    before: &HashSet<isize>,
+    rule: &WindowMatch,
+) -> Option<(windows::Win32::Foundation::HWND, String)> {
+    use windows::Win32::Foundation::{BOOL, HWND, LPARAM};
+    use windows::Win32::UI::WindowsAndMessaging::{
+        EnumWindows, GetWindow, GetWindowThreadProcessId, IsWindowVisible, GW_OWNER,
+    };
+
+    struct Search<'a> {
+        before: &'a HashSet<isize>,
+        rule: &'a WindowMatch,
+        own: u32,
+        found: Option<(HWND, String)>,
+    }
+
+    unsafe extern "system" fn visit(hwnd: HWND, lparam: LPARAM) -> BOOL {
+        // SAFETY: lparam is the pointer to `Search` passed below, alive for the call.
+        let search = &mut *(lparam.0 as *mut Search);
+        if search.before.contains(&(hwnd.0 as isize)) || !IsWindowVisible(hwnd).as_bool() {
+            return BOOL(1);
+        }
+        let top_level = GetWindow(hwnd, GW_OWNER)
+            .map(|h| h.0.is_null())
+            .unwrap_or(true);
+        let mut pid = 0u32;
+        GetWindowThreadProcessId(hwnd, Some(&mut pid));
+        if !top_level || pid == search.own {
+            return BOOL(1);
+        }
+        let (title, class) = title_and_class(hwnd);
+        if search.rule.matches(&title, &class) {
+            search.found = Some((hwnd, title));
+            return BOOL(0);
+        }
+        BOOL(1)
+    }
+
+    let mut search = Search {
+        before,
+        rule,
+        own: std::process::id(),
+        found: None,
+    };
+    // SAFETY: the callback reads window properties and writes into `search`,
+    // which this stack owns and which outlives the enumeration.
+    let _ = unsafe { EnumWindows(Some(visit), LPARAM(&mut search as *mut Search as isize)) };
+    search.found
+}
+
+/// Put the target's window where the placement says, and report what happened.
 ///
 /// The window is not there the instant the process is: a program takes a moment
 /// to show one. So the caller's timeout is spent looking, and a program that
 /// never shows a window of its own — a stub that handed off, risk R2 — ends as
-/// a report that says exactly that.
+/// a report that says exactly that. A rule that no new window answers in time
+/// says that instead.
 #[cfg(windows)]
-pub fn place(pid: u32, placement: &Placement, timeout: std::time::Duration) -> Placed {
+pub fn place(target: Target<'_>, placement: &Placement, timeout: std::time::Duration) -> Placed {
     use std::thread::sleep;
     use std::time::Instant;
     use windows::Win32::UI::WindowsAndMessaging::{
@@ -206,12 +351,23 @@ pub fn place(pid: u32, placement: &Placement, timeout: std::time::Duration) -> P
     };
 
     let deadline = Instant::now() + timeout;
+    let mut which: Option<String> = None;
     let window = loop {
-        if let Some(window) = main_window(pid) {
+        let found = match &target {
+            Target::Process(pid) => main_window(*pid),
+            Target::NewWindow { before, rule } => new_window(before, rule).map(|(hwnd, title)| {
+                which = Some(title);
+                hwnd
+            }),
+        };
+        if let Some(window) = found {
             break window;
         }
         if Instant::now() >= deadline {
-            return Placed::nothing("the program did not show a window of its own in time");
+            return Placed::nothing(match target {
+                Target::Process(_) => "the program did not show a window of its own in time",
+                Target::NewWindow { .. } => "no new window answering the rule appeared in time",
+            });
         }
         sleep(std::time::Duration::from_millis(100));
     };
@@ -324,6 +480,9 @@ pub fn place(pid: u32, placement: &Placement, timeout: std::time::Duration) -> P
     if let Some(monitor) = &screen {
         done.push(format!("on screen {}", monitor.number));
     }
+    if let Some(title) = which {
+        done.push(format!("— the window \u{201c}{title}\u{201d}"));
+    }
 
     Placed {
         placed: true,
@@ -337,7 +496,7 @@ pub fn place(pid: u32, placement: &Placement, timeout: std::time::Duration) -> P
 }
 
 #[cfg(not(windows))]
-pub fn place(_pid: u32, _placement: &Placement, _timeout: std::time::Duration) -> Placed {
+pub fn place(_target: Target<'_>, _placement: &Placement, _timeout: std::time::Duration) -> Placed {
     Placed::nothing("windows are only placed on Windows")
 }
 
@@ -397,11 +556,68 @@ mod tests {
         // A pid that cannot be running: nothing to look at, and the report says
         // so rather than the placement quietly counting as done.
         let report = place(
-            u32::MAX,
+            Target::Process(u32::MAX),
             &Placement::default(),
             std::time::Duration::from_millis(150),
         );
         assert!(!report.placed);
         assert!(report.note.is_some());
+    }
+
+    fn rule(title: Option<&str>, class: Option<&str>) -> WindowMatch {
+        WindowMatch {
+            title: title.map(str::to_string),
+            class_name: class.map(str::to_string),
+        }
+    }
+
+    #[test]
+    fn a_rule_matches_a_piece_of_the_title_and_the_whole_class_ignoring_case() {
+        let both = rule(Some("character"), Some("myclass"));
+        assert!(both.matches("Character Map", "MyClass"));
+        assert!(!both.matches("Character Map", "MyClassic"));
+        assert!(!both.matches("Calculator", "MyClass"));
+        assert!(rule(Some("map"), None).matches("Character Map", "anything"));
+        assert!(rule(None, Some("CabinetWClass")).matches("src", "cabinetwclass"));
+    }
+
+    #[test]
+    fn an_empty_rule_matches_nothing() {
+        assert!(!WindowMatch::default().matches("anything", "anything"));
+    }
+
+    #[test]
+    fn the_rule_reads_as_the_domain_writes_it() {
+        let placement: Placement = serde_json::from_value(serde_json::json!({
+            "state": "maximized",
+            "match": { "title": "Notepad", "className": "Notepad" }
+        }))
+        .unwrap();
+        assert_eq!(placement.rule, Some(rule(Some("Notepad"), Some("Notepad"))));
+    }
+
+    #[test]
+    #[cfg(windows)]
+    fn a_rule_never_answers_with_a_window_that_was_already_open() {
+        // Everything open now is "before": no window can be new, so a rule that
+        // would match anything still finds nothing.
+        let before = snapshot();
+        let anything = rule(Some(""), None);
+        let report = place(
+            Target::NewWindow {
+                before: &before,
+                rule: &anything,
+            },
+            &Placement {
+                state: "maximized".into(),
+                ..Placement::default()
+            },
+            std::time::Duration::from_millis(150),
+        );
+        assert!(!report.placed);
+        assert_eq!(
+            report.note.as_deref(),
+            Some("no new window answering the rule appeared in time")
+        );
     }
 }

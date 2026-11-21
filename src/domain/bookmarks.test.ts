@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { MAX_PAGES, pagesToOpen, readBookmarkFolder } from './bookmarks';
+import { browserArgs, firefoxTree, MAX_PAGES, pagesToOpen, readBookmarkFolder } from './bookmarks';
 
 /** A page, in the shape Chrome and Edge write. */
 function page(name: string, url: string) {
@@ -128,5 +128,86 @@ describe('how many pages one step opens', () => {
     const opened = pagesToOpen({ name: 'Work', path: 'work', urls, left: [] });
     expect(opened.urls).toHaveLength(MAX_PAGES);
     expect(opened.note).toBe(`the first ${MAX_PAGES} of ${MAX_PAGES + 12} pages`);
+  });
+});
+
+describe('Firefox bookmarks (1.1)', () => {
+  // As the host reads them: moz_bookmarks joined to its pages, from a copy.
+  const ROWS = [
+    { id: 1, type: 2, parent: 0, position: 0, title: '', url: null, guid: 'root________' },
+    { id: 2, type: 2, parent: 1, position: 0, title: 'menu', url: null, guid: 'menu________' },
+    { id: 3, type: 2, parent: 1, position: 1, title: 'toolbar', url: null, guid: 'toolbar_____' },
+    { id: 10, type: 2, parent: 3, position: 0, title: 'Work', url: null, guid: 'w1' },
+    {
+      id: 12,
+      type: 1,
+      parent: 10,
+      position: 1,
+      title: 'B',
+      url: 'https://example.com/b',
+      guid: 'b1',
+    },
+    {
+      id: 11,
+      type: 1,
+      parent: 10,
+      position: 0,
+      title: 'A',
+      url: 'https://example.com/a',
+      guid: 'a1',
+    },
+    { id: 13, type: 3, parent: 10, position: 2, title: '', url: null, guid: 's1' },
+    { id: 14, type: 1, parent: 10, position: 3, title: 'Local', url: 'file:///C:/x', guid: 'f1' },
+    { id: 20, type: 2, parent: 2, position: 0, title: 'Work', url: null, guid: 'w2' },
+  ];
+
+  it('finds a folder by the names Firefox shows, its pages in Firefox order', () => {
+    const read = readBookmarkFolder(JSON.stringify(ROWS), 'Bookmarks Toolbar/Work');
+    expect(read.ok).toBe(true);
+    if (!read.ok) return;
+    expect(read.folder.path).toBe('Bookmarks Toolbar/Work');
+    expect(read.folder.urls).toEqual(['https://example.com/a', 'https://example.com/b']);
+    // A separator is not a page; a file:// address is left out, and said.
+    expect(read.folder.left.length).toBe(1);
+  });
+
+  it('takes a bare folder name, first found in the browser order', () => {
+    const read = readBookmarkFolder(JSON.stringify(ROWS), 'Work');
+    expect(read.ok && read.folder.path).toBe('Bookmarks Menu/Work');
+  });
+
+  it('says which folders there are when the one asked for is not', () => {
+    const read = readBookmarkFolder(JSON.stringify(ROWS), 'Nope');
+    expect(read.ok).toBe(false);
+    if (!read.ok) expect(read.folders).toContain('Bookmarks Toolbar/Work');
+  });
+
+  it('builds the tree with Firefox root names and ignores rows it cannot read', () => {
+    const tree = firefoxTree([...ROWS, 'junk', { id: 'x' }]);
+    expect(Object.values(tree.roots).map((r) => r.name)).toEqual([
+      'Bookmarks Menu',
+      'Bookmarks Toolbar',
+    ]);
+  });
+});
+
+describe('asking a browser for one window of pages', () => {
+  const URLS = ['https://a.test/', 'https://b.test/', 'https://c.test/'];
+
+  it('hands Chrome and Edge every page after --new-window', () => {
+    expect(browserArgs('chrome', URLS)).toEqual(['--new-window', ...URLS]);
+    expect(browserArgs('edge', URLS)).toEqual(['--new-window', ...URLS]);
+  });
+
+  it('opens the first in a new Firefox window and the rest as its tabs', () => {
+    expect(browserArgs('firefox', URLS)).toEqual([
+      '-new-window',
+      'https://a.test/',
+      '-new-tab',
+      'https://b.test/',
+      '-new-tab',
+      'https://c.test/',
+    ]);
+    expect(browserArgs('firefox', [])).toEqual([]);
   });
 });

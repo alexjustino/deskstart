@@ -32,6 +32,11 @@ part that matters most later — the cost we accepted.
 | [024](#adr-024) | A trigger binds to a profile id; the window closes to the tray                           | Accepted |
 | [025](#adr-025) | A backup is the workspace file; a restore is staged and applied at the next start        | Accepted |
 | [026](#adr-026) | Content surfaces are opaque; Mica is the window backdrop, not behind text                | Accepted |
+| [027](#adr-027) | A hypervisor's inventory is discovered locally, each read its own way                    | Accepted |
+| [028](#adr-028) | An encrypted machine's password is asked each run and never stored                       | Accepted |
+| [029](#adr-029) | A window rule places only a window that appeared after its step began                    | Accepted |
+| [030](#adr-030) | A capture keeps what starts and places a window, never its title                         | Accepted |
+| [031](#adr-031) | The manual is data: shown in the product, generated into the repository                  | Accepted |
 
 ---
 
@@ -518,3 +523,140 @@ a wash behind the whole window. On a Mica machine the change is small — the op
 tuned to how the translucent ones composited — and it is a pure token change, reversible by
 anyone who disagrees. It touches the product's signature look, so it wants a person's eye on a
 real desktop (host proof), not only a passing gate.
+
+## ADR-027 — A hypervisor's inventory is discovered locally, each read its own way {#adr-027}
+
+**Context.** F8 starts a virtual machine you name by hand — a name for Hyper-V and VirtualBox, a
+`.vmx` path for VMware. The 1.1 line makes the machines pickable: show what each hypervisor
+already has, so "start two of these four" is a choice, not a remembered name. Something has to
+decide where that list comes from.
+
+**Decision.** Each hypervisor is asked, **on this machine**, for its own inventory — a local read,
+never a network call (the product's founding promise, ADR-006, holds). The host runs the list
+command or reads the inventory file; `domain/vminventory` decides what the output means, and never
+throws, because a hypervisor's output is somebody else's format. There is one reader per
+hypervisor, because each answers differently:
+
+- **VirtualBox** — `VBoxManage list vms` prints `"name" {uuid}` a line at a time, and `list
+runningvms` the same for the ones that are up. The name is what `startvm` wants, so it is the id.
+- **Hyper-V** — asked through PowerShell with a **constant** command
+  (`Get-VM | Select-Object Name, State | ConvertTo-Json`), nothing a person typed in it, and the
+  answer parsed as JSON — a machine name can hold characters a column-aligned table cannot be
+  parsed through.
+- **VMware Workstation** — has no clean "list all" on Workstation, so its registered machines are
+  read from `%APPDATA%\VMware\inventory.vmls`, a text file of `.vmx` paths, the way F7 reads a
+  browser's bookmarks file. The `.vmx` path is the id; the machine is called by its folder.
+
+A hypervisor that is not installed answers like any missing tool (ADR-022): the caller gets a
+"not found", and the editor says which, rather than an empty list that looks like "no machines".
+
+**Cost accepted.** VMware's inventory is read from a file the application writes, not asked of a
+running service, so a machine registered in this session but not yet flushed to `inventory.vmls`
+may be a beat late to appear; the typed `.vmx` path of F8 is always available as the fallback. And
+each reader is bound to its tool's output format, which a major version of that tool could change
+— held, as everywhere, by a parser that treats the output as untrusted and a test over real
+sample output.
+
+## ADR-028 — An encrypted machine's password is asked each run and never stored {#adr-028}
+
+**Context.** A VMware machine can be encrypted; starting it needs a password (`vmrun -vp
+<password> start`). Deskstart has to carry that password from the person to the hypervisor
+without betraying the trust the rest of the product earns.
+
+**Decision.** The password is **asked each time a run needs it, and stored nowhere** — not in the
+profile (ADR-010: a profile is data, never a secret, and a profile is a file people share), not on
+disk, not in the OS credential store. It is held in memory for the length of that run and
+discarded. The passwords a run needs are collected **before the run starts**, so the loop never
+pauses mid-sequence to ask; a step marked as needing a password that was not given is skipped with
+that reason, the way a step that does not resolve is, and the profile carries on.
+
+The secret never travels the path that is logged. The domain marks a VMware step as `encrypted`,
+a boolean — it never holds the password; the resolved launch the log records carries no password;
+the host builds the `vmrun` argument vector with `-vp <password>` at the moment of starting and
+the log line **redacts** it. A profile exported with F5 carries the `encrypted` flag and not the
+secret, so a shared profile asks its recipient for their own password and never leaks the author's.
+
+**Cost accepted.** Typing the password at every run, by design — the choice between convenience
+and a secret that cannot leak, made for the secret. A machine with several encrypted VMs asks for
+several passwords up front. Remembering them — in the session, or in the Windows Credential Manager
+— is a setting this decision deliberately does not add; it can be offered later without changing
+that the password is never in the profile.
+
+**As built (1.1).** A run started by a trigger (ADR-024) has nobody to ask, so its encrypted
+machines are skipped with the reason and the rest of the profile runs; a dry run starts nothing
+and asks for nothing. The interface hands the passwords to the run outside React Query's mutation
+variables, which outlive a run. The host holds the password in a type whose `Debug` prints
+nothing and whose own copy is overwritten on drop (best effort), refuses a password offered to any
+launch that is not an encrypted VMware start, and withholds whole — never redacts in place —
+anything `vmrun` says back that might hold any of it. One exposure remains
+and is the hypervisor's, not this product's: `-vp` is `vmrun`'s only way to take the password, so
+while `vmrun` runs (at most its one-minute budget), the same user's programs, elevated programs
+and security software can read it from the command line, and a machine that audits command lines
+(event 4688, Sysmon, endpoint protection) records it. `SECURITY.md` states it.
+
+## ADR-029 — A window rule places only a window that appeared after its step began {#adr-029}
+
+**Context.** F6 places the window of the process a step started, and refuses everything else:
+a folder, a page, a terminal, an editor or a machine's console opens in a window another process
+owns (ADR-018, risk R2), and so does Notepad on Windows 11, whose stub hands off. "Matching
+windows by title" was deferred to 1.1 because a rule that matches by name will one day match the
+wrong window — the one a person was working in.
+
+**Decision.** A placement may carry a **window rule**: a piece of the title (ignoring case), a
+window class (whole, ignoring case), or both. A rule never searches the desktop. When a step
+begins, before anything is started, the host notes **every top-level window that exists**; a rule
+considers only a window **not** in that note — visible, top-level, not owned, not this product's
+own — and places the first that answers it, or says that none appeared in time. A window that was
+open before the step began cannot be moved by it, whatever the rule says. With a rule, every kind
+of step may be placed; without one, only an application, as before. A rule never makes a window
+closable: holding and closing stay an application's (ADR-015). The log names the window it placed.
+
+**Cost accepted.** A window that appears during the step and answers the rule but is not the
+step's — a notification, another program opening at the same moment — can be the one moved; a
+narrower rule (class and title) is the remedy, and the log says which window it was. A program
+that reuses a window already open (Explorer on a folder already shown) gets no new window, and
+the step says so instead of moving the old one.
+
+## ADR-030 — A capture keeps what starts and places a window, never its title {#adr-030}
+
+**Context.** "Arrange it once, then capture it" is how most people would rather write a profile.
+Capturing means reading every window on the desktop — and a window's title is a document's name,
+a mail's subject, a chat. The profile a capture makes is a file people export and share (ADR-010).
+
+**Decision.** The host **reads** the desktop and changes nothing: each visible, top-level,
+unowned, uncloaked, non-tool window with a title, not this product's own, with the program that
+owns it, its screen, its rectangle on that screen (when shown normally), its state and its class.
+The domain decides what each becomes: an **application step** that starts its program — written
+under its known folder, `%LOCALAPPDATA%\…` — with a placement that puts the window back, and a
+window rule on its class (ADR-029) unless the class is generic (`#32770`, every dialog box), in
+which case the window is found by its own process. A window whose program Windows will not name, a
+Store app (not started by its path) and an Explorer window (its folder is not knowable from
+outside) are listed with that reason and cannot be ticked. **The title is shown to choose by and
+never stored. Arguments are not captured**: a window does not say how it was opened, and reading
+another process's command line is further into the machine than this product goes. A captured
+profile is made with the ordinary add-step path: it is the person's own, so it is not an import
+and needs no review (ADR-013).
+
+**Cost accepted.** A program opened with arguments — a browser profile, an editor's workspace —
+comes back without them; the person adds them in the editor. A class shared by many programs
+(`Chrome_WidgetWin_1` is Chrome, Edge and every Electron app) can pick another such window that
+appears during the step; the log names the window it placed.
+
+## ADR-031 — The manual is data: shown in the product, generated into the repository {#adr-031}
+
+**Context.** A person needs a manual where they are — inside Deskstart, which never reaches the
+network (ADR-006), so a web page is not an option. The repository needs the same manual for
+anyone reading the source. Two copies of a manual drift; a manual that drifts from the product is
+worse than none. The manual is wanted in English and Portuguese; the interface stays English.
+
+**Decision.** The manual is **typed data** (`src/features/help/manual/`): sections with stable
+ids, each a list of blocks — paragraph, heading, list, numbered steps, note — whose text may carry
+only `**strong**` and `` `code` ``. The Help screen renders it with the design system, offline,
+with search (case and accents ignored) and a language choice stored as a setting. A `?` on a card
+opens Help at that card's section, by id. `docs/MANUAL.md` and `docs/MANUAL.pt-BR.md` are
+**generated** from the same data (`npm run docs:manual`), and a unit test fails the gates when a
+file and the data differ. Both languages must have every section, in the same order.
+
+**Cost accepted.** Writing in a TypeScript file instead of Markdown, and no images, tables or
+links inside the manual. A second language is a second text to keep true; the test catches a
+missing section, not a stale sentence — that is review's job.
