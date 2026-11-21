@@ -108,6 +108,19 @@ runs, and all of them must pass:
 > A hook placed after an early return type-checks cleanly and crashes the screen at runtime.
 > That is why the lint gate is mandatory and not advisory.
 
+## The manual
+
+What a person reads under Help is `src/features/help/manual/` — one file per language, the same
+sections in the same order (ADR-031). A change a person would notice changes the manual in **both**
+languages, then:
+
+```bash
+npm run docs:manual
+```
+
+writes `docs/MANUAL.md` and `docs/MANUAL.pt-BR.md` from it. A test fails the gates when the files
+and the manual differ.
+
 ## Tests
 
 New rules arrive with tests, **including the negative case**. For anything touching the run

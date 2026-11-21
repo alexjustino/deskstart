@@ -31,7 +31,7 @@ interface AxeViolation {
   nodes: { target: string[]; failureSummary: string }[];
 }
 
-const SCREENS = ['Profiles', 'Runs', 'Diagnostics', 'Settings'] as const;
+const SCREENS = ['Profiles', 'Runs', 'Diagnostics', 'Settings', 'Help'] as const;
 const THEMES = ['Light', 'Dark'] as const;
 
 async function go(session: Session, label: string): Promise<void> {

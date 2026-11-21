@@ -16,6 +16,7 @@ import { InfoBar } from '@/ui/InfoBar';
 import { Input } from '@/ui/Input';
 import { Modal } from '@/ui/Modal';
 import { announce } from '@/ui/announce';
+import { HelpLink } from '@/features/help/HelpLink';
 
 /**
  * The desktop as it is, made into a profile (1.1, ADR-030).
@@ -102,7 +103,9 @@ export function CaptureProfile({
     <Modal open label="Capture this desktop" onClose={onClose} width="lg">
       <form onSubmit={(e) => void submit(e)} className="flex min-h-0 flex-col gap-3 p-5">
         <div>
-          <h2 className="text-subtitle font-semibold text-fg">Capture this desktop</h2>
+          <h2 className="flex items-center gap-2 text-subtitle font-semibold text-fg">
+            Capture this desktop <HelpLink section="capture" />
+          </h2>
           <p className="mt-1 text-body text-fg-secondary">
             Each window ticked becomes a step that starts its program and puts the window back where
             it is now. Titles are shown to help you choose; the profile does not keep them, nor how

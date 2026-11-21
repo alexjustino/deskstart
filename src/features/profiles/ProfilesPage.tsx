@@ -83,6 +83,7 @@ import { ReviewSteps } from './ReviewSteps';
 import { TriggersCard } from './TriggersCard';
 import { BROWSER_LABELS, HYPERVISOR_LABELS, KIND_LABELS } from './kinds';
 import { StepForm, type EarlierStep, type Screen, type ToolState } from './StepForm';
+import { HelpLink } from '@/features/help/HelpLink';
 
 /**
  * Profiles: the list on the left, the selected profile on the right, and the
@@ -497,7 +498,11 @@ function ProfileDetail({ profile, request }: { profile: Profile; request: RunReq
       {review.blocked ? (
         <ReviewSteps profile={profile} steps={steps.data ?? []} env={env} review={review} />
       ) : (
-        <Card title="Steps" description="What this profile opens, in this order.">
+        <Card
+          title="Steps"
+          description="What this profile opens, in this order."
+          actions={<HelpLink section="profiles" />}
+        >
           <StepList
             profileId={profile.id}
             judged={judged}
@@ -521,6 +526,7 @@ function ProfileDetail({ profile, request }: { profile: Profile; request: RunReq
       <Card
         title={activeRunId !== null && execute.isPending ? 'Run in progress' : 'Latest run'}
         description="Every line was written to the log before it reached this screen."
+        actions={<HelpLink section="run" />}
       >
         {shownRun ? (
           <div className="flex flex-col gap-3">

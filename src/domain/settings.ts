@@ -14,11 +14,17 @@
 export const THEMES = ['system', 'light', 'dark'] as const;
 export type ThemeChoice = (typeof THEMES)[number];
 
+/** The languages the manual is written in (1.1). The interface stays English. */
+export const MANUAL_LANGUAGES = ['en', 'pt-BR'] as const;
+export type ManualLanguage = (typeof MANUAL_LANGUAGES)[number];
+
 export interface Settings {
   theme: ThemeChoice;
+  /** The manual's language; null until a person chooses, when the system's is used. */
+  manualLanguage: ManualLanguage | null;
 }
 
-export const DEFAULT_SETTINGS: Settings = { theme: 'system' };
+export const DEFAULT_SETTINGS: Settings = { theme: 'system', manualLanguage: null };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -32,12 +38,22 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 export function readSettings(value: unknown): Settings {
   if (!isRecord(value)) return { ...DEFAULT_SETTINGS };
   const theme = value.theme;
+  const manualLanguage = value.manualLanguage;
   return {
     theme: (THEMES as readonly unknown[]).includes(theme)
       ? (theme as ThemeChoice)
       : DEFAULT_SETTINGS.theme,
+    manualLanguage: (MANUAL_LANGUAGES as readonly unknown[]).includes(manualLanguage)
+      ? (manualLanguage as ManualLanguage)
+      : null,
   };
 }
+
+/** What each manual language is called, in itself. */
+export const MANUAL_LANGUAGE_LABELS: Record<ManualLanguage, string> = {
+  en: 'English',
+  'pt-BR': 'Português (Brasil)',
+};
 
 /** What a setting is called on screen. */
 export const THEME_LABELS: Record<ThemeChoice, string> = {

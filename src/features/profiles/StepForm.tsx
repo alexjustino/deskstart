@@ -32,6 +32,7 @@ import { Select } from '@/ui/Select';
 
 import { BROWSER_LABELS, KIND_LABELS } from './kinds';
 import { MachinePicker } from './MachinePicker';
+import { HelpLink } from '@/features/help/HelpLink';
 
 /**
  * The step editor: one form for adding and for editing, one kind at a time.
@@ -576,6 +577,7 @@ export function StepForm({
             ))}
           </Select>
         </span>
+        <HelpLink section={draft.kind === 'vm' ? 'machines' : 'kinds'} />
       </div>
 
       {draft.kind === 'app' && (
@@ -797,7 +799,9 @@ export function StepForm({
       )}
 
       <fieldset className="flex flex-col gap-2 rounded-md border border-stroke-subtle p-3">
-        <legend className="px-1 text-caption font-semibold text-fg-tertiary uppercase">Time</legend>
+        <legend className="flex items-center gap-1 px-1 text-caption font-semibold text-fg-tertiary uppercase">
+          Time <HelpLink section="time" />
+        </legend>
         <div className="grid grid-cols-[minmax(0,1fr)_8rem] items-center gap-2">
           <label htmlFor="step-pause" className="text-body text-fg-secondary">
             Wait after this step, before the next (seconds)
@@ -870,8 +874,8 @@ export function StepForm({
       </fieldset>
 
       <fieldset className="flex flex-col gap-2 rounded-md border border-stroke-subtle p-3">
-        <legend className="px-1 text-caption font-semibold text-fg-tertiary uppercase">
-          Where
+        <legend className="flex items-center gap-1 px-1 text-caption font-semibold text-fg-tertiary uppercase">
+          Where <HelpLink section="where" />
         </legend>
         {!holdable && (
           <p className="text-caption text-fg-secondary">
@@ -987,8 +991,8 @@ export function StepForm({
 
       {earlier.length > 0 && (
         <fieldset className="flex flex-col gap-2 rounded-md border border-stroke-subtle p-3">
-          <legend className="px-1 text-caption font-semibold text-fg-tertiary uppercase">
-            Waits for
+          <legend className="flex items-center gap-1 px-1 text-caption font-semibold text-fg-tertiary uppercase">
+            Waits for <HelpLink section="waiting" />
           </legend>
           <div className="grid grid-cols-[minmax(0,1fr)_12rem] items-center gap-2">
             <label htmlFor="step-wait" className="text-body text-fg-secondary">

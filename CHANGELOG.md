@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added — the manual, inside the product
+
+- **Help** on the rail: the user manual, offline, in **English or Portuguese (Brazil)** — chosen
+  in Help or in Settings — with search, and a `?` on each card that opens it at that card's
+  section (ADR-031). The same text is `docs/MANUAL.md` and `docs/MANUAL.pt-BR.md`.
+- `docs/ARCHITECTURE.md`: how the code is put together and where a change goes.
+
 ### Added — capture this desktop
 
 - **Capture this desktop** makes a profile of the windows open now: each one ticked becomes a step
