@@ -7,7 +7,7 @@ use tauri::{AppHandle, Emitter, State};
 
 use crate::db::{backup, database_path, migrations, settings, Db, DATA_DIR_ENV};
 use crate::error::Result;
-use crate::os::{accent, files, inventory, tools, window};
+use crate::os::{accent, capture, files, inventory, tools, window};
 
 /// What Diagnostics and About read. Never a hand-typed constant: the version
 /// comes from the running binary.
@@ -110,6 +110,14 @@ mod tests {
 /// a person picks and what the run does mean the same thing. A machine that
 /// answers with nothing — no screen the host could enumerate — is a list the
 /// editor shows as such rather than a silent empty dropdown.
+/// The windows on the desktop now, to capture as a profile (1.1, ADR-030). A
+/// read: nothing is moved or focused, and the titles it returns are for the
+/// list a person picks from — the profile does not keep them.
+#[tauri::command]
+pub fn windows_capture() -> Vec<capture::Captured> {
+    capture::windows()
+}
+
 /// The event the interface listens for when the screens change (1.1).
 pub const MONITORS_CHANGED: &str = "monitors-changed";
 
