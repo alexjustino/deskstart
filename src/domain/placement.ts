@@ -266,3 +266,28 @@ export function describeMatch(match: WindowMatch | undefined): string | null {
   if (match.className !== null) halves.push(`of class ${match.className}`);
   return `the first new window ${halves.join(' and ')}`;
 }
+
+/** A step placed on a screen this machine does not have right now. */
+export interface OffScreen {
+  id: string;
+  title: string;
+  monitor: number;
+}
+
+/**
+ * The steps whose placement names a screen that is not here now (1.1). Such
+ * a window still opens — on the primary, and the log says so (ADR-016) — but
+ * a person looking at the profile should know before pressing Run, not after.
+ * With no screens known at all, nothing is said: that is "could not ask", not
+ * "screen missing".
+ */
+export function placedOffScreen(
+  steps: readonly { id: string; title: string; placement: Placement }[],
+  screens: readonly number[],
+): OffScreen[] {
+  if (screens.length === 0) return [];
+  const here = new Set(screens);
+  return steps
+    .filter((step) => step.placement.monitor !== null && !here.has(step.placement.monitor))
+    .map((step) => ({ id: step.id, title: step.title, monitor: step.placement.monitor as number }));
+}

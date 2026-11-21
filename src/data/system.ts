@@ -123,6 +123,17 @@ export async function fetchMonitors(): Promise<Monitor[]> {
 }
 
 /**
+ * Be told when the screens change — plugged in, unplugged, moved (1.1). The
+ * host watches; this hands over the new list. Returns the way to stop.
+ */
+export function onMonitorsChanged(handler: (monitors: Monitor[]) => void): () => void {
+  const stop = listen<Monitor[]>('monitors-changed', (event) => handler(event.payload));
+  return () => {
+    void stop.then((unlisten) => unlisten());
+  };
+}
+
+/**
  * The machines a hypervisor already has, read on this machine (1.1, ADR-027).
  * The host fetches the raw listing; what it means is the domain's. A
  * hypervisor that is not installed is an error with that sentence, which the

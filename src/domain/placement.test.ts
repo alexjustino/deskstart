@@ -5,6 +5,7 @@ import {
   describePlacement,
   isPlaced,
   parseStoredPlacement,
+  placedOffScreen,
   readPlacement,
   serializePlacement,
   type Placement,
@@ -222,5 +223,26 @@ describe('a window rule (ADR-029)', () => {
         match: { title: 'Notepad', className: null },
       }),
     ).toBe('the first new window whose title has “Notepad” opens maximised on screen 2');
+  });
+});
+
+describe('a step placed on a screen that is not here (1.1)', () => {
+  const at = (monitor: number | null): Placement => ({ ...DEFAULT_PLACEMENT, monitor });
+  const steps = [
+    { id: 'a', title: 'Code', placement: at(3) },
+    { id: 'b', title: 'Mail', placement: at(1) },
+    { id: 'c', title: 'Notes', placement: at(null) },
+  ];
+
+  it('is named, with the screen it asked for', () => {
+    expect(placedOffScreen(steps, [1, 2])).toEqual([{ id: 'a', title: 'Code', monitor: 3 }]);
+  });
+
+  it('is nothing when every screen asked for is here', () => {
+    expect(placedOffScreen(steps, [1, 2, 3])).toEqual([]);
+  });
+
+  it('says nothing when the screens could not be read at all', () => {
+    expect(placedOffScreen(steps, [])).toEqual([]);
   });
 });

@@ -90,7 +90,9 @@ twenty minutes, then close it" and "open, close, reopen" are first-class, not a 
   rectangle, normal, maximised or minimised. A screen this machine has not got lands the window
   on the primary and says so; a program that shows no window of its own says that. A **window
   rule** — a piece of the title, or the class — places a folder's Explorer window, a browser, a
-  terminal or an editor too, and only ever a window that appeared after the step began.
+  terminal or an editor too, and only ever a window that appeared after the step began. The
+  screens are watched: plug one in or out and the editor's list follows, and a profile placed on
+  a screen that is not here says so before you press Run.
 - **Capture this desktop.** Arrange your windows, then make a profile of them: each window ticked
   becomes a step that starts its program and puts it back where it is. Titles help you choose and
   are not kept.

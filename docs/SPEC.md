@@ -416,6 +416,20 @@ exactly where it was, with _no new window answering the rule appeared in time_ i
 - **Rules by process name.** A stub's real process has a different name from the one started;
   title and class are what a person can see and check.
 
+### Delivered in 1.1 — screens that come and go
+
+The host watches the screens while Deskstart runs — every two seconds, one enumeration — and when
+they change (plugged in, unplugged, moved, resized) it logs the change and tells the window, which
+replaces the list the editor offers and says it aloud. A profile with a step placed on a screen
+that is not here now says so **before Run**: which step, which screen, and that its window will
+open on the primary, as the log will record. Proved on the real binary: an imported profile placed
+on screen 9 is warned about on a one-screen machine, and the warning follows a host
+`monitors-changed` event without a reload.
+
+Deferred: re-placing windows already open when a screen comes back — that moves windows the run
+may no longer own, and is the "arrange my desktop" ADR-029 declines; and plugging a real screen in
+during a run, a person's proof.
+
 ### Delivered in 1.1 — machines picked, machines encrypted
 
 **Picked, not typed.** The VM step lists the machines each hypervisor already has on this
