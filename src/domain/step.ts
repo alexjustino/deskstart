@@ -9,10 +9,12 @@
  * meant a document could carry what the form would have refused.
  *
  * There is one such rule today, in two halves: what a run does to a window it
- * did not open. Nothing — so a folder, a file or a web page cannot be held,
- * closed, cycled or placed. Those open in a window that belongs to Explorer or
- * to the browser (ADR-018); reaching into one means matching windows by title,
- * and a rule that matches by name will one day match the wrong one.
+ * did not open. It never closes one — so a folder, a file or a web page cannot
+ * be held, closed or cycled; those open in a window that belongs to Explorer
+ * or to the browser (ADR-018). And it places one only when a **window rule**
+ * says which (1.1, ADR-029): the process this product started is not the one
+ * with the window, so "the window of what we started" means nothing for it,
+ * and the rule matches only windows that appeared after the step began.
  */
 
 import type { Placement } from './placement';
@@ -66,10 +68,10 @@ export function stepProblems(config: StepConfig, timing: Timing, placement: Plac
       problem: `only an application can be held and closed; ${what} ${why}`,
     });
   }
-  if (isPlaced(placement)) {
+  if (isPlaced(placement) && placement.match === undefined) {
     problems.push({
-      path: 'placement',
-      problem: `only an application's window can be placed; ${what} ${why}`,
+      path: 'placement.match',
+      problem: `${what} ${why}, so placing it needs a window rule: a piece of the title or the window class`,
     });
   }
   return problems;

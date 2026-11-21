@@ -88,7 +88,9 @@ twenty minutes, then close it" and "open, close, reopen" are first-class, not a 
   machine has not got is a reason you can read rather than a step that quietly does nothing.
 - **Where the window goes.** A step can open its program on a chosen screen, at a chosen
   rectangle, normal, maximised or minimised. A screen this machine has not got lands the window
-  on the primary and says so; a program that shows no window of its own says that.
+  on the primary and says so; a program that shows no window of its own says that. A **window
+  rule** — a piece of the title, or the class — places a folder's Explorer window, a browser, a
+  terminal or an editor too, and only ever a window that appeared after the step began.
 - **Dry run.** The same run on a virtual clock: the whole timeline written at once, nothing
   started, nothing waited for.
 - **The log.** Append-only in the database — triggers refuse any update or delete — read on

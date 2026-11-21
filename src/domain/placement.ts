@@ -13,12 +13,17 @@
  *   which is what a single-screen machine means anyway.
  * - `state`: normal, maximised or minimised.
  *
- * Only an **application** can be placed. A folder, a file or a web page opens
- * in a window that belongs to Explorer or to the browser — a process this
- * product did not start and does not own (ADR-018), and reaching into it means
- * matching windows by title, which is how a rule ends up moving the wrong
- * window. That is a 1.1 subject with its own risks; here, a window we place is
- * a window we opened.
+ * Without more, only an **application** can be placed: its window is found by
+ * the process this product started. A folder, a file, a web page, a terminal,
+ * an editor or a machine's console opens in a window that belongs to some
+ * other process (ADR-018, risk R2), and for those a placement needs a
+ * **window rule** (1.1, ADR-029): which window to place, by a piece of its
+ * title or by its class. A rule only ever matches a window that **appeared
+ * after its step started** — the host notes the windows that are open the
+ * moment the step begins and never considers one of them — so a rule cannot
+ * move a window that was already there, whatever it matches. An application
+ * may carry a rule too, for a program that hands its window to another
+ * process (Notepad on Windows 11, a browser).
  *
  * A placement that cannot be carried out is **said, never guessed**: a monitor
  * that is not there lands the window on the primary and the log says so
@@ -39,20 +44,41 @@ export interface Rect {
   height: number;
 }
 
+/**
+ * Which new window a placement is for (1.1, ADR-029). At least one half is
+ * given; a window must match every half that is.
+ */
+export interface WindowMatch {
+  /** A piece of the window's title, matched ignoring case. */
+  title: string | null;
+  /** The window's class, exactly, ignoring case — e.g. `CabinetWClass` for Explorer. */
+  className: string | null;
+}
+
 export interface Placement {
   /** The screen, numbered from 1, or null for wherever it opens. */
   monitor: number | null;
   /** Where on that screen, or null for wherever it opens. */
   rect: Rect | null;
   state: WindowState;
+  /** Which new window to place; absent means the window of the process the step started. */
+  match?: WindowMatch;
 }
 
-export const DEFAULT_PLACEMENT: Placement = { monitor: null, rect: null, state: 'normal' };
+export const DEFAULT_PLACEMENT: Placement = {
+  monitor: null,
+  rect: null,
+  state: 'normal',
+};
+
+/** The longest title piece or class a rule may hold: a rule, not a paragraph. */
+const MATCH_LIMIT = 200;
 
 /** How long the host waits for the window to appear before giving up on placing it. */
 export const WINDOW_TIMEOUT_MS = 5000;
 
-const FIELDS = new Set(['monitor', 'rect', 'state']);
+const FIELDS = new Set(['monitor', 'rect', 'state', 'match']);
+const MATCH_FIELDS = new Set(['title', 'className']);
 const RECT_FIELDS = new Set(['x', 'y', 'width', 'height']);
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -97,6 +123,39 @@ function readRect(value: unknown, path: string): Rect | null | Problem[] {
   };
 }
 
+function readMatch(value: unknown, path: string): WindowMatch | null | Problem[] {
+  if (value === undefined || value === null) return null;
+  if (!isRecord(value)) return [{ path, problem: 'a window rule must be an object' }];
+  const problems: Problem[] = [];
+  for (const key of Object.keys(value)) {
+    if (!MATCH_FIELDS.has(key)) {
+      problems.push({ path: `${path}.${key}`, problem: 'this field is not part of a window rule' });
+    }
+  }
+  const half = (key: 'title' | 'className', what: string): string | null => {
+    const raw = value[key] ?? null;
+    if (raw === null) return null;
+    if (typeof raw !== 'string') {
+      problems.push({ path: `${path}.${key}`, problem: `${what} must be text` });
+      return null;
+    }
+    const text = raw.trim();
+    if (text.length > MATCH_LIMIT) {
+      problems.push({
+        path: `${path}.${key}`,
+        problem: `${what} is at most ${MATCH_LIMIT} characters`,
+      });
+      return null;
+    }
+    return text === '' ? null : text;
+  };
+  const title = half('title', 'a title to match');
+  const className = half('className', 'a window class');
+  if (problems.length > 0) return problems;
+  if (title === null && className === null) return null;
+  return { title, className };
+}
+
 /** Read a stored or drafted placement. `{}` and null mean "wherever it opens". */
 export function readPlacement(value: unknown, path = 'placement'): Placement | Problem[] {
   if (value === undefined || value === null) return { ...DEFAULT_PLACEMENT };
@@ -129,11 +188,30 @@ export function readPlacement(value: unknown, path = 'placement'): Placement | P
   const rect = readRect(value.rect, `${path}.rect`);
   if (Array.isArray(rect)) problems.push(...rect);
 
-  if (problems.length > 0 || Array.isArray(rect)) return problems;
-  return { monitor: monitor as number | null, rect, state: state as WindowState };
+  const match = readMatch(value.match, `${path}.match`);
+  if (Array.isArray(match)) problems.push(...match);
+
+  if (problems.length > 0 || Array.isArray(rect) || Array.isArray(match)) return problems;
+  const placement: Placement = {
+    monitor: monitor as number | null,
+    rect,
+    state: state as WindowState,
+    ...(match !== null ? { match } : {}),
+  };
+  // A rule says which window; without somewhere to put it, it asks for nothing.
+  if (match !== null && !isPlaced(placement)) {
+    return [
+      {
+        path: `${path}.match`,
+        problem:
+          'a window rule needs somewhere to put the window: a screen, a rectangle or a state',
+      },
+    ];
+  }
+  return placement;
 }
 
-/** Is anything actually asked for? The default is "wherever it opens, as it opens". */
+/** Is anything actually asked for? The default is "wherever it opens, as it opens". A rule alone asks for nothing. */
 export function isPlaced(placement: Placement): boolean {
   return placement.monitor !== null || placement.rect !== null || placement.state !== 'normal';
 }
@@ -144,6 +222,12 @@ export function serializePlacement(placement: Placement): string {
   if (placement.monitor !== null) out.monitor = placement.monitor;
   if (placement.rect !== null) out.rect = placement.rect;
   if (placement.state !== 'normal') out.state = placement.state;
+  if (placement.match !== undefined) {
+    const match: Record<string, string> = {};
+    if (placement.match.title !== null) match.title = placement.match.title;
+    if (placement.match.className !== null) match.className = placement.match.className;
+    out.match = match;
+  }
   return JSON.stringify(out);
 }
 
@@ -170,5 +254,15 @@ export function describePlacement(placement: Placement): string | null {
     parts.push(`${width}×${height} at ${x}, ${y}`);
   }
   if (placement.monitor !== null) parts.push(`on screen ${placement.monitor}`);
-  return `opens ${parts.join(' ')}`;
+  const which = describeMatch(placement.match);
+  return which === null ? `opens ${parts.join(' ')}` : `${which} opens ${parts.join(' ')}`;
+}
+
+/** Which window a rule picks, as the start of a sentence, or null for no rule. */
+export function describeMatch(match: WindowMatch | undefined): string | null {
+  if (match === undefined) return null;
+  const halves: string[] = [];
+  if (match.title !== null) halves.push(`whose title has “${match.title}”`);
+  if (match.className !== null) halves.push(`of class ${match.className}`);
+  return `the first new window ${halves.join(' and ')}`;
 }
