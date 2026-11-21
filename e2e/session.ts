@@ -17,6 +17,7 @@
  */
 
 import { spawn, type ChildProcess } from 'node:child_process';
+import { readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { copyFile, mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { connect } from 'node:net';
 import { tmpdir } from 'node:os';
@@ -68,7 +69,15 @@ async function waitForDriver(): Promise<void> {
   throw new Error('tauri-driver did not come up on port 4444');
 }
 
-function startDriverProcess(dataDir: string): ChildProcess {
+/**
+ * Where this suite notes the tauri-driver it started. tauri-driver is the
+ * same binary for every Tauri project on a machine, so it cannot be told
+ * apart by name or path: another project's suite may be running its own
+ * right now. Only the process this suite started is ever stopped.
+ */
+const DRIVER_PID_FILE = path.join(tmpdir(), 'deskstart-e2e-tauri-driver.pid');
+
+function startDriverProcess(dataDir: string, env: Record<string, string> = {}): ChildProcess {
   const child = spawn(
     'tauri-driver',
     [
@@ -80,11 +89,12 @@ function startDriverProcess(dataDir: string): ChildProcess {
       nativeDriver(),
     ],
     {
-      env: { ...process.env, DESKSTART_DATA_DIR: dataDir },
+      env: { ...process.env, ...env, DESKSTART_DATA_DIR: dataDir },
       stdio: ['ignore', 'pipe', 'pipe'],
       windowsHide: true,
     },
   );
+  if (child.pid !== undefined) writeFileSync(DRIVER_PID_FILE, String(child.pid));
   child.stdout?.on('data', (chunk: Buffer) => {
     if (process.env.DESKSTART_E2E_VERBOSE) process.stdout.write(`[driver] ${chunk.toString()}`);
   });
@@ -174,16 +184,33 @@ function killProcess(child: ChildProcess): Promise<void> {
  * would hand focus to the old process and exit, and the next session would be
  * driving a window that was never created.
  */
+/** The tauri-driver this suite noted, taken: the note is removed as it is read. */
+function takeDriverPid(): number | null {
+  try {
+    const pid = Number(readFileSync(DRIVER_PID_FILE, 'utf-8').trim());
+    rmSync(DRIVER_PID_FILE, { force: true });
+    return Number.isInteger(pid) && pid > 0 ? pid : null;
+  } catch {
+    return null;
+  }
+}
+
 function stopStrayInstances(): Promise<void> {
   const binary = appPath().replace(/'/g, "''");
   const driverBinary = nativeDriver().replace(/'/g, "''");
   // Three processes, each matched narrowly: our application by path, the
   // native driver by the path this suite was told to use, and tauri-driver by
-  // name — it exists for this suite and nothing else.
+  // the process id this suite noted when it started it — never by name, which
+  // another project's suite on the same machine shares.
+  const ownDriver = takeDriverPid();
   const script = [
     `Get-Process deskstart -ErrorAction SilentlyContinue | Where-Object { $_.Path -eq '${binary}' } | Stop-Process -Force -ErrorAction SilentlyContinue`,
     `Get-Process msedgedriver -ErrorAction SilentlyContinue | Where-Object { $_.Path -eq '${driverBinary}' } | Stop-Process -Force -ErrorAction SilentlyContinue`,
-    `Get-Process tauri-driver -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue`,
+    ...(ownDriver === null
+      ? []
+      : [
+          `Get-Process -Id ${ownDriver} -ErrorAction SilentlyContinue | Where-Object { $_.ProcessName -eq 'tauri-driver' } | Stop-Process -Force -ErrorAction SilentlyContinue`,
+        ]),
   ].join('; ');
   return new Promise((resolve) => {
     spawn('pwsh', ['-NoProfile', '-NonInteractive', '-Command', script], {
@@ -246,6 +273,11 @@ export interface SessionOptions {
    * place: the fixture stays what it was.
    */
   seedWorkspace?: string;
+  /**
+   * Extra environment for the application — how the Firefox suite points it at
+   * a profile folder of its own instead of the person's.
+   */
+  env?: Record<string, string>;
 }
 
 export async function startSession(options: SessionOptions = {}): Promise<Session> {
@@ -257,7 +289,7 @@ export async function startSession(options: SessionOptions = {}): Promise<Sessio
   if (options.seedWorkspace !== undefined) {
     await copyFile(options.seedWorkspace, path.join(dataDir, 'deskstart.sqlite3'));
   }
-  let process_ = startDriverProcess(dataDir);
+  let process_ = startDriverProcess(dataDir, options.env);
   let driver: Driver;
   try {
     await waitForDriver();
@@ -287,7 +319,7 @@ export async function startSession(options: SessionOptions = {}): Promise<Sessio
     },
     async restart() {
       await teardown(driver, process_);
-      process_ = startDriverProcess(dataDir);
+      process_ = startDriverProcess(dataDir, options.env);
       await waitForDriver();
       driver = await createSession();
       session.driver = driver;
