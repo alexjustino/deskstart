@@ -19,6 +19,7 @@ import { Chip } from '@/ui/Chip';
 import { InfoBar } from '@/ui/InfoBar';
 import { Input } from '@/ui/Input';
 import { announce } from '@/ui/announce';
+import { HelpLink } from '@/features/help/HelpLink';
 
 const WEEKDAYS: Weekday[] = ['mon', 'tue', 'wed', 'thu', 'fri'];
 
@@ -36,6 +37,7 @@ export function TriggersCard({ profile }: { profile: Profile }) {
     <Card
       title="Triggers"
       description="Start this profile without pressing Run: at a time of day, or with a key combination from any program."
+      actions={<HelpLink section="triggers" />}
     >
       <div className="flex flex-col gap-4">
         <ScheduleRow profile={profile} />

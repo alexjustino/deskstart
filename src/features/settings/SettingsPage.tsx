@@ -12,7 +12,16 @@ import {
   restoreWorkspace,
   type BackupSummary,
 } from '@/data/system';
-import { readSettings, THEME_LABELS, THEMES, type ThemeChoice } from '@/domain/settings';
+import {
+  MANUAL_LANGUAGE_LABELS,
+  MANUAL_LANGUAGES,
+  readSettings,
+  THEME_LABELS,
+  THEMES,
+  type ManualLanguage,
+  type ThemeChoice,
+} from '@/domain/settings';
+import { HelpLink } from '@/features/help/HelpLink';
 import { Button } from '@/ui/Button';
 import { Card } from '@/ui/Card';
 import { Checkbox } from '@/ui/Checkbox';
@@ -40,6 +49,7 @@ export function SettingsPage() {
 
       <AppearanceCard />
       <AutostartCard />
+      <ManualCard />
       <BackupCard />
       <AboutCard />
     </div>
@@ -64,6 +74,36 @@ function AppearanceCard() {
           )
         }
         labels={THEME_LABELS}
+        disabled={set.isPending || settings.data === undefined}
+      />
+    </Card>
+  );
+}
+
+function ManualCard() {
+  const settings = useSettings();
+  const set = useSetSetting();
+  const chosen = readSettings(settings.data).manualLanguage;
+  const language: ManualLanguage =
+    chosen ?? (navigator.language.toLowerCase().startsWith('pt') ? 'pt-BR' : 'en');
+
+  return (
+    <Card
+      title="Manual"
+      description="The language the manual under Help is shown in. The interface stays in English."
+      actions={<HelpLink section="settings" />}
+    >
+      <ChoiceGroup
+        label="Manual language"
+        options={MANUAL_LANGUAGES}
+        value={language}
+        onChange={(next: ManualLanguage) =>
+          set.mutate(
+            { key: 'manualLanguage', value: next },
+            { onSuccess: () => announce(`The manual is in ${MANUAL_LANGUAGE_LABELS[next]}`) },
+          )
+        }
+        labels={MANUAL_LANGUAGE_LABELS}
         disabled={set.isPending || settings.data === undefined}
       />
     </Card>
@@ -199,6 +239,7 @@ function BackupCard() {
     <Card
       title="Backup and restore"
       description="A backup is your whole workspace — every profile and every run — in one file."
+      actions={<HelpLink section="settings" />}
     >
       <div className="flex gap-2">
         <Button

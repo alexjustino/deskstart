@@ -36,6 +36,7 @@ part that matters most later — the cost we accepted.
 | [028](#adr-028) | An encrypted machine's password is asked each run and never stored                       | Accepted |
 | [029](#adr-029) | A window rule places only a window that appeared after its step began                    | Accepted |
 | [030](#adr-030) | A capture keeps what starts and places a window, never its title                         | Accepted |
+| [031](#adr-031) | The manual is data: shown in the product, generated into the repository                  | Accepted |
 
 ---
 
@@ -640,3 +641,22 @@ and needs no review (ADR-013).
 comes back without them; the person adds them in the editor. A class shared by many programs
 (`Chrome_WidgetWin_1` is Chrome, Edge and every Electron app) can pick another such window that
 appears during the step; the log names the window it placed.
+
+## ADR-031 — The manual is data: shown in the product, generated into the repository {#adr-031}
+
+**Context.** A person needs a manual where they are — inside Deskstart, which never reaches the
+network (ADR-006), so a web page is not an option. The repository needs the same manual for
+anyone reading the source. Two copies of a manual drift; a manual that drifts from the product is
+worse than none. The manual is wanted in English and Portuguese; the interface stays English.
+
+**Decision.** The manual is **typed data** (`src/features/help/manual/`): sections with stable
+ids, each a list of blocks — paragraph, heading, list, numbered steps, note — whose text may carry
+only `**strong**` and `` `code` ``. The Help screen renders it with the design system, offline,
+with search (case and accents ignored) and a language choice stored as a setting. A `?` on a card
+opens Help at that card's section, by id. `docs/MANUAL.md` and `docs/MANUAL.pt-BR.md` are
+**generated** from the same data (`npm run docs:manual`), and a unit test fails the gates when a
+file and the data differ. Both languages must have every section, in the same order.
+
+**Cost accepted.** Writing in a TypeScript file instead of Markdown, and no images, tables or
+links inside the manual. A second language is a second text to keep true; the test catches a
+missing section, not a stale sentence — that is review's job.

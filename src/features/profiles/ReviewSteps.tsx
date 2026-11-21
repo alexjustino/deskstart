@@ -18,6 +18,7 @@ import { InfoBar } from '@/ui/InfoBar';
 import { announce } from '@/ui/announce';
 
 import { HOW_IT_OPENS, KIND_LABELS } from './kinds';
+import { HelpLink } from '@/features/help/HelpLink';
 
 /**
  * The review screen: what an imported profile would do, before it may do it.
@@ -53,6 +54,7 @@ export function ReviewSteps({
     <Card
       title="Review before running"
       description="This profile came from a file. Nothing in it starts until you have accepted every step."
+      actions={<HelpLink section="sharing" />}
     >
       {(accept.isError || acceptAll.isError || remove.isError) && (
         <InfoBar severity="danger" title="That did not go through">
