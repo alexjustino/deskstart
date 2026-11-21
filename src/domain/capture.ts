@@ -27,6 +27,14 @@ import type { Placement, Rect, WindowState } from './placement';
 import { DEFAULT_PLACEMENT, readPlacement } from './placement';
 import { lastSegment, type AppStep } from './profile';
 
+/**
+ * Window classes too common to say which window: `#32770` is every standard
+ * dialog box on Windows. A rule on one of these could pick a dialog that
+ * happens to open during the step, so a window of such a class is found by
+ * its own process instead (F6), and gets no rule.
+ */
+const GENERIC_CLASSES = new Set(['#32770']);
+
 /** One window as the host read it. */
 export interface CapturedWindow {
   program: string | null;
@@ -105,7 +113,8 @@ export function stepFromCapture(
       ? { rect: window.rect }
       : {}),
   };
-  if (window.className.trim() !== '') document.match = { className: window.className };
+  const className = window.className.trim();
+  if (className !== '' && !GENERIC_CLASSES.has(className)) document.match = { className };
   const read = readPlacement(document);
   if (!Array.isArray(read)) return { config, placement: read };
   // A window with nowhere to say (normal, no screen known) asks for nothing,

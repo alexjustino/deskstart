@@ -87,6 +87,17 @@ describe('the step a window becomes', () => {
     expect(stored).not.toContain('Visual Studio Code');
   });
 
+  it('gives a window of a generic class no rule, so it is found by its own process', () => {
+    const judged = judgeCaptured(
+      captured({ program: 'C:\\Windows\\System32\\charmap.exe', className: '#32770' }),
+    );
+    if (!judged.ok) throw new Error('capturable');
+    const { config, placement } = stepFromCapture(judged, ENV);
+    expect(config.program).toBe('%SYSTEMROOT%\\System32\\charmap.exe');
+    expect(placement.match).toBeUndefined();
+    expect(placement.monitor).toBe(2);
+  });
+
   it('places a maximised window by its screen and state, without a rectangle', () => {
     const judged = judgeCaptured(captured({ state: 'maximized', rect: null }));
     if (!judged.ok) throw new Error('capturable');
