@@ -9,6 +9,7 @@
 pub mod accent;
 pub mod close;
 pub mod files;
+pub mod firefox;
 pub mod inventory;
 pub mod job;
 pub mod open;

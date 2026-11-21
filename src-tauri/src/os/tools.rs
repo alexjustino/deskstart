@@ -68,9 +68,10 @@ pub struct Tool {
 }
 
 /// The ids a launch may name, with what they are called.
-const TOOLS: [(&str, &str); 7] = [
+const TOOLS: [(&str, &str); 8] = [
     ("chrome", "Google Chrome"),
     ("edge", "Microsoft Edge"),
+    ("firefox", "Mozilla Firefox"),
     ("terminal", "Windows Terminal"),
     ("editor", "VS Code"),
     ("hyperv", "Hyper-V"),
@@ -90,6 +91,10 @@ fn candidates(id: &str) -> Vec<PathBuf> {
             ("PROGRAMFILES", r"Google\Chrome\Application\chrome.exe"),
             ("PROGRAMFILES(X86)", r"Google\Chrome\Application\chrome.exe"),
             ("LOCALAPPDATA", r"Google\Chrome\Application\chrome.exe"),
+        ],
+        "firefox" => &[
+            ("PROGRAMFILES", r"Mozilla Firefox\firefox.exe"),
+            ("PROGRAMFILES(X86)", r"Mozilla Firefox\firefox.exe"),
         ],
         "edge" => &[
             (
@@ -229,8 +234,8 @@ mod tests {
 
     #[test]
     fn a_tool_nobody_declared_is_not_found_and_is_not_a_panic() {
-        assert!(find("firefox").is_none());
-        assert_eq!(name_of("firefox"), "that tool");
+        assert!(find("opera").is_none());
+        assert_eq!(name_of("opera"), "that tool");
         assert!(bookmarks_file("firefox").is_none());
     }
 
@@ -262,7 +267,7 @@ mod tests {
         for id in ["hyperv", "virtualbox", "vmware"] {
             assert_eq!(mode(id), Mode::Command, "{id}");
         }
-        for id in ["chrome", "edge", "terminal", "editor"] {
+        for id in ["chrome", "edge", "firefox", "terminal", "editor"] {
             assert_eq!(mode(id), Mode::Launcher, "{id}");
         }
     }
@@ -283,7 +288,7 @@ mod tests {
         if find("virtualbox").is_none() {
             assert!(invocation("virtualbox", &["startvm".into()]).is_none());
         }
-        assert!(invocation("firefox", &[]).is_none());
+        assert!(invocation("opera", &[]).is_none());
     }
 
     #[test]
