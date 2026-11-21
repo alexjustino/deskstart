@@ -140,6 +140,12 @@ pub fn run() {
             app.manage(Shortcuts::default());
             triggers::register_all(app.handle());
 
+            // The screens, watched: plugged in, unplugged, moved (1.1).
+            let watcher = app.handle().clone();
+            std::thread::Builder::new()
+                .name("screens".into())
+                .spawn(move || commands::system::watch_screens(watcher))?;
+
             // The tray: closing the window hides it, so a schedule or a
             // shortcut still has a Deskstart to reach; Quit is here, in words.
             let open = MenuItem::with_id(app, "open", "Open Deskstart", true, None::<&str>)?;

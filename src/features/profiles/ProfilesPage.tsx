@@ -57,7 +57,7 @@ import {
   type StepKind,
 } from '@/domain/profile';
 import type { Mode } from '@/domain/run';
-import { describePlacement, type Placement } from '@/domain/placement';
+import { describePlacement, placedOffScreen, type Placement } from '@/domain/placement';
 import { describeWaitFor, waitForProblems, type WaitFor } from '@/domain/readiness';
 import { reviewState } from '@/domain/review';
 import { describeTiming, type Timing } from '@/domain/timing';
@@ -274,6 +274,22 @@ function ProfileDetail({ profile, request }: { profile: Profile; request: RunReq
     () => judged.filter((j): j is Judged & { step: Step } => j.step !== null),
     [judged],
   );
+
+  // Steps placed on a screen that is not here now (1.1): said before Run, not
+  // only in the log after it. The list follows the host's watch of the screens.
+  const screenNumbers = useMemo(() => (screens.data ?? []).map((m) => m.number), [screens.data]);
+  const offScreen = useMemo(
+    () =>
+      placedOffScreen(
+        runnable.map((j) => ({
+          id: j.step.id,
+          title: titleOf(j.step.config, env),
+          placement: j.step.placement,
+        })),
+        screenNumbers,
+      ),
+    [runnable, env, screenNumbers],
+  );
   const blocked = judged.filter((j) => j.problems.length > 0).length;
 
   // Where this profile stands with review (ADR-013). While it is blocked the
@@ -440,6 +456,13 @@ function ProfileDetail({ profile, request }: { profile: Profile; request: RunReq
       {environment.isError && (
         <InfoBar severity="danger" title="The environment could not be read">
           {describeError(environment.error)} Paths with %NAMES% cannot be resolved until it can.
+        </InfoBar>
+      )}
+      {offScreen.length > 0 && (
+        <InfoBar severity="caution" title="A screen this profile uses is not here">
+          {offScreen.map((o) => `${o.title} is placed on screen ${o.monitor}`).join('; ')}. This
+          machine has {screenNumbers.length} {screenNumbers.length === 1 ? 'screen' : 'screens'}{' '}
+          now: those windows open on the primary, and the log says so.
         </InfoBar>
       )}
       {review.blocked && (
