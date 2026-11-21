@@ -181,9 +181,15 @@ pub fn profile_schedule_set(
 
 /// Is the profile's task registered with Windows right now? Asked of the
 /// scheduler, not of the database: what Diagnostics shows is what is there.
+///
+/// Asked off the window's thread: it waits on `schtasks`, and a synchronous
+/// command runs on the thread that also answers every other command — one
+/// slow question would hold up the rest (found in 1.1's release build).
 #[tauri::command]
-pub fn schedule_registered(id: String) -> bool {
-    scheduler::exists(&id)
+pub async fn schedule_registered(id: String) -> bool {
+    tauri::async_runtime::spawn_blocking(move || scheduler::exists(&id))
+        .await
+        .unwrap_or(false)
 }
 
 /// Store a profile's key combination and register it; an empty one removes it.

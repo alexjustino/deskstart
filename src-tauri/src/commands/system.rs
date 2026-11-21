@@ -237,7 +237,12 @@ pub fn restart(app: AppHandle) {
 /// The machines a hypervisor already has, as raw text for the domain to read
 /// (1.1). A hypervisor that is not installed here answers like any missing
 /// tool, so the editor can say which.
+/// Asked off the window's thread, like `schedule_registered`: it waits on a
+/// hypervisor's tool, which can take seconds.
 #[tauri::command]
-pub fn vm_inventory(hypervisor: String) -> Result<inventory::Raw> {
-    inventory::read(&hypervisor).map_err(|failure| crate::error::Error::Scheduler(failure.reason()))
+pub async fn vm_inventory(hypervisor: String) -> Result<inventory::Raw> {
+    tauri::async_runtime::spawn_blocking(move || inventory::read(&hypervisor))
+        .await
+        .map_err(|_| crate::error::Error::Scheduler("the hypervisor was not asked".to_string()))?
+        .map_err(|failure| crate::error::Error::Scheduler(failure.reason()))
 }
