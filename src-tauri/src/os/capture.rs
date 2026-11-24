@@ -33,6 +33,11 @@ pub struct Captured {
     pub rect: Option<CapturedRect>,
     /// normal, maximized or minimized.
     pub state: String,
+    /// A packaged (Store) app's identity — what Windows starts it by,
+    /// `shell:AppsFolder\<id>` — or None for an ordinary program (1.3).
+    pub app_id: Option<String>,
+    /// For an Explorer window, the folder it shows, when it is one on disk (1.3).
+    pub folder: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
@@ -67,6 +72,54 @@ pub fn windows() -> Vec<Captured> {
         WINDOWPLACEMENT, WS_EX_TOOLWINDOW,
     };
 
+    // A packaged app's identity, asked of its process. None for a program
+    // that is not packaged — most of them — or one Windows will not open.
+    fn app_id_of(pid: u32) -> Option<String> {
+        use windows::Win32::Storage::Packaging::Appx::GetApplicationUserModelId;
+        // SAFETY: a query-only handle, closed below; failure is None.
+        let process = unsafe { OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid) }.ok()?;
+        let mut buffer = [0u16; 512];
+        let mut length = buffer.len() as u32;
+        // SAFETY: the buffer and its length travel together.
+        let read = unsafe {
+            GetApplicationUserModelId(
+                process,
+                &mut length,
+                windows::core::PWSTR(buffer.as_mut_ptr()),
+            )
+        };
+        // SAFETY: the handle was opened above and is closed once.
+        let _ = unsafe { CloseHandle(process) };
+        if read.0 != 0 || length == 0 {
+            return None;
+        }
+        let id = String::from_utf16_lossy(&buffer[..(length as usize).saturating_sub(1)]);
+        (!id.trim().is_empty()).then_some(id)
+    }
+
+    // A modern app's window belongs to ApplicationFrameHost; the app itself
+    // is the process behind its CoreWindow child.
+    fn core_window_pid(frame: HWND) -> Option<u32> {
+        use windows::Win32::UI::WindowsAndMessaging::EnumChildWindows;
+        unsafe extern "system" fn child(hwnd: HWND, lparam: LPARAM) -> BOOL {
+            // SAFETY: lparam is the pointer to the u32 passed below, alive for the call.
+            let found = &mut *(lparam.0 as *mut u32);
+            let (_, class) = window::title_and_class(hwnd);
+            if class == "Windows.UI.Core.CoreWindow" {
+                let mut pid = 0u32;
+                GetWindowThreadProcessId(hwnd, Some(&mut pid));
+                *found = pid;
+                return BOOL(0);
+            }
+            BOOL(1)
+        }
+        let mut pid = 0u32;
+        // SAFETY: the callback writes one u32 this stack owns.
+        let _ =
+            unsafe { EnumChildWindows(frame, Some(child), LPARAM(&mut pid as *mut u32 as isize)) };
+        (pid != 0).then_some(pid)
+    }
+
     fn program_of(pid: u32) -> Option<String> {
         // SAFETY: a query-only handle, closed below; failure is None.
         let process = unsafe { OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid) }.ok()?;
@@ -100,6 +153,9 @@ pub fn windows() -> Vec<Captured> {
 
     let screens = window::monitors();
     let own = std::process::id();
+    // Which folder each Explorer window shows — asked once, and only when
+    // there is an Explorer window to ask about.
+    let mut folders: Option<std::collections::HashMap<isize, String>> = None;
     let mut out = Vec::new();
     for hwnd in handles {
         // SAFETY: every call below only reads properties of a window handle
@@ -178,17 +234,93 @@ pub fn windows() -> Vec<Captured> {
                 _ => None,
             };
 
+            let program = program_of(pid);
+            let app_id = if class_name == "ApplicationFrameWindow" {
+                core_window_pid(hwnd).and_then(app_id_of)
+            } else {
+                app_id_of(pid)
+            };
+            let is_explorer = program
+                .as_deref()
+                .map(|p| p.to_ascii_lowercase().ends_with("\\explorer.exe"))
+                .unwrap_or(false);
+            let folder = if is_explorer {
+                folders
+                    .get_or_insert_with(explorer_folders)
+                    .get(&(hwnd.0 as isize))
+                    .cloned()
+            } else {
+                None
+            };
+
             out.push(Captured {
-                program: program_of(pid),
+                program,
                 title,
                 class_name,
                 monitor: screen.map(|m| m.number),
                 rect,
                 state: state.to_string(),
+                app_id,
+                folder,
             });
         }
     }
     out
+}
+
+/// Every open Explorer window's folder, by window handle. Asked of the Shell
+/// with a constant PowerShell command — nothing a person typed is in it —
+/// because a window does not say what folder it shows. A window on something
+/// that is not a folder on disk (This PC, a library) has no entry.
+#[cfg(windows)]
+fn explorer_folders() -> std::collections::HashMap<isize, String> {
+    use crate::os::process::{capture_stdout, Launch};
+    let mut found = std::collections::HashMap::new();
+    let Some(system) = std::env::var_os("SYSTEMROOT") else {
+        return found;
+    };
+    let powershell =
+        std::path::PathBuf::from(system).join(r"System32\WindowsPowerShell\v1.0\powershell.exe");
+    let launch = Launch {
+        program: powershell,
+        args: vec![
+            "-NoProfile".into(),
+            "-NonInteractive".into(),
+            "-NoLogo".into(),
+            "-Command".into(),
+            EXPLORER_FOLDERS.into(),
+        ],
+        working_dir: None,
+        env: Vec::new(),
+    };
+    let Ok(text) = capture_stdout(&launch, std::time::Duration::from_secs(10)) else {
+        return found;
+    };
+    for (handle, path) in read_explorer_folders(&text) {
+        found.insert(handle, path);
+    }
+    found
+}
+
+/// The Shell, asked which folder each of its windows shows: one line each,
+/// handle, a tab, the folder.
+pub const EXPLORER_FOLDERS: &str = "(New-Object -ComObject Shell.Application).Windows() | ForEach-Object { try { \"$($_.HWND)`t$($_.Document.Folder.Self.Path)\" } catch {} }";
+
+/// The Shell's answer, as handle and folder; only folders on a disk or a
+/// share are kept — a virtual location (`::{…}`) cannot be opened by path.
+pub fn read_explorer_folders(text: &str) -> Vec<(isize, String)> {
+    text.lines()
+        .filter_map(|line| {
+            let (handle, path) = line.trim_end().split_once('\t')?;
+            let handle = handle.trim().parse::<isize>().ok()?;
+            let path = path.trim();
+            // A drive is a letter and a colon; `::{…}` is a virtual place.
+            let bytes = path.as_bytes();
+            let drive = bytes.len() > 2 && bytes[0].is_ascii_alphabetic() && bytes[1] == b':';
+            let on_disk = drive || path.starts_with("\\\\");
+            on_disk.then(|| (handle, path.to_string()))
+        })
+        .collect()
 }
 
 #[cfg(not(windows))]
@@ -217,6 +349,30 @@ mod tests {
         let screens = [screen(1, 0, true), screen(2, 1920, false)];
         assert_eq!(screen_of(&screens, 100, 100).map(|m| m.number), Some(1));
         assert_eq!(screen_of(&screens, 2000, 500).map(|m| m.number), Some(2));
+    }
+
+    #[test]
+    fn the_shell_answer_keeps_folders_on_disk_and_drops_virtual_places() {
+        let text = "11076128\tC:\\src\\deskstart\n\
+                    42\t::{20D04FE0-3AEA-1069-A2D8-08002B30309D}\n\
+                    7\t\\\\server\\share\\docs\n\
+                    junk line\n";
+        assert_eq!(
+            read_explorer_folders(text),
+            vec![
+                (11076128, r"C:\src\deskstart".to_string()),
+                (7, r"\\server\share\docs".to_string()),
+            ]
+        );
+    }
+
+    #[test]
+    fn the_shell_question_is_a_constant() {
+        // Nothing a person typed is ever part of it: no argument, no
+        // environment — only the Shell's own windows.
+        assert!(!EXPLORER_FOLDERS.contains("$args"));
+        assert!(!EXPLORER_FOLDERS.contains("$env:"));
+        assert!(EXPLORER_FOLDERS.starts_with("(New-Object -ComObject Shell.Application)"));
     }
 
     #[test]
