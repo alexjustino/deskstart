@@ -12,6 +12,7 @@ import { ChoiceGroup } from '@/ui/ChoiceGroup';
 import { Input } from '@/ui/Input';
 import { announce } from '@/ui/announce';
 
+import { ShowMe, TourButton, WelcomeButton } from '../guide/GuideLink';
 import { inline, MANUALS, searchManual } from './manual/text';
 import type { Block, SectionId } from './manual/types';
 
@@ -23,6 +24,15 @@ function systemLanguage(): ManualLanguage {
 }
 
 const NOTE: Record<ManualLanguage, string> = { en: 'Note', 'pt-BR': 'Nota' };
+const TOUR: Record<ManualLanguage, { take: string; showMe: string; welcome: string }> = {
+  en: { take: 'Take the tour', showMe: 'Show me in the app', welcome: 'Show the welcome again' },
+  'pt-BR': {
+    take: 'Fazer o tour',
+    showMe: 'Mostrar no aplicativo',
+    welcome: 'Ver as boas-vindas de novo',
+  },
+};
+
 const NO_MATCH: Record<ManualLanguage, string> = {
   en: 'No section has all of those words.',
   'pt-BR': 'Nenhuma seção tem todas essas palavras.',
@@ -124,11 +134,15 @@ export function HelpPage({
 
   return (
     <div className="mx-auto flex w-full max-w-5xl flex-col gap-4 p-6">
-      <header className="flex flex-col gap-1">
+      <header className="flex flex-col gap-1" data-guide="help">
         <h1 className="text-title font-semibold text-fg">{manual.title}</h1>
         <p className="text-body text-fg-secondary">
           <Text text={manual.intro} />
         </p>
+        <div className="flex flex-wrap gap-2 pt-1">
+          <TourButton label={TOUR[language].take} />
+          <WelcomeButton label={TOUR[language].welcome} />
+        </div>
       </header>
 
       <div className="flex flex-wrap items-center gap-4">
@@ -199,9 +213,12 @@ export function HelpPage({
             lang={language}
             className="flex flex-col gap-3 rounded-xl border border-stroke-subtle bg-card p-5 shadow-card"
           >
-            <h2 id={`manual-${shown.id}`} className="text-subtitle font-semibold text-fg">
-              {shown.title}
-            </h2>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <h2 id={`manual-${shown.id}`} className="text-subtitle font-semibold text-fg">
+                {shown.title}
+              </h2>
+              <ShowMe section={shown.id} label={TOUR[language].showMe} />
+            </div>
             {shown.blocks.map((block, i) => (
               <BlockView key={`${shown.id}-${i}`} block={block} language={language} />
             ))}

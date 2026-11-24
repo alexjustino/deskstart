@@ -40,6 +40,7 @@ export function Sidebar({
   return (
     <nav
       aria-label="Main"
+      data-guide="rail"
       className="flex w-52 shrink-0 flex-col gap-0.5 border-r border-stroke-subtle bg-layer-alt p-2"
     >
       {ENTRIES.map((entry) => {

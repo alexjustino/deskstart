@@ -543,6 +543,7 @@ export function StepForm({
     <form
       onSubmit={submit}
       aria-label={editing ? 'Edit step' : 'Add a step'}
+      data-guide={editing ? undefined : 'add-step'}
       className="flex flex-col gap-3 border-t border-stroke-subtle pt-3"
     >
       <p className="text-caption font-semibold text-fg-tertiary uppercase">
@@ -873,7 +874,10 @@ export function StepForm({
         </p>
       </fieldset>
 
-      <fieldset className="flex flex-col gap-2 rounded-md border border-stroke-subtle p-3">
+      <fieldset
+        className="flex flex-col gap-2 rounded-md border border-stroke-subtle p-3"
+        data-guide={editing ? undefined : 'where'}
+      >
         <legend className="flex items-center gap-1 px-1 text-caption font-semibold text-fg-tertiary uppercase">
           Where <HelpLink section="where" />
         </legend>
