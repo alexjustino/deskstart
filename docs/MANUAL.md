@@ -7,6 +7,7 @@ Deskstart opens your working day with one button. A **profile** is a list of **s
 ## Contents
 
 - [Getting started](#start) — Your first profile, in a minute.
+- [Welcome and the guided tour](#guide) — The first screen, and a tour of the real interface.
 - [Profiles and steps](#profiles) — Add, edit, reorder and remove steps; paths with %NAMES%.
 - [Kinds of step](#kinds) — Application, folder, file, web page, bookmark folder, terminal, VS Code, virtual machine.
 - [Run, Dry run, Stop and the log](#run) — What each button does, and how to read a run.
@@ -39,6 +40,18 @@ Deskstart opens your working day with one button. A **profile** is a list of **s
 - **Diagnostics** — the version, where your workspace is, and which programs a step can call on this machine.
 - **Settings** — theme, start with Windows, backup and restore, the manual’s language, and About.
 - **Help** — this manual. A `?` on a card opens it at that card’s section.
+
+<a id="guide"></a>
+
+## Welcome and the guided tour
+
+A new workspace opens on the **welcome**: what Deskstart does, and three ways in — **Take the tour**, **Capture this desktop**, or **Start from an empty profile**. Choosing any of them, or going anywhere from the rail, puts it away. **Show the welcome again** in Help brings it back.
+
+The **tour** lights one part of the real interface at a time — the rail, a new profile, capture, import, the steps, Where, Run, triggers, the log and this manual — and says what it is for. **Next** and **Back** move through it; **Skip the tour** or Escape leaves it. A part that is not on screen yet, like the step editor before there is a profile, is skipped, and the last card says so.
+
+**Read more** on a tour card opens this manual at that subject, and **Show me in the app** on a manual section starts the tour right at it. Start the whole tour again any time with **Take the tour** in Help.
+
+> **Note:** The welcome and the tour speak the manual’s language. When Windows is set to reduce motion, the light jumps instead of gliding.
 
 <a id="profiles"></a>
 
