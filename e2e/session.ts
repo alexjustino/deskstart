@@ -278,6 +278,27 @@ export interface SessionOptions {
    * a profile folder of its own instead of the person's.
    */
   env?: Record<string, string>;
+  /**
+   * Keep the welcome a new workspace opens on (1.2). Every other suite starts
+   * where a returning person would — Profiles — so the harness leaves the
+   * welcome through its own "start empty" button, the way a person would.
+   */
+  keepWelcome?: boolean;
+}
+
+/** Leave the welcome, if the workspace opened on it, for an empty profile list. */
+async function passWelcome(driver: Driver): Promise<void> {
+  const deadline = Date.now() + 20_000;
+  while (Date.now() < deadline) {
+    const welcome = await driver.findAll('[data-welcome="empty"]').catch(() => []);
+    if (welcome.length > 0) {
+      await welcome[0]!.click();
+      return;
+    }
+    const profiles = await driver.findAll('input[aria-label="New profile name"]').catch(() => []);
+    if (profiles.length > 0) return;
+    await new Promise((resolve) => setTimeout(resolve, 150));
+  }
 }
 
 export async function startSession(options: SessionOptions = {}): Promise<Session> {
@@ -301,6 +322,8 @@ export async function startSession(options: SessionOptions = {}): Promise<Sessio
     await stopStrayInstances();
     throw error;
   }
+
+  if (!options.keepWelcome) await passWelcome(driver);
 
   const session: Session = {
     driver,

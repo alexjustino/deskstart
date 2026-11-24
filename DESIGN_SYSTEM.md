@@ -165,6 +165,10 @@ from where it was — it does not decorate.
 
 Loading shows a skeleton of the shape that is coming, not a spinner.
 
+Entrances are two tokens, and only two: `--animate-fade-in` and `--animate-rise-in` (300 ms,
+decelerate) — a surface arriving settles into place. Use them with `motion-safe:`; a stagger is
+not done with `delay-*`, which delays transitions, not animations.
+
 **`prefers-reduced-motion` is honoured globally**, in `global.css`, not per component. A
 component cannot forget it. Nothing animates in a loop.
 
@@ -201,11 +205,19 @@ first — not inline in the feature.
 `Skeleton` · `EmptyState` · `Toast` · `InfoBar` · `Kbd` · `Resizer` · `VirtualList`
 
 Present today: `Button`, `IconButton`, `Card`, `InfoBar`, `Input`, `Select`, `Checkbox`, `Chip`,
-`Drawer`, `Modal`, `ConfirmDialog`, `ChoiceGroup`, `TabStrip`, `EmptyState`, `Kbd`. The rest
+`Drawer`, `Modal`, `ConfirmDialog`, `ChoiceGroup`, `TabStrip`, `EmptyState`, `Kbd`, `CoachMark`. The rest
 arrive with the slice that first needs them, and arrive _here_.
 
 A shortcut shown beside the thing it triggers is a `Kbd`, everywhere, so a person learns to
 read it once.
+
+### Pointing at the real interface
+
+`CoachMark`, always (1.2). A light on one element — the rest dimmed in the `overlay` token — and
+a `flyout` card beside it. The light glides between elements on `--ease-decelerate` at 300 ms and
+jumps when motion is reduced; the card goes on the first side with room (below, above, right,
+left) and never leaves the window (`coachPlacement.ts`, tested). Focus is held in the card;
+Escape leaves. A tour is never built from screenshots of the product: it lights the product.
 
 ### Asking "are you sure"
 

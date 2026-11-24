@@ -43,6 +43,29 @@ export const MANUAL_PT_BR: Manual = {
       ],
     },
     {
+      id: 'guide',
+      title: 'Boas-vindas e o tour guiado',
+      summary: 'A primeira tela, e um tour pela interface de verdade.',
+      blocks: [
+        {
+          kind: 'p',
+          text: 'Um workspace novo abre nas **boas-vindas**: o que o Deskstart faz e três caminhos — **Fazer o tour**, **Capturar esta área de trabalho** ou **Começar com um perfil vazio**. Escolher qualquer um, ou ir a qualquer tela pela barra lateral, a guarda. **Ver as boas-vindas de novo**, no Help, a traz de volta.',
+        },
+        {
+          kind: 'p',
+          text: 'O **tour** ilumina uma parte da interface de verdade por vez — a barra lateral, um perfil novo, a captura, a importação, os passos, o Where, o Run, os gatilhos, o log e este manual — e diz para que ela serve. **Próximo** e **Voltar** avançam e retornam; **Pular o tour** ou Esc saem. Uma parte que ainda não está na tela, como o editor de passos antes de existir um perfil, é pulada, e o último cartão avisa.',
+        },
+        {
+          kind: 'p',
+          text: '**Ler mais**, num cartão do tour, abre este manual naquele assunto, e **Mostrar no aplicativo**, numa seção do manual, começa o tour exatamente nela. Recomece o tour inteiro quando quiser com **Fazer o tour** no Help.',
+        },
+        {
+          kind: 'note',
+          text: 'As boas-vindas e o tour falam o idioma do manual. Quando o Windows está configurado para reduzir animações, a luz salta em vez de deslizar.',
+        },
+      ],
+    },
+    {
       id: 'profiles',
       title: 'Perfis e passos',
       summary: 'Adicionar, editar, reordenar e remover passos; caminhos com %NOMES%.',

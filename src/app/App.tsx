@@ -1,11 +1,14 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { applyAccent, applyTheme } from '@/app/theme';
 import { fetchAccentRamp, onRunRequested, pendingRun, type RunRequest } from '@/data/system';
-import { useScreenWatch, useSettings } from '@/data/hooks';
-import { readSettings } from '@/domain/settings';
+import { useScreenWatch, useSetSetting, useSettings } from '@/data/hooks';
+import { readSettings, type ManualLanguage } from '@/domain/settings';
 import { announce } from '@/ui/announce';
 import { DiagnosticsPage } from '@/features/diagnostics/DiagnosticsPage';
+import { Guide } from '@/features/guide/Guide';
+import { GuideProvider } from '@/features/guide/GuideLink';
+import { WelcomePage } from '@/features/guide/WelcomePage';
 import { HelpProvider } from '@/features/help/HelpLink';
 import { HelpPage } from '@/features/help/HelpPage';
 import type { SectionId } from '@/features/help/manual/types';
@@ -39,7 +42,47 @@ export function App() {
       .catch(() => undefined);
   }, [theme]);
 
-  const go = useCallback((next: Destination) => setDestination(next), []);
+  // The welcome (1.2): shown on a workspace that has not seen it, until a
+  // choice on it — or the rail — is made; Help shows it again. Null means
+  // "as the setting says", so nothing is set from inside an effect.
+  const setSetting = useSetSetting();
+  const [welcomeOpen, setWelcomeOpen] = useState<boolean | null>(null);
+  const showingWelcome =
+    welcomeOpen ?? (settings.data !== undefined && !readSettings(settings.data).welcomeSeen);
+  const chosenLanguage = readSettings(settings.data).manualLanguage;
+  const language: ManualLanguage =
+    chosenLanguage ?? (navigator.language.toLowerCase().startsWith('pt') ? 'pt-BR' : 'en');
+  const leaveWelcome = useCallback(() => {
+    setWelcomeOpen(false);
+    setSetting.mutate({ key: 'welcomeSeen', value: 'true' });
+  }, [setSetting]);
+
+  // Capture straight from the welcome: Profiles opens with the dialog up.
+  const [captureAtStart, setCaptureAtStart] = useState(false);
+
+  // The tour, over whatever screen it needs; a new key restarts it.
+  const [tour, setTour] = useState<{ start: string | null; serial: number } | null>(null);
+  const startTour = useCallback(
+    (start: string | null) => {
+      if (showingWelcome) leaveWelcome();
+      setWelcomeOpen(false);
+      setTour((current) => ({ start, serial: (current?.serial ?? 0) + 1 }));
+    },
+    [showingWelcome, leaveWelcome],
+  );
+  const guideActions = useMemo(
+    () => ({ startTour, showWelcome: () => setWelcomeOpen(true) }),
+    [startTour],
+  );
+
+  const go = useCallback(
+    (next: Destination) => {
+      if (showingWelcome) leaveWelcome();
+      setCaptureAtStart(false);
+      setDestination(next);
+    },
+    [showingWelcome, leaveWelcome],
+  );
 
   // The manual (1.1): the rail opens it where it was left; a "?" on a card
   // opens it at that card's section.
@@ -68,6 +111,7 @@ export function App() {
     const take = (next: RunRequest) => {
       serial += 1;
       setRequest({ ...next, serial });
+      setWelcomeOpen(false);
       setDestination('profiles');
     };
     void pendingRun()
@@ -80,24 +124,58 @@ export function App() {
 
   return (
     <HelpProvider open={openHelp}>
-      <div className="flex h-full flex-col overflow-hidden rounded-lg">
-        <TitleBar />
-        <div className="flex min-h-0 flex-1">
-          <Sidebar active={destination} onNavigate={go} />
-          <main
-            tabIndex={0}
-            className="min-w-0 flex-1 overflow-y-auto bg-layer focus-visible:outline-none"
-          >
-            {destination === 'profiles' && <ProfilesPage request={request} />}
-            {destination === 'runs' && <RunsPage />}
-            {destination === 'diagnostics' && <DiagnosticsPage />}
-            {destination === 'settings' && <SettingsPage />}
-            {destination === 'help' && (
-              <HelpPage section={helpSection} onSection={setHelpSection} />
-            )}
-          </main>
+      <GuideProvider actions={guideActions}>
+        <div className="flex h-full flex-col overflow-hidden rounded-lg">
+          <TitleBar />
+          <div className="flex min-h-0 flex-1">
+            <Sidebar active={destination} onNavigate={go} />
+            <main
+              tabIndex={0}
+              className="min-w-0 flex-1 overflow-y-auto bg-layer focus-visible:outline-none"
+            >
+              {showingWelcome ? (
+                <WelcomePage
+                  language={language}
+                  onLanguage={(next) => setSetting.mutate({ key: 'manualLanguage', value: next })}
+                  onTour={() => startTour(null)}
+                  onCapture={() => {
+                    leaveWelcome();
+                    setCaptureAtStart(true);
+                    setDestination('profiles');
+                  }}
+                  onEmpty={() => {
+                    leaveWelcome();
+                    setDestination('profiles');
+                  }}
+                />
+              ) : (
+                <>
+                  {destination === 'profiles' && (
+                    <ProfilesPage request={request} captureAtStart={captureAtStart} />
+                  )}
+                  {destination === 'runs' && <RunsPage />}
+                  {destination === 'diagnostics' && <DiagnosticsPage />}
+                  {destination === 'settings' && <SettingsPage />}
+                  {destination === 'help' && (
+                    <HelpPage section={helpSection} onSection={setHelpSection} />
+                  )}
+                </>
+              )}
+            </main>
+          </div>
         </div>
-      </div>
+        {tour !== null && (
+          <Guide
+            key={tour.serial}
+            startAt={tour.start}
+            language={language}
+            current={destination}
+            navigate={setDestination}
+            openHelp={openHelp}
+            onClose={() => setTour(null)}
+          />
+        )}
+      </GuideProvider>
     </HelpProvider>
   );
 }

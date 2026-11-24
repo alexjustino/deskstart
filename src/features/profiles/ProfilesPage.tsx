@@ -94,9 +94,12 @@ import { HelpLink } from '@/features/help/HelpLink';
  */
 export function ProfilesPage({
   request = null,
+  captureAtStart = false,
 }: {
   /** A run a trigger asked for, to be selected and started once (F9). */
   request?: RunRequestOnce | null;
+  /** Open with Capture this desktop up — the welcome's second way in (1.2). */
+  captureAtStart?: boolean;
 }) {
   const profiles = useProfiles();
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -118,7 +121,12 @@ export function ProfilesPage({
 
   return (
     <div className="flex h-full">
-      <ProfileList profiles={list} selectedId={selected?.id ?? null} onSelect={setSelectedId} />
+      <ProfileList
+        profiles={list}
+        selectedId={selected?.id ?? null}
+        onSelect={setSelectedId}
+        captureAtStart={captureAtStart}
+      />
       <section tabIndex={0} className="min-w-0 flex-1 overflow-y-auto focus-visible:outline-none">
         {profiles.isError && (
           <div className="p-6">
@@ -144,15 +152,17 @@ function ProfileList({
   profiles,
   selectedId,
   onSelect,
+  captureAtStart,
 }: {
   profiles: Profile[];
   selectedId: string | null;
   onSelect: (id: string) => void;
+  captureAtStart: boolean;
 }) {
   const create = useCreateProfile();
   const [name, setName] = useState('');
   const [importing, setImporting] = useState(false);
-  const [capturing, setCapturing] = useState(false);
+  const [capturing, setCapturing] = useState(captureAtStart);
 
   const submit = (event: FormEvent) => {
     event.preventDefault();
@@ -169,7 +179,7 @@ function ProfileList({
 
   return (
     <aside className="flex w-64 shrink-0 flex-col border-r border-stroke-subtle bg-layer-alt">
-      <form onSubmit={submit} className="flex gap-2 p-3">
+      <form onSubmit={submit} className="flex gap-2 p-3" data-guide="new-profile">
         <Input
           aria-label="New profile name"
           placeholder="New profile"
@@ -194,6 +204,7 @@ function ProfileList({
       <div className="px-3 pb-3">
         <Button
           className="w-full"
+          data-guide="import"
           icon={<ArrowImport20Regular />}
           onClick={() => setImporting(true)}
         >
@@ -201,6 +212,7 @@ function ProfileList({
         </Button>
         <Button
           className="mt-2 w-full"
+          data-guide="capture"
           icon={<WindowMultiple20Regular />}
           onClick={() => setCapturing(true)}
         >
@@ -421,7 +433,7 @@ function ProfileDetail({ profile, request }: { profile: Profile; request: RunReq
               : `${judged.length} ${judged.length === 1 ? 'step' : 'steps'}, in this order.`}
           </p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2" data-guide="run">
           <Button
             appearance="accent"
             icon={<Play20Regular />}
@@ -503,14 +515,16 @@ function ProfileDetail({ profile, request }: { profile: Profile; request: RunReq
           description="What this profile opens, in this order."
           actions={<HelpLink section="profiles" />}
         >
-          <StepList
-            profileId={profile.id}
-            judged={judged}
-            env={env}
-            screens={screens.data ?? []}
-            tools={tools.data ?? []}
-            busy={execute.isPending}
-          />
+          <div data-guide="steps">
+            <StepList
+              profileId={profile.id}
+              judged={judged}
+              env={env}
+              screens={screens.data ?? []}
+              tools={tools.data ?? []}
+              busy={execute.isPending}
+            />
+          </div>
           <AddStep
             profileId={profile.id}
             env={env}
@@ -521,7 +535,11 @@ function ProfileDetail({ profile, request }: { profile: Profile; request: RunReq
         </Card>
       )}
 
-      {!review.blocked && <TriggersCard profile={profile} />}
+      {!review.blocked && (
+        <div data-guide="triggers">
+          <TriggersCard profile={profile} />
+        </div>
+      )}
 
       <Card
         title={activeRunId !== null && execute.isPending ? 'Run in progress' : 'Latest run'}

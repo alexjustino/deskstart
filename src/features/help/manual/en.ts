@@ -39,6 +39,29 @@ export const MANUAL_EN: Manual = {
       ],
     },
     {
+      id: 'guide',
+      title: 'Welcome and the guided tour',
+      summary: 'The first screen, and a tour of the real interface.',
+      blocks: [
+        {
+          kind: 'p',
+          text: 'A new workspace opens on the **welcome**: what Deskstart does, and three ways in — **Take the tour**, **Capture this desktop**, or **Start from an empty profile**. Choosing any of them, or going anywhere from the rail, puts it away. **Show the welcome again** in Help brings it back.',
+        },
+        {
+          kind: 'p',
+          text: 'The **tour** lights one part of the real interface at a time — the rail, a new profile, capture, import, the steps, Where, Run, triggers, the log and this manual — and says what it is for. **Next** and **Back** move through it; **Skip the tour** or Escape leaves it. A part that is not on screen yet, like the step editor before there is a profile, is skipped, and the last card says so.',
+        },
+        {
+          kind: 'p',
+          text: '**Read more** on a tour card opens this manual at that subject, and **Show me in the app** on a manual section starts the tour right at it. Start the whole tour again any time with **Take the tour** in Help.',
+        },
+        {
+          kind: 'note',
+          text: 'The welcome and the tour speak the manual’s language. When Windows is set to reduce motion, the light jumps instead of gliding.',
+        },
+      ],
+    },
+    {
       id: 'profiles',
       title: 'Profiles and steps',
       summary: 'Add, edit, reorder and remove steps; paths with %NAMES%.',

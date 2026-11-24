@@ -7,6 +7,7 @@ O Deskstart abre o seu dia de trabalho com um botão. Um **perfil** é uma lista
 ## Conteúdo
 
 - [Primeiros passos](#start) — Seu primeiro perfil, em um minuto.
+- [Boas-vindas e o tour guiado](#guide) — A primeira tela, e um tour pela interface de verdade.
 - [Perfis e passos](#profiles) — Adicionar, editar, reordenar e remover passos; caminhos com %NOMES%.
 - [Tipos de passo](#kinds) — Aplicativo, pasta, arquivo, página, pasta de favoritos, terminal, VS Code, máquina virtual.
 - [Run, Dry run, Stop e o log](#run) — O que cada botão faz, e como ler uma execução.
@@ -39,6 +40,18 @@ O Deskstart abre o seu dia de trabalho com um botão. Um **perfil** é uma lista
 - **Diagnostics** — a versão, onde está seu workspace e quais programas um passo pode chamar nesta máquina.
 - **Settings** — tema, iniciar com o Windows, backup e restauração, o idioma do manual e o About.
 - **Help** — este manual. Um `?` num cartão abre o manual na seção daquele cartão.
+
+<a id="guide"></a>
+
+## Boas-vindas e o tour guiado
+
+Um workspace novo abre nas **boas-vindas**: o que o Deskstart faz e três caminhos — **Fazer o tour**, **Capturar esta área de trabalho** ou **Começar com um perfil vazio**. Escolher qualquer um, ou ir a qualquer tela pela barra lateral, a guarda. **Ver as boas-vindas de novo**, no Help, a traz de volta.
+
+O **tour** ilumina uma parte da interface de verdade por vez — a barra lateral, um perfil novo, a captura, a importação, os passos, o Where, o Run, os gatilhos, o log e este manual — e diz para que ela serve. **Próximo** e **Voltar** avançam e retornam; **Pular o tour** ou Esc saem. Uma parte que ainda não está na tela, como o editor de passos antes de existir um perfil, é pulada, e o último cartão avisa.
+
+**Ler mais**, num cartão do tour, abre este manual naquele assunto, e **Mostrar no aplicativo**, numa seção do manual, começa o tour exatamente nela. Recomece o tour inteiro quando quiser com **Fazer o tour** no Help.
+
+> **Nota:** As boas-vindas e o tour falam o idioma do manual. Quando o Windows está configurado para reduzir animações, a luz salta em vez de deslizar.
 
 <a id="profiles"></a>
 
