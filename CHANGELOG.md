@@ -16,6 +16,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   each manual section the tour can show has **Show me in the app** (ADR-032).
 - `CoachMark`, a shared primitive, and two entrance motion tokens, in the design system.
 
+### Changed — the mark
+
+- A new mark, **Comet**: six points — the steps of a profile — gathering speed into an amber Run
+  point, on a blue-black Windows 11 squircle (ADR-033). The installer, the taskbar, the tray and
+  the title bar all carry it.
+
 ## [1.1.0] — 2026-11-20 — The layout
 
 Deskstart 1.0 opened your working day from one button. 1.1 is about **where it all lands**, and
