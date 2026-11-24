@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed — the mark
+
+- A new mark, **Comet**: six points — the steps of a profile — gathering speed into an amber Run
+  point, on a blue-black Windows 11 squircle (ADR-033). The installer, the taskbar, the tray and
+  the title bar all carry it.
+
 ## [1.1.0] — 2026-11-20 — The layout
 
 Deskstart 1.0 opened your working day from one button. 1.1 is about **where it all lands**, and

@@ -37,6 +37,7 @@ part that matters most later — the cost we accepted.
 | [029](#adr-029) | A window rule places only a window that appeared after its step began                    | Accepted |
 | [030](#adr-030) | A capture keeps what starts and places a window, never its title                         | Accepted |
 | [031](#adr-031) | The manual is data: shown in the product, generated into the repository                  | Accepted |
+| [033](#adr-033) | The mark is Comet: steps gathering speed into Run                                        | Accepted |
 
 ---
 
@@ -660,3 +661,23 @@ file and the data differ. Both languages must have every section, in the same or
 **Cost accepted.** Writing in a TypeScript file instead of Markdown, and no images, tables or
 links inside the manual. A second language is a second text to keep true; the test catches a
 missing section, not a stale sentence — that is review's job.
+
+## ADR-033 — The mark is Comet: steps gathering speed into Run {#adr-033}
+
+**Context.** The 1.0 mark — three bars and a triangle on Fluent blue — said "list and play"
+clearly, but read as a media player and disappeared among the blue icons of a Windows taskbar.
+Fifteen alternatives were drawn in three rounds and compared on what an icon actually has to do:
+stand out on a taskbar, read at 16–24 px on a light and a dark taskbar, survive the common
+colour-vision differences, say what the product promises, and avoid the clichés of its category.
+
+**Decision.** The mark is **Comet**: six points, each a step, set out as a play triangle and
+growing and brightening towards the last, which is amber — Run. Palette **Aurora**: blue-black
+ground, cyan and sky for the steps, amber for Run. The ground is a superellipse. In the
+comparison it scored highest overall (23 of 25): distinct on a taskbar where most icons are blue,
+legible at 16 px on both taskbars, blue-against-amber for colour-vision safety, a warm accent for
+"the start of the day", and none of the violet-gradient look of AI tools. Every raster is
+generated from the one SVG.
+
+**Cost accepted.** A dark mark is quieter than a saturated one on a dark taskbar; the amber point
+carries it. The points become a language — the tour's progress is a row of them — so a future
+change to the mark is a change to that language too.

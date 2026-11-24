@@ -137,11 +137,15 @@ cannot be undone later without touching every screen.
 
 ### The mark
 
-The product's own icon is `src-tauri/icons/deskstart.svg`: three bars — the ordered steps
-of a profile — and one triangle, the button that runs them, lighter so the eye lands on the
-action rather than the list. It is drawn to survive sixteen pixels in a taskbar: four shapes,
-one accent, no stroke thinner than the gap between bars. The blue is the Windows 11 default
-accent, the value the token layer starts from.
+The product's own icon is `src-tauri/icons/deskstart.svg`, **Comet** (ADR-033): six points — the
+steps of a profile — set out as a play triangle, three, two, one, growing and brightening towards
+the last, which is amber: the steps gathering speed into Run. The ground is a superellipse, the
+Windows 11 icon shape, in a blue-black (`#0B1220`) that keeps cyan (`#22D3EE`), sky (`#60A5FA`)
+and amber (`#FBBF24`) legible on a light taskbar and a dark one. Amber is the mark's only warm
+colour and is kept for the one point that means Run. The mark's palette is the brand's, not the
+interface's: the interface still takes the person's Windows accent (§2).
+
+Drawn to survive sixteen pixels: the smallest point is never thinner than the gap between points.
 
 Every raster the platform needs is generated from that one file, never edited by hand:
 
