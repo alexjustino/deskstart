@@ -376,6 +376,22 @@ off until a person turns it on.
 - **Which build a task starts.** The one that registered it, by absolute path; the Diagnostics
   page of F10 will list the tasks and say which executable each one names.
 
+### Delivered in 1.2 — the welcome and the guided tour
+
+A new workspace opens on a **welcome**: what Deskstart is, in three promises — one button, where
+it lands, on your machine — and three ways in: **Take the tour**, **Capture this desktop**, or an
+empty profile, in English or Portuguese. The **tour** lights the real interface one part at a time
+— the rail, a new profile, capture, import, the steps, add a step, Where, Run, triggers, the log,
+the manual — with a card that says what each is for, links to the manual section, and a row of
+lights for progress. It moves between screens, skips what is not on screen yet in the direction of
+travel, and leaves on Escape. From Help, **Show me in the app** starts it at a section (ADR-032).
+
+Proved on the real binary: the welcome in both languages; the light measured on the element of
+each step (within 3 px); the tour crossing to Runs and back; the welcome not returning after a
+restart; Show me starting at Triggers and the tour ending on its last card. axe finds nothing on
+the welcome or a tour card in either theme. Found on the way and fixed: a card for an element as
+tall as the window (the rail) went off the screen; Back from a later screen bounced forward.
+
 ### Delivered in 1.1 — the manual, inside the product
 
 A **Help** destination on the rail holds the user manual — getting started, every kind of step,

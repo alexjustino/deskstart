@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added — the welcome and the guided tour
+
+- A new workspace opens on a **welcome**: what Deskstart does and three ways in — the tour,
+  Capture this desktop, or an empty profile — in English or Portuguese. Help shows it again.
+- **The guided tour** lights the real interface one part at a time with a card that says what it
+  is for, moves between screens, skips what is not there yet, and links each part to the manual;
+  each manual section the tour can show has **Show me in the app** (ADR-032).
+- `CoachMark`, a shared primitive, and two entrance motion tokens, in the design system.
+
 ## [1.1.0] — 2026-11-20 — The layout
 
 Deskstart 1.0 opened your working day from one button. 1.1 is about **where it all lands**, and
