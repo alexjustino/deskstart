@@ -627,7 +627,7 @@ export function resolveStep(
 export function stepTitle(config: StepConfig): string {
   switch (config.kind) {
     case 'app':
-      return lastSegment(config.program);
+      return storeAppName(config) ?? lastSegment(config.program);
     case 'folder':
     case 'file':
       return lastSegment(config.path);
@@ -668,4 +668,22 @@ export function passwordSteps(steps: readonly Step[]): { id: string; title: stri
   return steps
     .filter((step) => step.config.kind === 'vm' && step.config.encrypted === true)
     .map((step) => ({ id: step.id, title: stepTitle(step.config) }));
+}
+
+/**
+ * A Store app's name, read from the identity a captured step starts it by
+ * (`explorer.exe shell:AppsFolder\\<id>`, 1.3): `Claude_pzs8sxrjxfjjc!Claude`
+ * is "Claude", `Microsoft.WindowsCalculator_8wekyb3d8bbwe!App` is "Windows
+ * Calculator". Null for any other step, which is named by its program.
+ */
+export function storeAppName(config: StepConfig): string | null {
+  if (config.kind !== 'app' || lastSegment(config.program).toLowerCase() !== 'explorer.exe') {
+    return null;
+  }
+  const matched = /^shell:AppsFolder\\([^!]+)!/i.exec(config.args[0] ?? '');
+  if (matched === null) return null;
+  const family = (matched[1] ?? '').replace(/_[a-z0-9]+$/i, '');
+  const last = family.split('.').pop() ?? family;
+  const words = last.replace(/([a-z])([A-Z])/g, '$1 $2').trim();
+  return words === '' ? null : words;
 }

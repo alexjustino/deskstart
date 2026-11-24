@@ -9,7 +9,9 @@ import {
   resolvePath,
   resolveStep,
   serializeStepConfig,
+  type StepConfig,
   stepTitle,
+  storeAppName,
 } from './profile';
 
 const NOTEPAD = 'C:\\Windows\\System32\\notepad.exe';
@@ -433,5 +435,32 @@ describe('an encrypted VMware machine (ADR-028)', () => {
       { id: 's1', title: 'a' },
       { id: 's4', title: 'c' },
     ]);
+  });
+});
+
+describe('a Store app step is named for the app (1.3)', () => {
+  const store = (id: string): StepConfig => ({
+    kind: 'app',
+    program: '%SYSTEMROOT%\\explorer.exe',
+    args: [`shell:AppsFolder\\${id}`],
+    workingDir: null,
+  });
+
+  it('reads the name out of the app identity', () => {
+    expect(stepTitle(store('Claude_pzs8sxrjxfjjc!Claude'))).toBe('Claude');
+    expect(storeAppName(store('Microsoft.WindowsCalculator_8wekyb3d8bbwe!App'))).toBe(
+      'Windows Calculator',
+    );
+  });
+
+  it('leaves every other step named by its program', () => {
+    const explorerOnAFolder: StepConfig = {
+      kind: 'app',
+      program: 'C:\\Windows\\explorer.exe',
+      args: ['C:\\src'],
+      workingDir: null,
+    };
+    expect(storeAppName(explorerOnAFolder)).toBeNull();
+    expect(stepTitle(explorerOnAFolder)).toBe('explorer.exe');
   });
 });
