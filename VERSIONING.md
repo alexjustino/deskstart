@@ -9,7 +9,7 @@ MAJOR . MINOR . PATCH
 - **MAJOR** — a change that forces the user to act: a database migration that cannot be
   reversed, a removed feature, an export format that older versions cannot read.
 - **MINOR** — new capability, backwards compatible. This is where release themes land
-  (1.1 "the layout", 1.2 "the day").
+  (1.1 "the layout", 1.2 "the welcome", 1.3 "the day").
 - **PATCH** — bug fixes and corrections only; no schema change, no new surface.
 
 ## Single source of truth

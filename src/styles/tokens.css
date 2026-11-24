@@ -65,6 +65,32 @@
   --ease-decelerate: cubic-bezier(0.1, 0.9, 0.2, 1);
   --ease-accelerate: cubic-bezier(0.9, 0.1, 1, 0.2);
   --animate-duration-faster: 100ms;
+
+  /* Entrances (1.2): something new arrives — the welcome, a coach mark's
+     card. Decelerate, because it settles into place; 300 ms, the longest
+     Fluent step, because it is a whole surface. Turned off with motion-safe. */
+  --animate-fade-in: fade-in 300ms var(--ease-decelerate) both;
+  --animate-rise-in: rise-in 300ms var(--ease-decelerate) both;
+
+  @keyframes fade-in {
+    from {
+      opacity: 0;
+    }
+    to {
+      opacity: 1;
+    }
+  }
+
+  @keyframes rise-in {
+    from {
+      opacity: 0;
+      transform: translateY(8px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
 }
 
 /* Map the semantic namespaces into Tailwind's colour namespace by reference,

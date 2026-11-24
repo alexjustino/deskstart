@@ -29,7 +29,7 @@ export function RunsPage() {
 
   return (
     <div className="mx-auto flex w-full max-w-4xl flex-col gap-4 p-6">
-      <header>
+      <header data-guide="runs">
         <h1 className="text-title font-semibold text-fg">Runs</h1>
         <p className="mt-1 text-body text-fg-secondary">
           What happened, every time. The log is written by the host and cannot be edited.

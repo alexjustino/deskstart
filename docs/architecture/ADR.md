@@ -37,6 +37,8 @@ part that matters most later — the cost we accepted.
 | [029](#adr-029) | A window rule places only a window that appeared after its step began                    | Accepted |
 | [030](#adr-030) | A capture keeps what starts and places a window, never its title                         | Accepted |
 | [031](#adr-031) | The manual is data: shown in the product, generated into the repository                  | Accepted |
+| [032](#adr-032) | The welcome and the tour are the manual's first page and its moving version              | Accepted |
+| [033](#adr-033) | The mark is Comet: steps gathering speed into Run                                        | Accepted |
 
 ---
 
@@ -660,3 +662,46 @@ file and the data differ. Both languages must have every section, in the same or
 **Cost accepted.** Writing in a TypeScript file instead of Markdown, and no images, tables or
 links inside the manual. A second language is a second text to keep true; the test catches a
 missing section, not a stale sentence — that is review's job.
+
+## ADR-032 — The welcome and the tour are the manual's first page and its moving version {#adr-032}
+
+**Context.** 1.1 put the manual inside the product (ADR-031). A manual answers "how do I…"; it
+does not show a newcomer where things are. A tour does, but tours rot: built from screenshots
+they drift from the product, built as a separate script they say things the manual does not, and
+a tour that blocks the window or reaches into a person's data is worse than none.
+
+**Decision.** A new workspace opens on a **welcome** — what Deskstart is, in three promises, and
+three ways in: the tour, Capture this desktop, an empty profile. Any choice, or the rail, puts it
+away for good (`welcomeSeen`, a setting); Help shows it again. The **tour** is data in the domain
+(`domain/guide.ts`): an ordered list of steps, each naming the screen it is on, a `data-guide`
+anchor on the **real element**, and the manual section that says more. A shared `CoachMark`
+primitive lights that element and places a card beside it. A step whose element is not on screen —
+the step editor before there is a profile — is skipped in the direction of travel and counted, and
+the last card says how to see it. Every card can open the manual at its section, and every manual
+section the tour can show offers **Show me in the app**. The welcome and the tour speak the
+manual's language. The tour only looks: it opens screens, scrolls an element into view and lights
+it; it never types, clicks for the person, or changes data.
+
+**Cost accepted.** An anchor is a `data-guide` attribute a refactor can drop; the end-to-end suite
+walks the tour on the real binary and measures the light against each element, so a lost anchor
+fails a gate rather than a person. The text is written twice, like the manual's.
+
+## ADR-033 — The mark is Comet: steps gathering speed into Run {#adr-033}
+
+**Context.** The 1.0 mark — three bars and a triangle on Fluent blue — said "list and play"
+clearly, but read as a media player and disappeared among the blue icons of a Windows taskbar.
+Fifteen alternatives were drawn in three rounds and compared on what an icon actually has to do:
+stand out on a taskbar, read at 16–24 px on a light and a dark taskbar, survive the common
+colour-vision differences, say what the product promises, and avoid the clichés of its category.
+
+**Decision.** The mark is **Comet**: six points, each a step, set out as a play triangle and
+growing and brightening towards the last, which is amber — Run. Palette **Aurora**: blue-black
+ground, cyan and sky for the steps, amber for Run. The ground is a superellipse. In the
+comparison it scored highest overall (23 of 25): distinct on a taskbar where most icons are blue,
+legible at 16 px on both taskbars, blue-against-amber for colour-vision safety, a warm accent for
+"the start of the day", and none of the violet-gradient look of AI tools. Every raster is
+generated from the one SVG.
+
+**Cost accepted.** A dark mark is quieter than a saturated one on a dark taskbar; the amber point
+carries it. The points become a language — the tour's progress is a row of them — so a future
+change to the mark is a change to that language too.

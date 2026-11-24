@@ -58,7 +58,7 @@ describe('the manual', () => {
     expect(await shownSection(session)).toBe('Primeiros passos');
     // Away and back: still Portuguese, and Settings says so.
     await go(session, 'Settings');
-    await driver.waitForText('The language the manual under Help is shown in');
+    await driver.waitForText('The language of the manual under Help, the welcome and the tour');
     const chosen = await driver.findAllByXPath(
       '//button[@role="radio" and @aria-checked="true" and normalize-space(.)="Português (Brasil)"]',
     );

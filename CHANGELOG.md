@@ -7,6 +7,35 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.2.0] — 2026-11-24 — The welcome
+
+1.1 put the manual inside Deskstart. 1.2 is about the first minutes with it: a new workspace opens
+on a **welcome** that says what Deskstart does and offers three ways in, and a **guided tour**
+lights the real interface one part at a time — in English or Portuguese — linking each part to
+the manual. Deskstart also has a new mark, **Comet**: the steps of a profile gathering speed into
+Run. Two new advisories in Rust dependencies are closed.
+
+**Schema.** No migration: the welcome's state is a setting in the existing `setting` table.
+
+### Added — the welcome and the guided tour
+
+- A new workspace opens on a **welcome**: what Deskstart does and three ways in — the tour,
+  Capture this desktop, or an empty profile — in English or Portuguese. Help shows it again.
+- **The guided tour** lights the real interface one part at a time with a card that says what it
+  is for, moves between screens, skips what is not there yet, and links each part to the manual;
+  each manual section the tour can show has **Show me in the app** (ADR-032).
+- `CoachMark`, a shared primitive, and two entrance motion tokens, in the design system.
+
+### Changed — the mark
+
+- A new mark, **Comet**: six points — the steps of a profile — gathering speed into an amber Run
+  point, on a blue-black Windows 11 squircle (ADR-033). The installer, the taskbar, the tray and
+  the title bar all carry it.
+
+### Security
+
+- `cookie` 0.18.3 and `url` 2.5.9 close RUSTSEC-2026-0594 and RUSTSEC-2026-0592.
+
 ## [1.1.0] — 2026-11-20 — The layout
 
 Deskstart 1.0 opened your working day from one button. 1.1 is about **where it all lands**, and

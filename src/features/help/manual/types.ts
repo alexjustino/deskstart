@@ -18,6 +18,7 @@ export { MANUAL_LANGUAGES, type ManualLanguage } from '@/domain/settings';
 /** Every section, by a stable id: what a "?" on a card links to. */
 export const SECTION_IDS = [
   'start',
+  'guide',
   'profiles',
   'kinds',
   'run',

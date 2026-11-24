@@ -137,11 +137,15 @@ cannot be undone later without touching every screen.
 
 ### The mark
 
-The product's own icon is `src-tauri/icons/deskstart.svg`: three bars — the ordered steps
-of a profile — and one triangle, the button that runs them, lighter so the eye lands on the
-action rather than the list. It is drawn to survive sixteen pixels in a taskbar: four shapes,
-one accent, no stroke thinner than the gap between bars. The blue is the Windows 11 default
-accent, the value the token layer starts from.
+The product's own icon is `src-tauri/icons/deskstart.svg`, **Comet** (ADR-033): six points — the
+steps of a profile — set out as a play triangle, three, two, one, growing and brightening towards
+the last, which is amber: the steps gathering speed into Run. The ground is a superellipse, the
+Windows 11 icon shape, in a blue-black (`#0B1220`) that keeps cyan (`#22D3EE`), sky (`#60A5FA`)
+and amber (`#FBBF24`) legible on a light taskbar and a dark one. Amber is the mark's only warm
+colour and is kept for the one point that means Run. The mark's palette is the brand's, not the
+interface's: the interface still takes the person's Windows accent (§2).
+
+Drawn to survive sixteen pixels: the smallest point is never thinner than the gap between points.
 
 Every raster the platform needs is generated from that one file, never edited by hand:
 
@@ -160,6 +164,10 @@ Fluent curves and durations, from the token layer: `--ease-easy`, `--ease-decele
 from where it was — it does not decorate.
 
 Loading shows a skeleton of the shape that is coming, not a spinner.
+
+Entrances are two tokens, and only two: `--animate-fade-in` and `--animate-rise-in` (300 ms,
+decelerate) — a surface arriving settles into place. Use them with `motion-safe:`; a stagger is
+not done with `delay-*`, which delays transitions, not animations.
 
 **`prefers-reduced-motion` is honoured globally**, in `global.css`, not per component. A
 component cannot forget it. Nothing animates in a loop.
@@ -197,11 +205,19 @@ first — not inline in the feature.
 `Skeleton` · `EmptyState` · `Toast` · `InfoBar` · `Kbd` · `Resizer` · `VirtualList`
 
 Present today: `Button`, `IconButton`, `Card`, `InfoBar`, `Input`, `Select`, `Checkbox`, `Chip`,
-`Drawer`, `Modal`, `ConfirmDialog`, `ChoiceGroup`, `TabStrip`, `EmptyState`, `Kbd`. The rest
+`Drawer`, `Modal`, `ConfirmDialog`, `ChoiceGroup`, `TabStrip`, `EmptyState`, `Kbd`, `CoachMark`. The rest
 arrive with the slice that first needs them, and arrive _here_.
 
 A shortcut shown beside the thing it triggers is a `Kbd`, everywhere, so a person learns to
 read it once.
+
+### Pointing at the real interface
+
+`CoachMark`, always (1.2). A light on one element — the rest dimmed in the `overlay` token — and
+a `flyout` card beside it. The light glides between elements on `--ease-decelerate` at 300 ms and
+jumps when motion is reduced; the card goes on the first side with room (below, above, right,
+left) and never leaves the window (`coachPlacement.ts`, tested). Focus is held in the card;
+Escape leaves. A tour is never built from screenshots of the product: it lights the product.
 
 ### Asking "are you sure"
 
