@@ -22,9 +22,15 @@ export interface Settings {
   theme: ThemeChoice;
   /** The manual's language; null until a person chooses, when the system's is used. */
   manualLanguage: ManualLanguage | null;
+  /** The welcome has been seen — dismissed, or left by a choice on it (1.2). */
+  welcomeSeen: boolean;
 }
 
-export const DEFAULT_SETTINGS: Settings = { theme: 'system', manualLanguage: null };
+export const DEFAULT_SETTINGS: Settings = {
+  theme: 'system',
+  manualLanguage: null,
+  welcomeSeen: false,
+};
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -46,6 +52,7 @@ export function readSettings(value: unknown): Settings {
     manualLanguage: (MANUAL_LANGUAGES as readonly unknown[]).includes(manualLanguage)
       ? (manualLanguage as ManualLanguage)
       : null,
+    welcomeSeen: value.welcomeSeen === 'true',
   };
 }
 

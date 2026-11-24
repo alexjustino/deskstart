@@ -221,4 +221,34 @@ describe('accessibility', () => {
       await driver.waitForGone('Passwords for this run');
     }
   }, 120_000);
+
+  it('the welcome and a tour card (1.2) have no axe violations, in both themes', async () => {
+    const { driver } = session;
+    for (const theme of THEMES) {
+      await setTheme(session, theme);
+      await go(session, 'Help');
+      await (
+        await driver.findByXPath('//button[@role="radio" and normalize-space(.)="English"]')
+      ).click();
+      await (
+        await driver.findByXPath('//button[normalize-space(.)="Show the welcome again"]')
+      ).click();
+      await driver.waitForText('Your working day, one button away');
+      await new Promise((resolve) => setTimeout(resolve, 400));
+      const welcome = await violations(session);
+      expect(welcome, report('Welcome', theme, welcome)).toEqual([]);
+
+      await (await driver.findByXPath('//button[normalize-space(.)="Take the tour"]')).click();
+      await driver.waitForText('Everything is one click away');
+      await new Promise((resolve) => setTimeout(resolve, 400));
+      const tour = await violations(session);
+      expect(tour, report('Tour', theme, tour)).toEqual([]);
+      await session.screenshot(`a11y-tour-${theme.toLowerCase()}`);
+      await (
+        await driver.findByXPath(
+          '//div[@role="dialog"]//button[normalize-space(.)="Skip the tour"]',
+        )
+      ).click();
+    }
+  }, 120_000);
 });

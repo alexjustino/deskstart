@@ -4,9 +4,21 @@ import { DEFAULT_SETTINGS, readSettings } from './settings';
 
 describe('reading settings', () => {
   it('reads a stored theme', () => {
-    expect(readSettings({ theme: 'dark' })).toEqual({ theme: 'dark', manualLanguage: null });
-    expect(readSettings({ theme: 'light' })).toEqual({ theme: 'light', manualLanguage: null });
-    expect(readSettings({ theme: 'system' })).toEqual({ theme: 'system', manualLanguage: null });
+    expect(readSettings({ theme: 'dark' })).toEqual({
+      theme: 'dark',
+      manualLanguage: null,
+      welcomeSeen: false,
+    });
+    expect(readSettings({ theme: 'light' })).toEqual({
+      theme: 'light',
+      manualLanguage: null,
+      welcomeSeen: false,
+    });
+    expect(readSettings({ theme: 'system' })).toEqual({
+      theme: 'system',
+      manualLanguage: null,
+      welcomeSeen: false,
+    });
   });
 
   it('defaults anything missing, unknown, or of the wrong shape', () => {
@@ -23,6 +35,7 @@ describe('reading settings', () => {
     expect(readSettings({ theme: 'dark', density: 'compact' })).toEqual({
       theme: 'dark',
       manualLanguage: null,
+      welcomeSeen: false,
     });
   });
 });
@@ -36,5 +49,13 @@ describe('the manual language (1.1)', () => {
   it('is unchosen for anything else, so the system language is used', () => {
     expect(readSettings({ manualLanguage: 'fr' }).manualLanguage).toBeNull();
     expect(readSettings({}).manualLanguage).toBeNull();
+  });
+});
+
+describe('the welcome (1.2)', () => {
+  it('has been seen only when the store says so, in words', () => {
+    expect(readSettings({ welcomeSeen: 'true' }).welcomeSeen).toBe(true);
+    expect(readSettings({ welcomeSeen: 'yes' }).welcomeSeen).toBe(false);
+    expect(readSettings({}).welcomeSeen).toBe(false);
   });
 });

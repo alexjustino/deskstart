@@ -90,7 +90,7 @@ function ManualCard() {
   return (
     <Card
       title="Manual"
-      description="The language the manual under Help is shown in. The interface stays in English."
+      description="The language of the manual under Help, the welcome and the tour. The interface stays in English."
       actions={<HelpLink section="settings" />}
     >
       <ChoiceGroup
