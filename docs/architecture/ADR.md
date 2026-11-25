@@ -39,6 +39,7 @@ part that matters most later — the cost we accepted.
 | [031](#adr-031) | The manual is data: shown in the product, generated into the repository                  | Accepted |
 | [032](#adr-032) | The welcome and the tour are the manual's first page and its moving version              | Accepted |
 | [033](#adr-033) | The mark is Comet: steps gathering speed into Run                                        | Accepted |
+| [034](#adr-034) | Home is where Deskstart opens; the welcome is Home before the first profile              | Accepted |
 
 ---
 
@@ -715,3 +716,21 @@ generated from the one SVG.
 **Cost accepted.** A dark mark is quieter than a saturated one on a dark taskbar; the amber point
 carries it. The points become a language — the tour's progress is a row of them — so a future
 change to the mark is a change to that language too.
+
+## ADR-034 — Home is where Deskstart opens; the welcome is Home before the first profile {#adr-034}
+
+**Context.** ADR-032 made the welcome a screen shown once: any choice put it away for good, and
+Help could show it again. The 1.2 UAT found the cost: a person who left it had no start to come
+back to, and the product's promise — one button — sat two screens deep, behind a profile list and
+a profile.
+
+**Decision.** **Home** is the first entry on the rail and the screen Deskstart opens on, every
+time. With no profile, Home is the welcome — what Deskstart does and the ways in: create a first
+profile, capture this desktop, import, take the tour. With profiles, Home shows each as a card —
+its steps, its schedule or shortcut, when it last ran and how — with **Run**, one click, and
+**Open**. Run from Home goes through the same path as the profile's own Run button, review gate
+and encrypted-machine passwords included. Home speaks the manual's language, like the tour, and
+the tour starts on it. ADR-032's one-time welcome is superseded; its tour stands.
+
+**Cost accepted.** One more screen between the window and the editor for someone who lives in
+the editor — one click on the rail, and Open on a card goes straight to the profile.

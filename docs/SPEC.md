@@ -377,6 +377,20 @@ off until a person turns it on.
 - **Which build a task starts.** The one that registered it, by absolute path; the Diagnostics
   page of F10 will list the tasks and say which executable each one names.
 
+### Delivered in 1.3 — Home, and capture on a real desktop
+
+The 1.2 UAT found two failures, both fixed here and both now gates. **Home** (ADR-034) is where
+Deskstart opens, every time: the welcome while there is no profile, and each profile one click from
+Run once there are — with its steps, schedule or shortcut, and last run. **Capture this desktop**
+takes the windows a real desktop is made of: an Explorer window becomes a Folder step for its
+folder, a Store app a step that starts it the way Windows does (ADR-030, as built in 1.3).
+
+Proved on the real binary: Home opens on a new workspace and after a restart; a first profile is
+made from Home with the name field ready; a Home card's Run starts the profile and the card then
+shows its last run. A real Explorer window and Windows Calculator are captured, closed, and both
+come back on Run, each placed. The earlier proofs of capture used a classic program only — that gap
+is what let the UAT failure through.
+
 ### Delivered in 1.2 — the welcome and the guided tour
 
 A new workspace opens on a **welcome**: what Deskstart is, in three promises — one button, where

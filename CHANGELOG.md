@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added — Home
+
+- **Home** is where Deskstart opens, every time (ADR-034): the welcome while there is no profile,
+  then each profile as a card — steps, schedule or shortcut, last run — with **Run** in one click
+  and **Open**. The welcome no longer disappears after one look. Found in UAT.
+
 ### Fixed — capture this desktop, on a real desktop
 
 - **Capture now takes Explorer windows and Store apps** — on a real desktop, most windows — which
