@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added — the manual shows
+
+- **Scenes in the manual** (ADR-035): eight sections open with a short animated drawing of
+  Deskstart doing what they explain — a run lighting its steps, a window gliding to its screen, a
+  capture becoming a profile. Each plays once in view; **Replay** plays it again.
+- **F1** opens the manual at the section about the screen you are on.
+- **An opening**: the mark's points light up to Run, with the greeting, for about a second and a
+  half; any click or key ends it. None under reduced motion.
+
+### Fixed — the manual on capture
+
+- The manual still said capture refused Store apps and Explorer windows; it now says what each
+  becomes.
+
 ### Added — Home
 
 - **Home** is where Deskstart opens, every time (ADR-034): the welcome while there is no profile,

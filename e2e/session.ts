@@ -283,6 +283,18 @@ export interface SessionOptions {
    * Profiles, reached through the rail the way a person would.
    */
   keepWelcome?: boolean;
+  /** Do not wait for the opening (1.3) to go: the suite looks at it. */
+  keepOpening?: boolean;
+}
+
+/** The opening (1.3) stands about a second and a half; nothing is clicked through it. */
+async function passOpening(driver: Driver): Promise<void> {
+  const deadline = Date.now() + 10_000;
+  while (Date.now() < deadline) {
+    const shown = await driver.findAll('[data-opening]').catch(() => []);
+    if (shown.length === 0) return;
+    await new Promise((resolve) => setTimeout(resolve, 100));
+  }
 }
 
 /**
@@ -329,6 +341,7 @@ export async function startSession(options: SessionOptions = {}): Promise<Sessio
     throw error;
   }
 
+  if (!options.keepOpening) await passOpening(driver);
   if (!options.keepWelcome) await passWelcome(driver);
 
   const session: Session = {
@@ -353,6 +366,7 @@ export async function startSession(options: SessionOptions = {}): Promise<Sessio
       driver = await createSession();
       session.driver = driver;
       // The product opens on Home again; most suites carry on from Profiles.
+      await passOpening(driver);
       if (!options.keepWelcome) await passWelcome(driver);
     },
   };

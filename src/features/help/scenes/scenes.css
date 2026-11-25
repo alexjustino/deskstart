@@ -1,0 +1,230 @@
+/*
+ * The manual's scenes (1.3, ADR-035): small drawings of Deskstart doing one
+ * thing — the explanation, not decoration. A scene plays once when it comes
+ * into view and again on Replay, never in a loop. Every colour is a token, so
+ * a scene is right in both themes. Under reduced motion it is shown finished.
+ * With the opening, these are the only places in the product where things
+ * move by themselves (DESIGN_SYSTEM §6).
+ */
+.ds-scene svg {
+  display: block;
+  width: 100%;
+  max-width: 30rem;
+  margin-inline: auto;
+  height: auto;
+}
+.ds-scene * {
+  transform-box: fill-box;
+}
+.ds-scene[data-state='idle'] * {
+  animation-play-state: paused !important;
+}
+
+/* Surfaces and ink, from the token layer. */
+.ds-scene .card {
+  fill: var(--color-card);
+  stroke: var(--color-stroke-subtle);
+}
+.ds-scene .layer {
+  fill: var(--color-layer-alt);
+}
+.ds-scene .line {
+  fill: var(--color-fg-tertiary);
+  opacity: 0.5;
+}
+.ds-scene .ink {
+  fill: var(--color-fg);
+}
+.ds-scene .stroke {
+  stroke: var(--color-stroke-strong);
+  fill: none;
+}
+.ds-scene .accent {
+  fill: var(--color-accent);
+}
+.ds-scene .accent-stroke {
+  stroke: var(--color-accent);
+  fill: none;
+}
+.ds-scene .accent-soft {
+  fill: var(--color-accent-subtle);
+}
+.ds-scene .success {
+  fill: var(--color-success);
+}
+.ds-scene .caution {
+  fill: var(--color-caution);
+}
+.ds-scene text {
+  font-family: 'Segoe UI Variable Text', 'Segoe UI', sans-serif;
+  font-size: 11px;
+  fill: var(--color-fg);
+}
+.ds-scene text.small {
+  font-size: 9px;
+  fill: var(--color-fg-secondary);
+}
+.ds-scene text.mono {
+  font-family: 'Cascadia Mono', Consolas, monospace;
+  font-size: 9px;
+  fill: var(--color-fg-secondary);
+}
+.ds-scene text.on-accent {
+  fill: var(--color-fg-on-accent);
+}
+
+/* The moves. Each element sets its own delay; all of them hold their last frame. */
+.ds-scene .pop,
+.ds-scene .rise,
+.ds-scene .drop,
+.ds-scene .grow,
+.ds-scene .type,
+.ds-scene .glide,
+.ds-scene .light,
+.ds-scene .fade,
+.ds-scene .leave,
+.ds-scene .sweep {
+  animation-duration: 420ms;
+  animation-timing-function: var(--ease-decelerate);
+  animation-fill-mode: both;
+}
+.ds-scene .pop {
+  transform-origin: center;
+  animation-name: ds-pop;
+}
+.ds-scene .rise {
+  animation-name: ds-rise;
+}
+.ds-scene .drop {
+  animation-name: ds-drop;
+}
+.ds-scene .grow {
+  transform-origin: left center;
+  animation-name: ds-grow;
+  animation-duration: 900ms;
+  animation-timing-function: linear;
+}
+.ds-scene .type {
+  transform-origin: left center;
+  animation-name: ds-type;
+  animation-duration: 900ms;
+  animation-timing-function: steps(20, end);
+}
+/* A window travelling to its place: from (--dx, --dy) to where it is drawn. */
+.ds-scene .glide {
+  animation-name: ds-glide;
+  animation-duration: 900ms;
+}
+/* A point of the mark lighting: dim, then lit — the Comet's own motion. */
+.ds-scene .light {
+  animation-name: ds-light;
+}
+/* A clock hand going round to its hour, about the clock's centre. */
+.ds-scene .sweep {
+  transform-box: view-box;
+  animation-name: ds-sweep;
+  animation-duration: 800ms;
+}
+.ds-scene .fade {
+  animation-name: ds-fade;
+}
+.ds-scene .leave {
+  animation-name: ds-leave;
+}
+
+@keyframes ds-pop {
+  from {
+    opacity: 0;
+    transform: scale(0.6);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes ds-rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes ds-drop {
+  from {
+    opacity: 0;
+    transform: translateY(-16px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes ds-grow {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: none;
+  }
+}
+@keyframes ds-type {
+  from {
+    transform: scaleX(0);
+  }
+  to {
+    transform: none;
+  }
+}
+@keyframes ds-glide {
+  from {
+    transform: translate(var(--dx, 0), var(--dy, 0));
+  }
+  to {
+    transform: none;
+  }
+}
+@keyframes ds-light {
+  from {
+    opacity: 0.25;
+    transform: scale(0.8);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes ds-sweep {
+  from {
+    transform: rotate(-180deg);
+  }
+  to {
+    transform: none;
+  }
+}
+@keyframes ds-fade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes ds-leave {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+/* Reduced motion: the scene is shown as it ends — every move at its last frame. */
+@media (prefers-reduced-motion: reduce) {
+  .ds-scene * {
+    animation-duration: 1ms !important;
+    animation-delay: 0ms !important;
+  }
+}

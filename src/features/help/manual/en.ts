@@ -57,8 +57,12 @@ export const MANUAL_EN: Manual = {
           text: '**Read more** on a tour card opens this manual at that subject, and **Show me in the app** on a manual section starts the tour right at it. Start the whole tour again any time with **Take the tour** in Help.',
         },
         {
+          kind: 'p',
+          text: 'Press **F1** on any screen to open this manual at the section about that screen. Many sections open with a short scene of Deskstart doing what the section explains; it plays once when it comes into view, and **Replay** plays it again.',
+        },
+        {
           kind: 'note',
-          text: 'Home and the tour speak the manual’s language. When Windows is set to reduce motion, the light jumps instead of gliding.',
+          text: 'Home, the tour and the scenes speak the manual’s language. When Windows is set to reduce motion, the light jumps instead of gliding, each scene is shown finished, and the window opens without its short opening.',
         },
       ],
     },
@@ -258,7 +262,7 @@ export const MANUAL_EN: Manual = {
         },
         {
           kind: 'p',
-          text: 'Each window ticked becomes an **Application** step that starts its program and puts its window back where it is — screen, position, size, maximised or minimised. A window that cannot be a step says why: a Store app (not started by its path), an Explorer window (add its folder as a **Folder** step instead), or a program Windows would not name.',
+          text: 'Each window ticked becomes a step that opens it again and puts it back where it is — screen, position, size, maximised or minimised. A program becomes an **Application** step for its program; a Store app, like Calculator, a step that starts it the way the Start menu does; an Explorer window, a **Folder** step for its folder. A window that cannot be a step says why — a program Windows would not name, for one.',
         },
         {
           kind: 'note',

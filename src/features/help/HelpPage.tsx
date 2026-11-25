@@ -14,6 +14,7 @@ import { announce } from '@/ui/announce';
 
 import { ShowMe, TourButton, WelcomeButton } from '../guide/GuideLink';
 import { inline, MANUALS, searchManual } from './manual/text';
+import { HelpScene } from './scenes/HelpScene';
 import type { Block, SectionId } from './manual/types';
 
 /** The language the manual opens in before a person has chosen one. */
@@ -219,6 +220,7 @@ export function HelpPage({
               </h2>
               <ShowMe section={shown.id} label={TOUR[language].showMe} />
             </div>
+            <HelpScene key={shown.id} id={shown.id} language={language} />
             {shown.blocks.map((block, i) => (
               <BlockView key={`${shown.id}-${i}`} block={block} language={language} />
             ))}

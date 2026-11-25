@@ -52,7 +52,9 @@ O **tour** ilumina uma parte da interface de verdade por vez — o Home, a barra
 
 **Ler mais**, num cartão do tour, abre este manual naquele assunto, e **Mostrar no aplicativo**, numa seção do manual, começa o tour exatamente nela. Recomece o tour inteiro quando quiser com **Fazer o tour** no Help.
 
-> **Nota:** O Home e o tour falam o idioma do manual. Quando o Windows está configurado para reduzir animações, a luz salta em vez de deslizar.
+Pressione **F1** em qualquer tela para abrir este manual na seção sobre ela. Muitas seções abrem com uma cena curta do Deskstart fazendo o que a seção explica; ela toca uma vez quando aparece, e **Repetir a animação** a toca de novo.
+
+> **Nota:** O Home, o tour e as cenas falam o idioma do manual. Quando o Windows está configurado para reduzir animações, a luz salta em vez de deslizar, cada cena aparece já terminada e a janela abre sem a abertura curta.
 
 <a id="profiles"></a>
 
@@ -163,7 +165,7 @@ Fechar a janela mantém o Deskstart na **bandeja**, para que um agendamento ou a
 2. Em **Profiles**, pressione **Capture this desktop**.
 3. Desmarque as janelas que não pertencem, dê um nome ao perfil e pressione **Make a profile**.
 
-Cada janela marcada vira um passo **Application** que inicia o programa e põe a janela de volta onde está — tela, posição, tamanho, maximizada ou minimizada. Uma janela que não pode virar passo diz o motivo: um app da Store (não é iniciado pelo caminho), uma janela do Explorador (adicione a pasta como um passo **Folder**), ou um programa cujo nome o Windows não informou.
+Cada janela marcada vira um passo que a abre de novo e a põe de volta onde está — tela, posição, tamanho, maximizada ou minimizada. Um programa vira um passo **Application** para o programa; um app da Store, como a Calculadora, um passo que o inicia como o menu Iniciar faz; uma janela do Explorador, um passo **Folder** para a pasta. Uma janela que não pode virar passo diz o motivo — um programa cujo nome o Windows não informou, por exemplo.
 
 > **Nota:** Os títulos das janelas aparecem para ajudar a escolher e **não são guardados**. Os argumentos de um programa também não são capturados — adicione-os no editor se ele precisar.
 
