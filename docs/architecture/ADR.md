@@ -40,6 +40,7 @@ part that matters most later — the cost we accepted.
 | [032](#adr-032) | The welcome and the tour are the manual's first page and its moving version              | Accepted |
 | [033](#adr-033) | The mark is Comet: steps gathering speed into Run                                        | Accepted |
 | [034](#adr-034) | Home is where Deskstart opens; the welcome is Home before the first profile              | Accepted |
+| [035](#adr-035) | The manual shows, not only tells: scenes, F1 and the opening                             | Accepted |
 
 ---
 
@@ -734,3 +735,27 @@ the tour starts on it. ADR-032's one-time welcome is superseded; its tour stands
 
 **Cost accepted.** One more screen between the window and the editor for someone who lives in
 the editor — one click on the rail, and Open on a card goes straight to the profile.
+
+## ADR-035 — The manual shows, not only tells: scenes, F1 and the opening {#adr-035}
+
+**Context.** The 1.2 UAT judged the product below the bar a person expects from a modern desktop
+tool. The manual (ADR-031) and the tour (ADR-032) explain every part in words; neither shows a
+profile running, a window travelling to its screen, or a capture becoming a profile — the things
+that make the product make sense on first sight.
+
+**Decision.** Eight sections of the manual open with a **scene**: a small drawing, 360×200, of
+Deskstart doing what the section explains — Getting started, Run, Time, Where, Virtual machines,
+Triggers, Capture and Sharing. A scene is data beside its section (`features/help/scenes`), drawn
+from token colours only, so it is right in both themes, and moved by a small vocabulary of
+classes (pop, rise, drop, grow, glide, light, sweep, fade, leave) on the Fluent curves. It plays
+**once**, when half of it is in view, and again on **Replay**; it never loops. It is an image
+with a label in the manual's language, so a screen reader hears what it shows. **F1** opens the
+manual at the section about the current screen. The window opens with a short **opening**: the
+mark's points light in order up to the amber one — a profile's steps running into Run — and the
+greeting rises beside it. It stands about a second and a half over the content, not the title
+bar, ends on any click or key, and is hidden from assistive technology. Under reduced motion each
+scene is shown finished and there is no opening.
+
+**Cost accepted.** A second and a half before the first click on every launch, unless a person
+clicks through it; and eight drawings to keep true as the product changes — a test renders each
+one in both languages and fails on a written colour or a scene with no motion.

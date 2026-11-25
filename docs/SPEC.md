@@ -377,6 +377,15 @@ off until a person turns it on.
 - **Which build a task starts.** The one that registered it, by absolute path; the Diagnostics
   page of F10 will list the tasks and say which executable each one names.
 
+### Delivered in 1.3 — the manual shows
+
+Eight manual sections open with an animated scene of Deskstart doing what the section explains,
+played once in view and again on Replay; F1 opens the manual at the current screen's section; the
+window opens with the mark lighting up to Run (ADR-035). Proved on the real binary: the opening
+goes by itself; F1 from Home and from Settings lands on their sections; the Run scene plays when
+scrolled into view and Replay plays it again; a section without a scene draws none; the scenes
+are there in Portuguese, with Portuguese labels.
+
 ### Delivered in 1.3 — Home, and capture on a real desktop
 
 The 1.2 UAT found two failures, both fixed here and both now gates. **Home** (ADR-034) is where

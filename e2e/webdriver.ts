@@ -113,6 +113,7 @@ export const Keys = {
   END: '',
   CONTROL: '',
   ALT: '',
+  F1: '',
 } as const;
 
 export class Driver {

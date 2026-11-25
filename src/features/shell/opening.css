@@ -1,0 +1,46 @@
+/*
+ * The opening (1.3, ADR-035): the mark's points light in order, the greeting
+ * rises, and the curtain fades. Motion tokens only; under reduced motion the
+ * opening is not drawn at all (Opening.tsx).
+ */
+.ds-opening-point {
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: ds-opening-light 360ms var(--ease-decelerate) both;
+}
+.ds-opening-words {
+  animation: ds-opening-rise 420ms var(--ease-decelerate) 700ms both;
+}
+.ds-opening[data-opening='leaving'] {
+  animation: ds-opening-leave 250ms var(--ease-decelerate) both;
+  pointer-events: none;
+}
+
+@keyframes ds-opening-light {
+  from {
+    opacity: 0.15;
+    transform: scale(0.6);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes ds-opening-rise {
+  from {
+    opacity: 0;
+    transform: translateX(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes ds-opening-leave {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}

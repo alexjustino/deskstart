@@ -52,7 +52,9 @@ The **tour** lights one part of the real interface at a time — Home, the rail,
 
 **Read more** on a tour card opens this manual at that subject, and **Show me in the app** on a manual section starts the tour right at it. Start the whole tour again any time with **Take the tour** in Help.
 
-> **Note:** Home and the tour speak the manual’s language. When Windows is set to reduce motion, the light jumps instead of gliding.
+Press **F1** on any screen to open this manual at the section about that screen. Many sections open with a short scene of Deskstart doing what the section explains; it plays once when it comes into view, and **Replay** plays it again.
+
+> **Note:** Home, the tour and the scenes speak the manual’s language. When Windows is set to reduce motion, the light jumps instead of gliding, each scene is shown finished, and the window opens without its short opening.
 
 <a id="profiles"></a>
 
@@ -163,7 +165,7 @@ Closing the window keeps Deskstart in the **tray**, so a schedule or a shortcut 
 2. In **Profiles**, press **Capture this desktop**.
 3. Untick the windows that do not belong, give the profile a name, and press **Make a profile**.
 
-Each window ticked becomes an **Application** step that starts its program and puts its window back where it is — screen, position, size, maximised or minimised. A window that cannot be a step says why: a Store app (not started by its path), an Explorer window (add its folder as a **Folder** step instead), or a program Windows would not name.
+Each window ticked becomes a step that opens it again and puts it back where it is — screen, position, size, maximised or minimised. A program becomes an **Application** step for its program; a Store app, like Calculator, a step that starts it the way the Start menu does; an Explorer window, a **Folder** step for its folder. A window that cannot be a step says why — a program Windows would not name, for one.
 
 > **Note:** Window titles are shown to help you choose and are **not kept**. A program’s arguments are not captured either — add them in the editor if it needs them.
 

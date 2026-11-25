@@ -172,6 +172,14 @@ not done with `delay-*`, which delays transitions, not animations.
 **`prefers-reduced-motion` is honoured globally**, in `global.css`, not per component. A
 component cannot forget it. Nothing animates in a loop.
 
+Things move **by themselves** in two places only (ADR-035), and both are explanation, not
+decoration. The manual's **scenes** — a drawing of Deskstart doing one thing, played once when in
+view and again on Replay, token colours only, with a label that says what it shows; under reduced
+motion, shown at their last frame. The **opening** — the mark's points lighting up to the amber
+one, about a second and a half, over the content and never the title bar, ended by any click or
+key; under reduced motion, not drawn. Anything else that moves does so because a person did
+something.
+
 > A hard-won rule: check the **built** CSS, not just the source. A minifier that drops a
 > prefix it does not understand can turn a conditional animation into an unconditional one from
 > perfectly correct source.

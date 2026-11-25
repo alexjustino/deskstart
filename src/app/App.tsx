@@ -11,10 +11,12 @@ import { GuideProvider } from '@/features/guide/GuideLink';
 import { HelpProvider } from '@/features/help/HelpLink';
 import { HomePage } from '@/features/home/HomePage';
 import { HelpPage } from '@/features/help/HelpPage';
+import { SECTION_FOR } from '@/features/help/sectionFor';
 import type { SectionId } from '@/features/help/manual/types';
 import { ProfilesPage, type RunRequestOnce } from '@/features/profiles/ProfilesPage';
 import { RunsPage } from '@/features/runs/RunsPage';
 import { SettingsPage } from '@/features/settings/SettingsPage';
+import { Opening } from '@/features/shell/Opening';
 import { Sidebar, type Destination } from '@/features/shell/Sidebar';
 import { TitleBar } from '@/features/shell/TitleBar';
 
@@ -75,6 +77,17 @@ export function App() {
     setDestination('help');
   }, []);
 
+  // F1 (1.3): the manual, at the section about the screen a person is on.
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.key !== 'F1' || event.altKey || event.ctrlKey || event.metaKey) return;
+      event.preventDefault();
+      if (destination !== 'help') openHelp(SECTION_FOR[destination]);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [destination, openHelp]);
+
   // The screens, kept current while the window is open (1.1): plugging one in
   // or out is said aloud, and every list and warning re-reads the new set.
   const screensChanged = useCallback((count: number) => {
@@ -114,7 +127,7 @@ export function App() {
       <GuideProvider actions={guideActions}>
         <div className="flex h-full flex-col overflow-hidden rounded-lg">
           <TitleBar />
-          <div className="flex min-h-0 flex-1">
+          <div className="relative flex min-h-0 flex-1">
             <Sidebar active={destination} onNavigate={go} />
             <main
               tabIndex={0}
@@ -140,6 +153,7 @@ export function App() {
                 <HelpPage section={helpSection} onSection={setHelpSection} />
               )}
             </main>
+            <Opening language={language} />
           </div>
         </div>
         {tour !== null && (

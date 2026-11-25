@@ -104,6 +104,8 @@ twenty minutes, then close it" and "open, close, reopen" are first-class, not a 
 - **Home.** Where Deskstart opens: the welcome on a new workspace, then each profile one click
   from Run, with when it last ran. The guided tour lights the real interface one part at a time,
   in English or Portuguese, and links each part to the manual.
+- **A manual that shows.** Built in, offline, in English or Portuguese; F1 opens it at the screen
+  you are on, and its sections open with short animated scenes of Deskstart at work.
 - **Help.** The user manual, inside the product and offline, in English or Portuguese, with
   search; a `?` on a card opens it at that card's section. The same text is
   [`docs/MANUAL.md`](docs/MANUAL.md) ([Português](docs/MANUAL.pt-BR.md)).
