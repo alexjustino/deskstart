@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed — capture this desktop, on a real desktop
+
+- **Capture now takes Explorer windows and Store apps** — on a real desktop, most windows — which
+  1.2 refused, leaving nothing to tick. An Explorer window becomes a Folder step for the folder it
+  shows; a Store app (Claude, Calculator, Teams, Notepad…) becomes a step that starts it the way
+  Windows does, named for the app, with its window put back where it was. Found in UAT.
+
 ## [1.2.0] — 2026-11-24 — The welcome
 
 1.1 put the manual inside Deskstart. 1.2 is about the first minutes with it: a new workspace opens
