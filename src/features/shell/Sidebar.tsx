@@ -1,5 +1,6 @@
 import {
   History20Regular,
+  Home20Regular,
   PlayCircle20Regular,
   QuestionCircle20Regular,
   Settings20Regular,
@@ -14,7 +15,7 @@ import type { ReactNode } from 'react';
  * built is not listed — nothing on the rail pretends to work when it does not.
  */
 
-export type Destination = 'profiles' | 'runs' | 'diagnostics' | 'settings' | 'help';
+export type Destination = 'home' | 'profiles' | 'runs' | 'diagnostics' | 'settings' | 'help';
 
 interface Entry {
   id: Destination;
@@ -23,6 +24,7 @@ interface Entry {
 }
 
 const ENTRIES: Entry[] = [
+  { id: 'home', label: 'Home', icon: <Home20Regular /> },
   { id: 'profiles', label: 'Profiles', icon: <PlayCircle20Regular /> },
   { id: 'runs', label: 'Runs', icon: <History20Regular /> },
   { id: 'diagnostics', label: 'Diagnostics', icon: <Wrench20Regular /> },

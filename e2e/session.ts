@@ -279,24 +279,30 @@ export interface SessionOptions {
    */
   env?: Record<string, string>;
   /**
-   * Keep the welcome a new workspace opens on (1.2). Every other suite starts
-   * where a returning person would — Profiles — so the harness leaves the
-   * welcome through its own "start empty" button, the way a person would.
+   * Stay on Home, where the product opens (1.3). Every other suite starts on
+   * Profiles, reached through the rail the way a person would.
    */
   keepWelcome?: boolean;
 }
 
-/** Leave the welcome, if the workspace opened on it, for an empty profile list. */
+/**
+ * Go from Home — where the product opens (1.3) — to Profiles, through the
+ * rail, the way a person would; most suites start their work there.
+ */
 async function passWelcome(driver: Driver): Promise<void> {
   const deadline = Date.now() + 20_000;
   while (Date.now() < deadline) {
-    const welcome = await driver.findAll('[data-welcome="empty"]').catch(() => []);
-    if (welcome.length > 0) {
-      await welcome[0]!.click();
-      return;
-    }
     const profiles = await driver.findAll('input[aria-label="New profile name"]').catch(() => []);
     if (profiles.length > 0) return;
+    const rail = await driver
+      .findAll('nav[aria-label="Main"] button')
+      .catch(() => [] as Awaited<ReturnType<Driver['findAll']>>);
+    for (const button of rail) {
+      if ((await button.text().catch(() => '')) === 'Profiles') {
+        await button.click().catch(() => undefined);
+        break;
+      }
+    }
     await new Promise((resolve) => setTimeout(resolve, 150));
   }
 }
@@ -346,6 +352,8 @@ export async function startSession(options: SessionOptions = {}): Promise<Sessio
       await waitForDriver();
       driver = await createSession();
       session.driver = driver;
+      // The product opens on Home again; most suites carry on from Profiles.
+      if (!options.keepWelcome) await passWelcome(driver);
     },
   };
   return session;

@@ -30,7 +30,7 @@ describe('shell', () => {
     const { driver } = session;
     const buttons = await driver.findAll('nav[aria-label="Main"] button');
     const labels = await Promise.all(buttons.map((b) => b.text()));
-    expect(labels).toEqual(['Profiles', 'Runs', 'Diagnostics', 'Settings', 'Help']);
+    expect(labels).toEqual(['Home', 'Profiles', 'Runs', 'Diagnostics', 'Settings', 'Help']);
   });
 
   it.each([
@@ -38,6 +38,7 @@ describe('shell', () => {
     ['Diagnostics', 'h1'],
     ['Settings', 'h1'],
     ['Help', 'input[aria-label="Search the manual"]'],
+    ['Home', '[data-guide="home"]'],
     ['Profiles', 'input[aria-label="New profile name"]'],
   ])('navigates to %s and renders it', async (label, marker) => {
     const { driver } = session;

@@ -25,6 +25,24 @@ export interface GuideText {
     empty: string;
     privacy: string;
   };
+  /** Home (1.3): the screen Deskstart opens on. */
+  home: {
+    greeting: (hour: number) => string;
+    first: string;
+    yours: string;
+    run: string;
+    open: string;
+    newProfile: string;
+    importProfile: string;
+    steps: (n: number) => string;
+    notRun: string;
+    lastRun: (when: string) => string;
+    outcomes: Record<string, string>;
+    ago: (minutes: number) => string;
+    scheduled: string;
+    shortcut: string;
+    blocked: string;
+  };
   steps: Record<string, StepText>;
   next: string;
   back: string;
@@ -61,7 +79,47 @@ export const GUIDE_TEXT: Record<ManualLanguage, GuideText> = {
       empty: 'Start from an empty profile',
       privacy: 'You can see this again from Help.',
     },
+    home: {
+      greeting: (hour) =>
+        hour < 5
+          ? 'Good evening'
+          : hour < 12
+            ? 'Good morning'
+            : hour < 18
+              ? 'Good afternoon'
+              : 'Good evening',
+      first: 'Create your first profile',
+      yours: 'Your profiles',
+      run: 'Run',
+      open: 'Open',
+      newProfile: 'New profile',
+      importProfile: 'Import a profile',
+      steps: (n) => `${n} ${n === 1 ? 'step' : 'steps'}`,
+      notRun: 'Not run yet',
+      lastRun: (when) => `Last run ${when}`,
+      outcomes: {
+        completed: 'completed',
+        completed_with_failures: 'completed with failures',
+        failed: 'failed',
+        stopped: 'stopped',
+      },
+      ago: (minutes) =>
+        minutes < 1
+          ? 'just now'
+          : minutes < 60
+            ? `${minutes} min ago`
+            : minutes < 60 * 24
+              ? `${Math.floor(minutes / 60)} h ago`
+              : `${Math.floor(minutes / (60 * 24))} d ago`,
+      scheduled: 'Scheduled',
+      shortcut: 'Shortcut',
+      blocked: 'Review before running',
+    },
     steps: {
+      home: {
+        title: 'Home is where you start',
+        body: 'Your profiles, each one click from **Run**. A new profile, a capture of your desktop or an import are here too.',
+      },
       rail: {
         title: 'Everything is one click away',
         body: '**Profiles** is where you work. **Runs** keeps every run. **Diagnostics** shows what this machine has. **Settings** and **Help** are at the bottom.',
@@ -144,7 +202,41 @@ export const GUIDE_TEXT: Record<ManualLanguage, GuideText> = {
       empty: 'Começar com um perfil vazio',
       privacy: 'Você pode ver isto de novo pelo Help.',
     },
+    home: {
+      greeting: (hour) =>
+        hour < 5 ? 'Boa noite' : hour < 12 ? 'Bom dia' : hour < 18 ? 'Boa tarde' : 'Boa noite',
+      first: 'Criar seu primeiro perfil',
+      yours: 'Seus perfis',
+      run: 'Run',
+      open: 'Abrir',
+      newProfile: 'Novo perfil',
+      importProfile: 'Importar um perfil',
+      steps: (n) => `${n} ${n === 1 ? 'passo' : 'passos'}`,
+      notRun: 'Ainda não rodou',
+      lastRun: (when) => `Última execução ${when}`,
+      outcomes: {
+        completed: 'concluída',
+        completed_with_failures: 'concluída com falhas',
+        failed: 'falhou',
+        stopped: 'interrompida',
+      },
+      ago: (minutes) =>
+        minutes < 1
+          ? 'agora há pouco'
+          : minutes < 60
+            ? `há ${minutes} min`
+            : minutes < 60 * 24
+              ? `há ${Math.floor(minutes / 60)} h`
+              : `há ${Math.floor(minutes / (60 * 24))} d`,
+      scheduled: 'Agendado',
+      shortcut: 'Atalho',
+      blocked: 'Revisar antes de rodar',
+    },
     steps: {
+      home: {
+        title: 'O Home é o seu ponto de partida',
+        body: 'Seus perfis, cada um a um clique do **Run**. Novo perfil, captura da área de trabalho e importação também estão aqui.',
+      },
       rail: {
         title: 'Tudo a um clique',
         body: '**Profiles** é onde você trabalha. **Runs** guarda cada execução. **Diagnostics** mostra o que esta máquina tem. **Settings** e **Help** ficam embaixo.',

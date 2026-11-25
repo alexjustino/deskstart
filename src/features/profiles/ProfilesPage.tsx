@@ -63,7 +63,6 @@ import { describeWaitFor, waitForProblems, type WaitFor } from '@/domain/readine
 import { reviewState } from '@/domain/review';
 import { describeTiming, type Timing } from '@/domain/timing';
 import { describeTrigger, type Trigger } from '@/domain/triggers';
-import type { RunRequest } from '@/data/system';
 import { Button } from '@/ui/Button';
 import { Card } from '@/ui/Card';
 import { Chip } from '@/ui/Chip';
@@ -94,12 +93,12 @@ import { HelpLink } from '@/features/help/HelpLink';
  */
 export function ProfilesPage({
   request = null,
-  captureAtStart = false,
+  opening = null,
 }: {
   /** A run a trigger asked for, to be selected and started once (F9). */
   request?: RunRequestOnce | null;
-  /** Open with Capture this desktop up — the welcome's second way in (1.2). */
-  captureAtStart?: boolean;
+  /** How Home sent a person here (1.3): with Capture or Import up, or ready to name a profile. */
+  opening?: 'capture' | 'import' | 'new' | null;
 }) {
   const profiles = useProfiles();
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -125,7 +124,7 @@ export function ProfilesPage({
         profiles={list}
         selectedId={selected?.id ?? null}
         onSelect={setSelectedId}
-        captureAtStart={captureAtStart}
+        opening={opening}
       />
       <section tabIndex={0} className="min-w-0 flex-1 overflow-y-auto focus-visible:outline-none">
         {profiles.isError && (
@@ -152,17 +151,17 @@ function ProfileList({
   profiles,
   selectedId,
   onSelect,
-  captureAtStart,
+  opening,
 }: {
   profiles: Profile[];
   selectedId: string | null;
   onSelect: (id: string) => void;
-  captureAtStart: boolean;
+  opening: 'capture' | 'import' | 'new' | null;
 }) {
   const create = useCreateProfile();
   const [name, setName] = useState('');
-  const [importing, setImporting] = useState(false);
-  const [capturing, setCapturing] = useState(captureAtStart);
+  const [importing, setImporting] = useState(opening === 'import');
+  const [capturing, setCapturing] = useState(opening === 'capture');
 
   const submit = (event: FormEvent) => {
     event.preventDefault();
@@ -182,6 +181,7 @@ function ProfileList({
       <form onSubmit={submit} className="flex gap-2 p-3" data-guide="new-profile">
         <Input
           aria-label="New profile name"
+          autoFocus={opening === 'new'}
           placeholder="New profile"
           value={name}
           onChange={(e) => setName(e.target.value)}
@@ -255,7 +255,17 @@ function ProfileList({
 }
 
 /** A trigger's request with a serial, so it is served once and not on every render. */
-export type RunRequestOnce = RunRequest & { serial: number };
+/**
+ * A profile to show, and to run or not — from a trigger (F9) or from Home's
+ * Run and Open (1.3) — with a serial so it is served once.
+ */
+export interface RunRequestOnce {
+  profileId: string;
+  trigger: Trigger;
+  serial: number;
+  /** False for Home's Open: show the profile, start nothing. */
+  run: boolean;
+}
 
 /** A stored step with what the domain makes of it against this machine's environment. */
 interface Judged {
@@ -400,6 +410,7 @@ function ProfileDetail({ profile, request }: { profile: Profile; request: RunReq
   useEffect(() => {
     if (request === null || request.profileId !== profile.id) return;
     if (served.current === request.serial) return;
+    if (!request.run) return;
     if (steps.data === undefined || environment.data === undefined) return;
     // After this render has committed: a run begun from inside an effect is a
     // cascade of renders, and the log is in no hurry by a frame. The request
@@ -414,7 +425,10 @@ function ProfileDetail({ profile, request }: { profile: Profile; request: RunReq
       served.current = serial;
       if (runnableNow) {
         start('real', trigger);
-        announce(`${describeTrigger(trigger) ?? 'A trigger'} started ${profile.name}`);
+        // A person pressing Run on Home hears what the button says anyway.
+        if (trigger !== 'button') {
+          announce(`${describeTrigger(trigger) ?? 'A trigger'} started ${profile.name}`);
+        }
       } else {
         announce(`${profile.name} was asked to run and cannot be run right now`);
       }

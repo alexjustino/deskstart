@@ -33,6 +33,7 @@ export const MANUAL_PT_BR: Manual = {
         {
           kind: 'list',
           items: [
+            '**Home** — onde o Deskstart abre: seus perfis, cada um a um clique do Run.',
             '**Profiles** — seus perfis, os passos, o Run, o log da última execução e os gatilhos.',
             '**Runs** — todas as execuções de todos os perfis, da mais nova para a mais antiga, cada uma com o log completo.',
             '**Diagnostics** — a versão, onde está seu workspace e quais programas um passo pode chamar nesta máquina.',
@@ -44,16 +45,16 @@ export const MANUAL_PT_BR: Manual = {
     },
     {
       id: 'guide',
-      title: 'Boas-vindas e o tour guiado',
-      summary: 'A primeira tela, e um tour pela interface de verdade.',
+      title: 'O Home e o tour guiado',
+      summary: 'Onde o Deskstart abre, e um tour pela interface de verdade.',
       blocks: [
         {
           kind: 'p',
-          text: 'Um workspace novo abre nas **boas-vindas**: o que o Deskstart faz e três caminhos — **Fazer o tour**, **Capturar esta área de trabalho** ou **Começar com um perfil vazio**. Escolher qualquer um, ou ir a qualquer tela pela barra lateral, a guarda. **Ver as boas-vindas de novo**, no Help, a traz de volta.',
+          text: 'O Deskstart abre no **Home**, sempre — o primeiro item da barra lateral. Sem nenhum perfil, o Home é as boas-vindas: o que o Deskstart faz e os caminhos — **Criar seu primeiro perfil**, **Capturar esta área de trabalho**, **Importar um perfil**, **Fazer o tour**. Com perfis, o Home lista cada um, com quantos passos tem, quando rodou pela última vez e como, o **Run** — um clique — e **Abrir**.',
         },
         {
           kind: 'p',
-          text: 'O **tour** ilumina uma parte da interface de verdade por vez — a barra lateral, um perfil novo, a captura, a importação, os passos, o Where, o Run, os gatilhos, o log e este manual — e diz para que ela serve. **Próximo** e **Voltar** avançam e retornam; **Pular o tour** ou Esc saem. Uma parte que ainda não está na tela, como o editor de passos antes de existir um perfil, é pulada, e o último cartão avisa.',
+          text: 'O **tour** ilumina uma parte da interface de verdade por vez — o Home, a barra lateral, um perfil novo, a captura, a importação, os passos, o Where, o Run, os gatilhos, o log e este manual — e diz para que ela serve. **Próximo** e **Voltar** avançam e retornam; **Pular o tour** ou Esc saem. Uma parte que ainda não está na tela, como o editor de passos antes de existir um perfil, é pulada, e o último cartão avisa.',
         },
         {
           kind: 'p',
@@ -61,7 +62,7 @@ export const MANUAL_PT_BR: Manual = {
         },
         {
           kind: 'note',
-          text: 'As boas-vindas e o tour falam o idioma do manual. Quando o Windows está configurado para reduzir animações, a luz salta em vez de deslizar.',
+          text: 'O Home e o tour falam o idioma do manual. Quando o Windows está configurado para reduzir animações, a luz salta em vez de deslizar.',
         },
       ],
     },

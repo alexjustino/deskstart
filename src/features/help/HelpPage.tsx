@@ -25,11 +25,11 @@ function systemLanguage(): ManualLanguage {
 
 const NOTE: Record<ManualLanguage, string> = { en: 'Note', 'pt-BR': 'Nota' };
 const TOUR: Record<ManualLanguage, { take: string; showMe: string; welcome: string }> = {
-  en: { take: 'Take the tour', showMe: 'Show me in the app', welcome: 'Show the welcome again' },
+  en: { take: 'Take the tour', showMe: 'Show me in the app', welcome: 'Go to Home' },
   'pt-BR': {
     take: 'Fazer o tour',
     showMe: 'Mostrar no aplicativo',
-    welcome: 'Ver as boas-vindas de novo',
+    welcome: 'Ir para o Home',
   },
 };
 
