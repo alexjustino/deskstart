@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [1.3.0] — 2026-11-25 — Home
+
+1.2's acceptance test failed, and this release is the answer to it. Deskstart now opens on
+**Home**, every time: the welcome while there is no profile, then each profile one click from Run,
+with when it last ran. **Capture this desktop** takes what a real desktop is made of — Explorer
+windows and Store apps, which 1.2 refused — and puts each back on Run. And the manual **shows**:
+its sections open with short animated scenes of Deskstart at work, **F1** opens it at the screen
+you are on, and the window opens with the mark lighting up to Run.
+
+**Schema.** No migration.
+
 ### Added — the manual shows
 
 - **Scenes in the manual** (ADR-035): eight sections open with a short animated drawing of

@@ -117,7 +117,7 @@ twenty minutes, then close it" and "open, close, reopen" are first-class, not a 
 
 | Release | What                                                                                |
 | ------- | ----------------------------------------------------------------------------------- |
-| 1.3.0   | The day: conditions (weekday, time, network, battery) · profile chaining · teardown |
+| 1.4.0   | The day: conditions (weekday, time, network, battery) · profile chaining · teardown |
 
 The specification, with a proof of done per slice, is [`docs/SPEC.md`](docs/SPEC.md). How the code
 is put together, and where a change goes, is [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md). How
@@ -206,8 +206,9 @@ npm run e2e
 | --------- | ------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | 1.0.0     | The button          | the slices above                                                                                                                                                                   |
 | 1.1.0     | The layout          | machines picked from each hypervisor · encrypted VMware machines · capture the current arrangement as a profile · window rules by title/class · monitor-change awareness · Firefox |
-| **1.2.0** | The welcome         | the welcome screen · the guided tour over the real interface · the Comet mark                                                                                                      |
-| 1.3.0     | The day             | conditions (weekday, time, network, battery) · profile chaining · end-of-day teardown                                                                                              |
+| 1.2.0     | The welcome         | the welcome screen · the guided tour over the real interface · the Comet mark                                                                                                      |
+| **1.3.0** | Home                | Home, where Deskstart opens · capture of Explorer windows and Store apps · animated scenes in the manual, F1, the opening                                                          |
+| 1.4.0     | The day             | conditions (weekday, time, network, battery) · profile chaining · end-of-day teardown                                                                                              |
 | 2.0       | Only if it earns it | macOS and Linux                                                                                                                                                                    |
 
 ## Contributing
