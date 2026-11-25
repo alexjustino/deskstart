@@ -16,7 +16,7 @@
  */
 
 /** The screens the tour may take a person to. */
-export type GuideDestination = 'profiles' | 'runs' | 'settings' | 'help';
+export type GuideDestination = 'home' | 'profiles' | 'runs' | 'settings' | 'help';
 
 export interface GuideStep {
   id: string;
@@ -30,6 +30,7 @@ export interface GuideStep {
 
 /** The tour, in order. */
 export const GUIDE_STEPS: readonly GuideStep[] = [
+  { id: 'home', destination: 'home', anchor: 'home', section: 'start' },
   { id: 'rail', destination: 'profiles', anchor: 'rail', section: 'start' },
   { id: 'new-profile', destination: 'profiles', anchor: 'new-profile', section: 'profiles' },
   { id: 'capture', destination: 'profiles', anchor: 'capture', section: 'capture' },
