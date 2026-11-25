@@ -352,6 +352,8 @@ export async function startSession(options: SessionOptions = {}): Promise<Sessio
       await waitForDriver();
       driver = await createSession();
       session.driver = driver;
+      // The product opens on Home again; most suites carry on from Profiles.
+      if (!options.keepWelcome) await passWelcome(driver);
     },
   };
   return session;
