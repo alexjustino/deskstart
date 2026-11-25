@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { applyAccent, applyTheme } from '@/app/theme';
 import { fetchAccentRamp, onRunRequested, pendingRun, type RunRequest } from '@/data/system';
@@ -8,11 +8,11 @@ import { announce } from '@/ui/announce';
 import { DiagnosticsPage } from '@/features/diagnostics/DiagnosticsPage';
 import { Guide } from '@/features/guide/Guide';
 import { GuideProvider } from '@/features/guide/GuideLink';
-import { WelcomePage } from '@/features/guide/WelcomePage';
 import { HelpProvider } from '@/features/help/HelpLink';
+import { HomePage } from '@/features/home/HomePage';
 import { HelpPage } from '@/features/help/HelpPage';
 import type { SectionId } from '@/features/help/manual/types';
-import { ProfilesPage } from '@/features/profiles/ProfilesPage';
+import { ProfilesPage, type RunRequestOnce } from '@/features/profiles/ProfilesPage';
 import { RunsPage } from '@/features/runs/RunsPage';
 import { SettingsPage } from '@/features/settings/SettingsPage';
 import { Sidebar, type Destination } from '@/features/shell/Sidebar';
@@ -27,7 +27,8 @@ import { TitleBar } from '@/features/shell/TitleBar';
  * native rather than as a web page in a frame.
  */
 export function App() {
-  const [destination, setDestination] = useState<Destination>('profiles');
+  // Home is where Deskstart opens, every time (1.3).
+  const [destination, setDestination] = useState<Destination>('home');
 
   // The theme is a stored setting now (F10). It is applied whenever it is read
   // or changed — Settings writes it, this query refetches, and the effect
@@ -42,47 +43,29 @@ export function App() {
       .catch(() => undefined);
   }, [theme]);
 
-  // The welcome (1.2): shown on a workspace that has not seen it, until a
-  // choice on it — or the rail — is made; Help shows it again. Null means
-  // "as the setting says", so nothing is set from inside an effect.
   const setSetting = useSetSetting();
-  const [welcomeOpen, setWelcomeOpen] = useState<boolean | null>(null);
-  const showingWelcome =
-    welcomeOpen ?? (settings.data !== undefined && !readSettings(settings.data).welcomeSeen);
   const chosenLanguage = readSettings(settings.data).manualLanguage;
   const language: ManualLanguage =
     chosenLanguage ?? (navigator.language.toLowerCase().startsWith('pt') ? 'pt-BR' : 'en');
-  const leaveWelcome = useCallback(() => {
-    setWelcomeOpen(false);
-    setSetting.mutate({ key: 'welcomeSeen', value: 'true' });
-  }, [setSetting]);
 
-  // Capture straight from the welcome: Profiles opens with the dialog up.
-  const [captureAtStart, setCaptureAtStart] = useState(false);
+  // How Profiles opens when Home sends a person there: with Capture or Import
+  // up, or with the new-profile field ready. Cleared by the rail.
+  const [opening, setOpening] = useState<'capture' | 'import' | 'new' | null>(null);
 
   // The tour, over whatever screen it needs; a new key restarts it.
   const [tour, setTour] = useState<{ start: string | null; serial: number } | null>(null);
-  const startTour = useCallback(
-    (start: string | null) => {
-      if (showingWelcome) leaveWelcome();
-      setWelcomeOpen(false);
-      setTour((current) => ({ start, serial: (current?.serial ?? 0) + 1 }));
-    },
-    [showingWelcome, leaveWelcome],
-  );
+  const startTour = useCallback((start: string | null) => {
+    setTour((current) => ({ start, serial: (current?.serial ?? 0) + 1 }));
+  }, []);
   const guideActions = useMemo(
-    () => ({ startTour, showWelcome: () => setWelcomeOpen(true) }),
+    () => ({ startTour, showWelcome: () => setDestination('home') }),
     [startTour],
   );
 
-  const go = useCallback(
-    (next: Destination) => {
-      if (showingWelcome) leaveWelcome();
-      setCaptureAtStart(false);
-      setDestination(next);
-    },
-    [showingWelcome, leaveWelcome],
-  );
+  const go = useCallback((next: Destination) => {
+    setOpening(null);
+    setDestination(next);
+  }, []);
 
   // The manual (1.1): the rail opens it where it was left; a "?" on a card
   // opens it at that card's section.
@@ -101,26 +84,30 @@ export function App() {
   }, []);
   useScreenWatch(screensChanged);
 
-  // A run asked for by a trigger (F9): the request this process was started
-  // with, or one made while the window was open. Each carries a serial so the
-  // profile screen runs it once, and the screen is brought to Profiles so what
-  // happens next is seen.
-  const [request, setRequest] = useState<(RunRequest & { serial: number }) | null>(null);
+  // A profile Profiles should show — and run, for a trigger or Home's Run.
+  // Each request carries a serial so the profile screen serves it once.
+  const serial = useRef(0);
+  const [request, setRequest] = useState<RunRequestOnce | null>(null);
+  const ask = useCallback((next: Omit<RunRequestOnce, 'serial'>) => {
+    serial.current += 1;
+    setRequest({ ...next, serial: serial.current });
+    setOpening(null);
+    setDestination('profiles');
+  }, []);
   useEffect(() => {
-    let serial = 0;
-    const take = (next: RunRequest) => {
-      serial += 1;
-      setRequest({ ...next, serial });
-      setWelcomeOpen(false);
-      setDestination('profiles');
-    };
+    const take = (next: RunRequest) => ask({ ...next, run: true });
     void pendingRun()
       .then((pending) => {
         if (pending !== null) take(pending);
       })
       .catch(() => undefined);
     return onRunRequested(take);
-  }, []);
+  }, [ask]);
+
+  const toProfiles = (how: 'capture' | 'import' | 'new') => {
+    setOpening(how);
+    setDestination('profiles');
+  };
 
   return (
     <HelpProvider open={openHelp}>
@@ -133,33 +120,24 @@ export function App() {
               tabIndex={0}
               className="min-w-0 flex-1 overflow-y-auto bg-layer focus-visible:outline-none"
             >
-              {showingWelcome ? (
-                <WelcomePage
+              {destination === 'home' && (
+                <HomePage
                   language={language}
                   onLanguage={(next) => setSetting.mutate({ key: 'manualLanguage', value: next })}
+                  onRun={(profileId) => ask({ profileId, trigger: 'button', run: true })}
+                  onOpen={(profileId) => ask({ profileId, trigger: 'button', run: false })}
+                  onNewProfile={() => toProfiles('new')}
+                  onCapture={() => toProfiles('capture')}
+                  onImport={() => toProfiles('import')}
                   onTour={() => startTour(null)}
-                  onCapture={() => {
-                    leaveWelcome();
-                    setCaptureAtStart(true);
-                    setDestination('profiles');
-                  }}
-                  onEmpty={() => {
-                    leaveWelcome();
-                    setDestination('profiles');
-                  }}
                 />
-              ) : (
-                <>
-                  {destination === 'profiles' && (
-                    <ProfilesPage request={request} captureAtStart={captureAtStart} />
-                  )}
-                  {destination === 'runs' && <RunsPage />}
-                  {destination === 'diagnostics' && <DiagnosticsPage />}
-                  {destination === 'settings' && <SettingsPage />}
-                  {destination === 'help' && (
-                    <HelpPage section={helpSection} onSection={setHelpSection} />
-                  )}
-                </>
+              )}
+              {destination === 'profiles' && <ProfilesPage request={request} opening={opening} />}
+              {destination === 'runs' && <RunsPage />}
+              {destination === 'diagnostics' && <DiagnosticsPage />}
+              {destination === 'settings' && <SettingsPage />}
+              {destination === 'help' && (
+                <HelpPage section={helpSection} onSection={setHelpSection} />
               )}
             </main>
           </div>

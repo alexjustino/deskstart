@@ -29,6 +29,7 @@ export const MANUAL_EN: Manual = {
         {
           kind: 'list',
           items: [
+            '**Home** — where Deskstart opens: your profiles, each one click from Run.',
             '**Profiles** — your profiles, their steps, Run, the latest run’s log and the triggers.',
             '**Runs** — every run of every profile, newest first, each with its full log.',
             '**Diagnostics** — the version, where your workspace is, and which programs a step can call on this machine.',
@@ -40,16 +41,16 @@ export const MANUAL_EN: Manual = {
     },
     {
       id: 'guide',
-      title: 'Welcome and the guided tour',
-      summary: 'The first screen, and a tour of the real interface.',
+      title: 'Home and the guided tour',
+      summary: 'Where Deskstart opens, and a tour of the real interface.',
       blocks: [
         {
           kind: 'p',
-          text: 'A new workspace opens on the **welcome**: what Deskstart does, and three ways in — **Take the tour**, **Capture this desktop**, or **Start from an empty profile**. Choosing any of them, or going anywhere from the rail, puts it away. **Show the welcome again** in Help brings it back.',
+          text: 'Deskstart opens on **Home**, every time — the first entry on the rail. With no profile yet, Home is the welcome: what Deskstart does, and the ways in — **Create your first profile**, **Capture this desktop**, **Import a profile**, **Take the tour**. With profiles, Home lists them, each with its number of steps, when it last ran and how, **Run** — one click — and **Open**.',
         },
         {
           kind: 'p',
-          text: 'The **tour** lights one part of the real interface at a time — the rail, a new profile, capture, import, the steps, Where, Run, triggers, the log and this manual — and says what it is for. **Next** and **Back** move through it; **Skip the tour** or Escape leaves it. A part that is not on screen yet, like the step editor before there is a profile, is skipped, and the last card says so.',
+          text: 'The **tour** lights one part of the real interface at a time — Home, the rail, a new profile, capture, import, the steps, Where, Run, triggers, the log and this manual — and says what it is for. **Next** and **Back** move through it; **Skip the tour** or Escape leaves it. A part that is not on screen yet, like the step editor before there is a profile, is skipped, and the last card says so.',
         },
         {
           kind: 'p',
@@ -57,7 +58,7 @@ export const MANUAL_EN: Manual = {
         },
         {
           kind: 'note',
-          text: 'The welcome and the tour speak the manual’s language. When Windows is set to reduce motion, the light jumps instead of gliding.',
+          text: 'Home and the tour speak the manual’s language. When Windows is set to reduce motion, the light jumps instead of gliding.',
         },
       ],
     },
