@@ -115,6 +115,12 @@ to the list a person picks from and **nowhere else**: the profile keeps the prog
 the rectangle, the state and the class — never a title, never a program's arguments. A program
 running with more rights than Deskstart is not named, and cannot be captured.
 
+For an Explorer window, the folder it shows is asked of the Shell with a **constant** PowerShell
+command — no input of anyone's is part of it — and kept as a Folder step. For a Store app, its
+AppUserModelID is read from its process; the step starts it with `explorer.exe
+shell:AppsFolder\<id>`, the way the Start menu does. An imported profile's steps like this are
+shown in review like every other step.
+
 ### What a virtual-machine step can do
 
 Ask one hypervisor to start one machine, and open its console. The machine's name is one
