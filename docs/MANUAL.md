@@ -7,7 +7,7 @@ Deskstart opens your working day with one button. A **profile** is a list of **s
 ## Contents
 
 - [Getting started](#start) — Your first profile, in a minute.
-- [Welcome and the guided tour](#guide) — The first screen, and a tour of the real interface.
+- [Home and the guided tour](#guide) — Where Deskstart opens, and a tour of the real interface.
 - [Profiles and steps](#profiles) — Add, edit, reorder and remove steps; paths with %NAMES%.
 - [Kinds of step](#kinds) — Application, folder, file, web page, bookmark folder, terminal, VS Code, virtual machine.
 - [Run, Dry run, Stop and the log](#run) — What each button does, and how to read a run.
@@ -35,6 +35,7 @@ Deskstart opens your working day with one button. A **profile** is a list of **s
 
 ### The screens
 
+- **Home** — where Deskstart opens: your profiles, each one click from Run.
 - **Profiles** — your profiles, their steps, Run, the latest run’s log and the triggers.
 - **Runs** — every run of every profile, newest first, each with its full log.
 - **Diagnostics** — the version, where your workspace is, and which programs a step can call on this machine.
@@ -43,15 +44,15 @@ Deskstart opens your working day with one button. A **profile** is a list of **s
 
 <a id="guide"></a>
 
-## Welcome and the guided tour
+## Home and the guided tour
 
-A new workspace opens on the **welcome**: what Deskstart does, and three ways in — **Take the tour**, **Capture this desktop**, or **Start from an empty profile**. Choosing any of them, or going anywhere from the rail, puts it away. **Show the welcome again** in Help brings it back.
+Deskstart opens on **Home**, every time — the first entry on the rail. With no profile yet, Home is the welcome: what Deskstart does, and the ways in — **Create your first profile**, **Capture this desktop**, **Import a profile**, **Take the tour**. With profiles, Home lists them, each with its number of steps, when it last ran and how, **Run** — one click — and **Open**.
 
-The **tour** lights one part of the real interface at a time — the rail, a new profile, capture, import, the steps, Where, Run, triggers, the log and this manual — and says what it is for. **Next** and **Back** move through it; **Skip the tour** or Escape leaves it. A part that is not on screen yet, like the step editor before there is a profile, is skipped, and the last card says so.
+The **tour** lights one part of the real interface at a time — Home, the rail, a new profile, capture, import, the steps, Where, Run, triggers, the log and this manual — and says what it is for. **Next** and **Back** move through it; **Skip the tour** or Escape leaves it. A part that is not on screen yet, like the step editor before there is a profile, is skipped, and the last card says so.
 
 **Read more** on a tour card opens this manual at that subject, and **Show me in the app** on a manual section starts the tour right at it. Start the whole tour again any time with **Take the tour** in Help.
 
-> **Note:** The welcome and the tour speak the manual’s language. When Windows is set to reduce motion, the light jumps instead of gliding.
+> **Note:** Home and the tour speak the manual’s language. When Windows is set to reduce motion, the light jumps instead of gliding.
 
 <a id="profiles"></a>
 

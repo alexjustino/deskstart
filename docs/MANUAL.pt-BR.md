@@ -7,7 +7,7 @@ O Deskstart abre o seu dia de trabalho com um botão. Um **perfil** é uma lista
 ## Conteúdo
 
 - [Primeiros passos](#start) — Seu primeiro perfil, em um minuto.
-- [Boas-vindas e o tour guiado](#guide) — A primeira tela, e um tour pela interface de verdade.
+- [O Home e o tour guiado](#guide) — Onde o Deskstart abre, e um tour pela interface de verdade.
 - [Perfis e passos](#profiles) — Adicionar, editar, reordenar e remover passos; caminhos com %NOMES%.
 - [Tipos de passo](#kinds) — Aplicativo, pasta, arquivo, página, pasta de favoritos, terminal, VS Code, máquina virtual.
 - [Run, Dry run, Stop e o log](#run) — O que cada botão faz, e como ler uma execução.
@@ -35,6 +35,7 @@ O Deskstart abre o seu dia de trabalho com um botão. Um **perfil** é uma lista
 
 ### As telas
 
+- **Home** — onde o Deskstart abre: seus perfis, cada um a um clique do Run.
 - **Profiles** — seus perfis, os passos, o Run, o log da última execução e os gatilhos.
 - **Runs** — todas as execuções de todos os perfis, da mais nova para a mais antiga, cada uma com o log completo.
 - **Diagnostics** — a versão, onde está seu workspace e quais programas um passo pode chamar nesta máquina.
@@ -43,15 +44,15 @@ O Deskstart abre o seu dia de trabalho com um botão. Um **perfil** é uma lista
 
 <a id="guide"></a>
 
-## Boas-vindas e o tour guiado
+## O Home e o tour guiado
 
-Um workspace novo abre nas **boas-vindas**: o que o Deskstart faz e três caminhos — **Fazer o tour**, **Capturar esta área de trabalho** ou **Começar com um perfil vazio**. Escolher qualquer um, ou ir a qualquer tela pela barra lateral, a guarda. **Ver as boas-vindas de novo**, no Help, a traz de volta.
+O Deskstart abre no **Home**, sempre — o primeiro item da barra lateral. Sem nenhum perfil, o Home é as boas-vindas: o que o Deskstart faz e os caminhos — **Criar seu primeiro perfil**, **Capturar esta área de trabalho**, **Importar um perfil**, **Fazer o tour**. Com perfis, o Home lista cada um, com quantos passos tem, quando rodou pela última vez e como, o **Run** — um clique — e **Abrir**.
 
-O **tour** ilumina uma parte da interface de verdade por vez — a barra lateral, um perfil novo, a captura, a importação, os passos, o Where, o Run, os gatilhos, o log e este manual — e diz para que ela serve. **Próximo** e **Voltar** avançam e retornam; **Pular o tour** ou Esc saem. Uma parte que ainda não está na tela, como o editor de passos antes de existir um perfil, é pulada, e o último cartão avisa.
+O **tour** ilumina uma parte da interface de verdade por vez — o Home, a barra lateral, um perfil novo, a captura, a importação, os passos, o Where, o Run, os gatilhos, o log e este manual — e diz para que ela serve. **Próximo** e **Voltar** avançam e retornam; **Pular o tour** ou Esc saem. Uma parte que ainda não está na tela, como o editor de passos antes de existir um perfil, é pulada, e o último cartão avisa.
 
 **Ler mais**, num cartão do tour, abre este manual naquele assunto, e **Mostrar no aplicativo**, numa seção do manual, começa o tour exatamente nela. Recomece o tour inteiro quando quiser com **Fazer o tour** no Help.
 
-> **Nota:** As boas-vindas e o tour falam o idioma do manual. Quando o Windows está configurado para reduzir animações, a luz salta em vez de deslizar.
+> **Nota:** O Home e o tour falam o idioma do manual. Quando o Windows está configurado para reduzir animações, a luz salta em vez de deslizar.
 
 <a id="profiles"></a>
 
