@@ -8,7 +8,7 @@ import type { Profile } from '@/data/profiles';
 import { fetchCapture } from '@/data/system';
 import { judgeCaptured, stepFromCapture, type Judged } from '@/domain/capture';
 import { describePlacement } from '@/domain/placement';
-import { lastSegment } from '@/domain/profile';
+import { lastSegment, storeAppName } from '@/domain/profile';
 import { DEFAULT_TIMING } from '@/domain/timing';
 import { Button } from '@/ui/Button';
 import { Checkbox } from '@/ui/Checkbox';
@@ -156,7 +156,17 @@ export function CaptureProfile({
           >
             {judged.map((entry, index) => {
               const program = entry.window.program ?? '';
-              const name = program === '' ? 'Unknown program' : lastSegment(program);
+              // What a person calls it: a Store app by its name, an Explorer
+              // window by its folder, anything else by its program.
+              const name = !entry.ok
+                ? program === ''
+                  ? 'Unknown program'
+                  : lastSegment(program)
+                : entry.as === 'store'
+                  ? (storeAppName(stepFromCapture(entry, env).config) ?? lastSegment(program))
+                  : entry.as === 'folder'
+                    ? `${lastSegment(entry.folder)} (folder)`
+                    : lastSegment(program);
               const where = entry.ok
                 ? (describePlacement(stepFromCapture(entry, env).placement) ??
                   'opens where it opens')

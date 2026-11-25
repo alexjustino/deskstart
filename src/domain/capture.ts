@@ -25,7 +25,7 @@
 
 import type { Placement, Rect, WindowState } from './placement';
 import { DEFAULT_PLACEMENT, readPlacement } from './placement';
-import { lastSegment, type AppStep } from './profile';
+import { lastSegment, type StepConfig } from './profile';
 
 /**
  * Window classes too common to say which window: `#32770` is every standard
@@ -43,11 +43,29 @@ export interface CapturedWindow {
   monitor: number | null;
   rect: Rect | null;
   state: WindowState;
+  /** A packaged (Store) app's identity, when it is one (1.3). */
+  appId: string | null;
+  /** The folder an Explorer window shows, when it is one on disk (1.3). */
+  folder: string | null;
 }
 
+/**
+ * What a window can become (1.3): an ordinary **program**, started by its
+ * path; a **Store app**, started the way Windows starts it, by its identity;
+ * or the **folder** an Explorer window shows. 1.2 refused the last two —
+ * which, on a real desktop, are most windows.
+ */
 export type Judged =
-  | { ok: true; window: CapturedWindow; program: string }
+  | { ok: true; window: CapturedWindow; as: 'program'; program: string }
+  | { ok: true; window: CapturedWindow; as: 'store'; appId: string }
+  | { ok: true; window: CapturedWindow; as: 'folder'; folder: string }
   | { ok: false; window: CapturedWindow; reason: string };
+
+/** How Windows starts a packaged app: Explorer opens its entry in the Apps folder. */
+export const STORE_LAUNCHER = '%SYSTEMROOT%\\explorer.exe';
+export function storeArgument(appId: string): string {
+  return `shell:AppsFolder\\${appId}`;
+}
 
 /** Can this window become a step, and if not, why — in a sentence for the list. */
 export function judgeCaptured(window: CapturedWindow): Judged {
@@ -59,17 +77,25 @@ export function judgeCaptured(window: CapturedWindow): Judged {
       reason: 'Windows did not say which program this is (it may run with more rights)',
     };
   }
-  if (/[\\/]WindowsApps[\\/]/i.test(program)) {
-    return { ok: false, window, reason: 'a Store app, which is not started by its path' };
-  }
-  if (lastSegment(program).toLowerCase() === 'explorer.exe') {
+  const appId = window.appId?.trim() ?? '';
+  if (appId !== '') return { ok: true, window, as: 'store', appId };
+  if (/[\\/]WindowsApps[\\/]/i.test(program) || /applicationframehost\.exe$/i.test(program)) {
     return {
       ok: false,
       window,
-      reason: 'an Explorer window — add its folder as a Folder step instead',
+      reason: 'a Store app Windows did not name — open it and capture again',
     };
   }
-  return { ok: true, window, program };
+  if (lastSegment(program).toLowerCase() === 'explorer.exe') {
+    const folder = window.folder?.trim() ?? '';
+    if (folder !== '') return { ok: true, window, as: 'folder', folder };
+    return {
+      ok: false,
+      window,
+      reason: 'an Explorer window on something that is not a folder (This PC, a library)',
+    };
+  }
+  return { ok: true, window, as: 'program', program };
 }
 
 /**
@@ -91,18 +117,23 @@ export function abbreviate(path: string, env: Readonly<Record<string, string>>):
   return best === null ? path : `%${best.name}%${path.slice(best.value.length)}`;
 }
 
-/** The step a capturable window becomes: its program, and where its window is now. */
+/** The step a capturable window becomes, and where its window is now. */
 export function stepFromCapture(
   judged: Judged & { ok: true },
   env: Readonly<Record<string, string>>,
-): { config: AppStep; placement: Placement } {
+): { config: StepConfig; placement: Placement } {
   const { window } = judged;
-  const config: AppStep = {
-    kind: 'app',
-    program: abbreviate(judged.program, env),
-    args: [],
-    workingDir: null,
-  };
+  const config: StepConfig =
+    judged.as === 'folder'
+      ? { kind: 'folder', path: abbreviate(judged.folder, env) }
+      : judged.as === 'store'
+        ? {
+            kind: 'app',
+            program: STORE_LAUNCHER,
+            args: [storeArgument(judged.appId)],
+            workingDir: null,
+          }
+        : { kind: 'app', program: abbreviate(judged.program, env), args: [], workingDir: null };
   const document: Record<string, unknown> = {
     state: window.state,
     ...(window.monitor !== null ? { monitor: window.monitor } : {}),
@@ -114,7 +145,13 @@ export function stepFromCapture(
       : {}),
   };
   const className = window.className.trim();
-  if (className !== '' && !GENERIC_CLASSES.has(className)) document.match = { className };
+  if (judged.as === 'folder') {
+    // Explorer's window for this folder: its class, and the folder's name in
+    // its title — both read from the folder, not from the window's title.
+    document.match = { className: 'CabinetWClass', title: lastSegment(judged.folder) };
+  } else if (className !== '' && !GENERIC_CLASSES.has(className)) {
+    document.match = { className };
+  }
   const read = readPlacement(document);
   if (!Array.isArray(read)) return { config, placement: read };
   // A window with nowhere to say (normal, no screen known) asks for nothing,

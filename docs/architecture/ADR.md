@@ -644,6 +644,16 @@ comes back without them; the person adds them in the editor. A class shared by m
 (`Chrome_WidgetWin_1` is Chrome, Edge and every Electron app) can pick another such window that
 appears during the step; the log names the window it placed.
 
+**As built (1.3), after the 1.2 UAT.** A real desktop is mostly Explorer windows and Store apps,
+and 1.2 refused both — a person found nothing to tick. Now an **Explorer window** becomes a
+**Folder** step for the folder it shows, read from the Shell with a constant PowerShell command
+(virtual places like This PC are still refused, with that reason), and reopened by a window rule
+on its class and the folder's name. A **Store app** becomes a step that starts it the way Windows
+does — `explorer.exe shell:AppsFolder\<id>`, its AppUserModelID read from its process (through
+its CoreWindow when the window is ApplicationFrameHost's) — and its window is found by class. The
+step is named for the app, not for `explorer.exe`. Proved on the real binary with a real folder
+window and Windows Calculator: captured, closed, and brought back by Run.
+
 ## ADR-031 — The manual is data: shown in the product, generated into the repository {#adr-031}
 
 **Context.** A person needs a manual where they are — inside Deskstart, which never reaches the
