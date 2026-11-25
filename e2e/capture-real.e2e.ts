@@ -1,4 +1,4 @@
-import { execFileSync } from 'node:child_process';
+import { execFileSync, spawn } from 'node:child_process';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -37,6 +37,11 @@ const PROBE = [
   '}',
   '"@',
 ].join('\n');
+
+/** Ask Explorer to open something, without waiting on its exit code. */
+function openWith(target: string): void {
+  spawn(EXPLORER, [target], { detached: true, stdio: 'ignore' }).unref();
+}
 
 function powershell(script: string): string {
   return execFileSync('powershell', ['-NoProfile', '-Command', script], {
@@ -91,20 +96,27 @@ describe('capturing a real desktop', () => {
   let folder: string;
   let name: string;
   let calculatorsBefore: number[] = [];
+  let calculatorWindowsBefore = 0;
 
   beforeAll(async () => {
     calculatorsBefore = calculators();
+    calculatorWindowsBefore = windowsTitled('Calculator');
     folder = mkdtempSync(path.join(tmpdir(), 'deskstart-uat-'));
     name = path.basename(folder);
     session = await startSession();
     await session.driver.waitForElement('input[aria-label="New profile name"]');
     // What a person has open: a folder in Explorer, and a Store app.
-    execFileSync(EXPLORER, [folder], { windowsHide: false });
-    execFileSync(EXPLORER, [`shell:AppsFolder\\${CALCULATOR}`], { windowsHide: false });
+    // explorer.exe exits 1 even when it opened what it was asked: it is not
+    // waited on; the windows themselves are, below.
+    openWith(folder);
+    openWith(`shell:AppsFolder\\${CALCULATOR}`);
+    // The windows, not just the processes: a process is up before its window is.
     await session.driver.waitFor(
       'the folder and Calculator to show',
       async () =>
-        windowsTitled(name) > 0 && calculators().length > calculatorsBefore.length ? true : null,
+        windowsTitled(name) > 0 && windowsTitled('Calculator') > calculatorWindowsBefore
+          ? true
+          : null,
       20_000,
       300,
     );
@@ -127,10 +139,15 @@ describe('capturing a real desktop', () => {
       20_000,
       300,
     );
+    // As a person would: if a window is not listed yet, read the desktop again.
     const calculatorBox = await driver.waitFor(
       'Calculator in the list',
-      async () =>
-        (await driver.findAll('input[aria-label^="Include Windows Calculator"]'))[0] ?? null,
+      async () => {
+        const found = (await driver.findAll('input[aria-label^="Include Windows Calculator"]'))[0];
+        if (found !== undefined) return found;
+        await (await driver.findByXPath('//button[normalize-space(.)="Read again"]')).click();
+        return null;
+      },
       20_000,
       300,
     );
